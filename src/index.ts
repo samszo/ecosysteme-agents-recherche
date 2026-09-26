@@ -13,7 +13,7 @@ async function main() {
   const runResult = await run.start({
     inputData: {
       cfpText: "Appel à propositions sur l'éthique des écosystèmes d'information numérique...",
-      zoteroCollection: "KPWPDCJ3"
+      zoteroCollection: "G7YDE9ME"
     }
   });
   

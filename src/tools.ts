@@ -1,92 +1,133 @@
 import { Tool } from "@mastra/core/tools";
 import { z } from "zod";
-import pdf from "pdf-parse";
 import { createOpenAI } from "@ai-sdk/openai";
 import { generateObject } from "ai";
+import { PDFParse } from 'pdf-parse';
 
 export const fetchZoteroData = new Tool({
   name: "fetch-zotero-data",
-  description: "Récupère les métadonnées et extrait le texte intégral des PDFs d'une collection Zotero.",
+  description: "Récupère les PDFs depuis Zotero ou depuis le cache Omeka S. Uploade physiquement le PDF dans Omeka s'il est nouveau.",
   schema: z.object({
     collectionId: z.string(),
   }),
   execute: async ({ data }) => {
     const { collectionId } = data;
-    
-    const userId = process.env.ZOTERO_USER_ID;
-    const apiKey = process.env.ZOTERO_API_KEY;
-
-    if (!userId || !apiKey) {
-      throw new Error("Les identifiants Zotero (ZOTERO_USER_ID, ZOTERO_API_KEY) sont manquants dans le .env");
+    const zUserId = process.env.ZOTERO_USER_ID;
+    const zApiKey = process.env.ZOTERO_API_KEY;
+    const omekaUrl = process.env.OMKS_API_URL;
+    const omekaKeyId = process.env.OMKS_KEY_IDENTITY;
+    const omekaKeyCred = process.env.OMKS_KEY_CREDENTIAL;
+    if (!zUserId || !zApiKey || !omekaUrl || !omekaKeyId || !omekaKeyCred) {
+      throw new Error("Identifiants Zotero ou Omeka manquants dans le .env");
     }
 
-    const headers = {
-      "Zotero-API-Version": "3",
-      "Authorization": `Bearer ${apiKey}`,
-    };
+    const zHeaders = { "Zotero-API-Version": "3", "Authorization": `Bearer ${zApiKey}` };
+    const getOmekaAuth = (endpoint: string) => `${omekaUrl}${endpoint}?key_identity=${omekaKeyId}&key_credential=${omekaKeyCred}`;
 
-    console.log(`📥 Interrogation de Zotero pour la collection : ${collectionId}...`);
+    console.log(`\n📥 Interrogation de la collection Zotero : ${collectionId}...`);
 
-    // 1. Récupérer tous les items de la collection
-    // On demande le format JSON pour lire les métadonnées
-    const itemsUrl = `https://api.zotero.org/users/${userId}/collections/${collectionId}/items?format=json`;
-    const itemsResponse = await fetch(itemsUrl, { headers });
-    
-    if (!itemsResponse.ok) {
-      throw new Error(`Erreur API Zotero: ${itemsResponse.statusText}`);
-    }
-
-    const items = await itemsResponse.json();
-
-    // 2. Filtrer pour ne garder que les attachements de type PDF
-    const pdfAttachments = items.filter((item: any) => 
-      item.data.itemType === "attachment" && 
-      item.data.contentType === "application/pdf"
-    );
-
-    console.log(`📄 ${pdfAttachments.length} PDF(s) trouvé(s). Début de l'extraction textuelle...`);
+    const itemsRes = await fetch(`https://api.zotero.org/users/${zUserId}/collections/${collectionId}/items?format=json`, { headers: zHeaders });
+    const items = await itemsRes.json();
+    const pdfAttachments = items.filter((item: any) => item.data.itemType === "attachment" && item.data.contentType === "application/pdf");
 
     const extractedArticles = [];
 
-    // 3. Télécharger et parser chaque PDF
     for (const attachment of pdfAttachments) {
-      const fileUrl = `https://api.zotero.org/users/${userId}/items/${attachment.key}/file`;
+      const zoteroKey = attachment.key;
+      const title = attachment.data.title;
+      // Nettoyage du nom de fichier pour l'upload
+      const safeFileName = `${title.replace(/[^a-zA-Z0-9]/g, '_')}_${zoteroKey}.pdf`;
+
+      // 1. Vérification dans le cache Omeka S
+      const searchUrl = `${getOmekaAuth('/items')}&property[0][property]=dcterms:identifier&property[0][type]=eq&property[0][text]=${zoteroKey}`;
       
       try {
-        const fileResponse = await fetch(fileUrl, { headers });
-        if (!fileResponse.ok) {
-          console.warn(`⚠️ Impossible de télécharger le PDF ${attachment.key}`);
-          continue;
-        }
+        const searchRes = await fetch(searchUrl);
+        const existingOmekaItems = await searchRes.json();
 
-        // Conversion du flux binaire en Buffer Node.js
-        const arrayBuffer = await fileResponse.arrayBuffer();
+        if (existingOmekaItems && existingOmekaItems.length > 0) {
+          console.log(`♻️ [CACHE OMEKA] Article et Media déjà présents : ${title}`);
+          const cachedText = existingOmekaItems[0]["dcterms:description"]?.[0]?.["@value"] || "";
+          
+          extractedArticles.push({ zoteroKey, title, text: cachedText });
+          continue; 
+        }
+      } catch (e) {
+        console.warn(`⚠️ Impossible de vérifier le cache Omeka S pour ${title}.`);
+      }
+
+      // 2. Téléchargement depuis Zotero
+      console.log(`⬇️ [ZOTERO] Téléchargement du nouveau PDF : ${title}`);
+      const fileUrl = `https://api.zotero.org/users/${zUserId}/items/${zoteroKey}/file`;
+
+      try {
+        const fileRes = await fetch(fileUrl, { headers: zHeaders });
+        const arrayBuffer = await fileRes.arrayBuffer();
         const buffer = Buffer.from(arrayBuffer);
 
-        // Extraction du texte via pdf-parse
-        const pdfData = await pdf(buffer);
+// 💡 LA MÉTHODE FORTE : On cache le "require" au transpileur tsx grâce à eval()
+        // Node.js pur prend le relais et charge la fonction d'origine sans l'altérer.
+        const pdfData = new PDFParse(buffer);
+        const extractedText = pdfData.text;
         
-        extractedArticles.push({
-          zoteroKey: attachment.key,
-          parentItemKey: attachment.data.parentItem,
-          title: attachment.data.title,
-          text: pdfData.text,
-          pages: pdfData.numpages
+        extractedArticles.push({ zoteroKey, title, text: extractedText });      
+
+        // 3. Création de l'Item dans Omeka S
+        console.log(`⬆️ [OMEKA] Création de la notice bibliographique...`);
+        const itemPayload = {
+          "@type": "o:Item",
+          "dcterms:title": [{ "type": "literal", "@value": title }],
+          "dcterms:identifier": [{ "type": "literal", "@value": zoteroKey }],
+          "dcterms:description": [{ "type": "literal", "@value": extractedText }]
+        };
+
+        const createItemRes = await fetch(getOmekaAuth('/items'), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(itemPayload)
         });
+
+        if (!createItemRes.ok) throw new Error("Échec de la création de l'Item");
         
-        console.log(`✅ Extraction réussie : ${attachment.data.title} (${pdfData.numpages} pages)`);
+        const createdItem = await createItemRes.json();
+        const omekaItemId = createdItem["o:id"];
+
+        // 4. Upload physique du binaire en tant que Media Omeka S
+        console.log(`📦 [OMEKA] Upload du fichier binaire attaché à l'Item ID ${omekaItemId}...`);
         
+        const formData = new FormData();
+        const fileBlob = new Blob([buffer], { type: 'application/pdf' });
+        
+        // 💡 CORRECTION : Ajout de la clé "file_index" exigée par le framework Laminas d'Omeka S
+        const mediaMetadata = {
+          "o:ingester": "upload",
+          "file_index": "0", // <-- C'est ce qui manquait
+          "o:item": { "o:id": omekaItemId },
+          "dcterms:title": [{ "type": "literal", "@value": `PDF original de ${title}` }]
+        };
+
+        formData.append('data', JSON.stringify(mediaMetadata));
+        
+        // 💡 CORRECTION : Ajout de l'index [0] dans le nom du champ de fichier
+        formData.append('file[0]', fileBlob, safeFileName);
+
+        const mediaRes = await fetch(getOmekaAuth('/media'), {
+          method: "POST",
+          body: formData
+        });
+
+        if (mediaRes.ok) {
+          console.log(`✅ [OMEKA] Media uploadé avec succès !`);
+        } else {
+          console.warn(`⚠️ [OMEKA] Échec de l'upload du media :`, await mediaRes.text());
+        }
+
       } catch (error) {
-        console.error(`❌ Erreur lors de l'extraction de ${attachment.key}:`, error);
+        console.error(`❌ Erreur sur ${title} :`, (error as Error).message);
       }
     }
 
-    // Le résultat sera injecté dans la mémoire de l'agent "Architecte des Connaissances"
-    return { 
-      status: "success", 
-      totalExtracted: extractedArticles.length,
-      articles: extractedArticles 
-    };
+    return { articles: extractedArticles };
   },
 });
 
@@ -125,7 +166,14 @@ export const buildLLMWiki = new Tool({
 
     for (const article of articles) {
       console.log(`\n✂️ Traitement de l'article : ${article.title}`);
-      const chunks = chunkText(article.text, 12000, 1000); // Fonction de chunking précédente
+      
+      // 💡 CORRECTION : Filtrage des documents sans texte
+      if (!article.text || article.text.trim() === "") {
+        console.warn(`   ⚠️ Aucun texte exploitable pour "${article.title}" (PDF scanné ou vide). Document ignoré.`);
+        continue; // On passe au document suivant
+      }
+
+      const chunks = chunkText(article.text, 12000, 1000);
       
       // ==========================================
       // PHASE 1 : MAP (Extraction par chunk)
@@ -238,7 +286,7 @@ export const exportToOpenKnowledge = new Tool({
         "dcterms:type": [{ "type": "literal", "@value": node.category }],
         "dcterms:identifier": [{ "type": "literal", "@value": node.id }]
       };
-
+      console.log(itemPayload);
       try {
         const response = await fetch(getAuthUrl('/items'), {
           method: "POST",
@@ -316,42 +364,42 @@ export const exportToOpenKnowledge = new Tool({
 
 // Une règle empirique est que 1 token ≈ 4 caractères en français.
 // Pour une limite de 4000 tokens, on vise des chunks d'environ 16000 caractères.
-
 function chunkText(text: string, maxChars: number = 15000, overlapChars: number = 1000): string[] {
+  // Sécurité anti-crash pour les PDFs vides
+  if (!text || typeof text !== 'string') return [];
   if (text.length <= maxChars) return [text];
 
   const chunks: string[] = [];
+  
+  // On DÉCLARE la variable une seule fois ici
   let currentPosition = 0;
 
   while (currentPosition < text.length) {
     let chunkEnd = currentPosition + maxChars;
 
-    // Si on dépasse la fin du texte, on prend le reste
     if (chunkEnd >= text.length) {
       chunks.push(text.slice(currentPosition));
       break;
     }
 
-    // Chercher le meilleur point de coupure (paragraphe, puis phrase)
     let slice = text.slice(currentPosition, chunkEnd);
     let cutIndex = slice.lastIndexOf("\n\n");
 
     if (cutIndex === -1) {
-      cutIndex = slice.lastIndexOf(". "); // Repli sur la fin d'une phrase
+      cutIndex = slice.lastIndexOf(". "); 
     }
     if (cutIndex === -1) {
-      cutIndex = slice.lastIndexOf(" ");  // Repli sur un espace
+      cutIndex = slice.lastIndexOf(" ");  
     }
     
-    // Si aucun point logique n'est trouvé, on coupe brutalement
     const finalCut = cutIndex !== -1 ? currentPosition + cutIndex + 1 : chunkEnd;
 
     chunks.push(text.slice(currentPosition, finalCut).trim());
 
-    // On recule pour créer le chevauchement (overlap) et ne pas perdre de contexte
+    // On MODIFIE la variable sans la redéclarer (pas de 'let' ici)
     currentPosition = finalCut - overlapChars;
-    // Sécurité pour éviter les boucles infinies
-    if (currentPosition <= chunks[chunks.length - 1].length - maxChars) {
+    
+    if (currentPosition <= (finalCut - maxChars)) {
        currentPosition = finalCut; 
     }
   }

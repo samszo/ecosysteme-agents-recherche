@@ -322,7 +322,8 @@ Le serveur écoute sur `127.0.0.1` (variable `HOST` pour le conteneur) et le por
 ## 12. Documentation et conteneur
 
 - `npm run docs` convertit `docs/*.md` en `docs/html/*.html` (script `scripts/build-docs.ts`, bibliothèque **marked** ; les diagrammes **Mermaid** sont rendus dans le navigateur).
-- `Dockerfile` : image `node:22-bookworm-slim`, code dans `/app`, données dans le volume `/data`, utilisateur `node`, commandes `workflow-ui` (défaut) et `workflow`.
+- `Dockerfile` : image `node:22-bookworm-slim`, code dans `/app`, données dans le volume `/data`, commandes `workflow-ui` (défaut) et `workflow`.
+- `docker/entrypoint.sh` : le conteneur démarre en root, rétablit si besoin la propriété de `/data` pour l'utilisateur `node` (uid 1000), puis exécute la commande sous `node` avec `setpriv`. Les commandes `workflow` et `workflow-ui` lancées par `docker compose exec` (en root) passent aussi par ce point d'entrée.
 - `docker-compose.yml` : port publié sur `127.0.0.1:7272`, volume `./data:/data`, `host.docker.internal` pour un Omeka S local.
 
 ## 13. Limites connues

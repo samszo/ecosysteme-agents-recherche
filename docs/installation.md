@@ -106,6 +106,8 @@ docker compose logs -f         # suivre le démarrage
 
 L'interface est disponible sur http://127.0.0.1:7272 (le port n'est publié que sur la machine hôte).
 
+Le conteneur démarre en root le temps de vérifier le volume : si le dossier `data/` ou ses fichiers n'appartiennent pas à l'utilisateur `node` du conteneur (uid 1000), c'est le cas quand ils ont été créés par root sur un serveur Linux, leur propriétaire est rétabli (`🔧 Droits du volume /data attribués à l'utilisateur node` dans le journal). L'interface et le workflow s'exécutent ensuite sans les droits root. Sur l'hôte, `data/` appartient donc à l'uid 1000 : l'éditer avec `sudo` ou avec l'utilisateur d'uid 1000.
+
 Autres commandes utiles :
 
 ```bash
@@ -472,6 +474,8 @@ certbot --apache -d workflow.example.org --redirect
 | `Échec de l'upload du media` | type de fichier refusé par Omeka S | voir *Types de fichiers autorisés* |
 | Omeka S injoignable depuis Docker (`… injoignable : …`) | serveur web de l'hôte arrêté, ou (sous Linux) serveur qui n'écoute que sur 127.0.0.1 | démarrer le serveur ; sous Linux, le faire écouter sur l'interface du pont Docker ; vérifier `extra_hosts` dans `docker-compose.yml` |
 | `EADDRINUSE` au lancement de l'interface | port déjà utilisé | changer `PORT` dans `.env` |
+| `EACCES: permission denied, open '/data/.env'` (Docker) | `data/` créé par root, image antérieure au point d'entrée | reconstruire l'image (`docker compose up -d --build`) ; ou `sudo chown -R 1000:1000 data` |
+| `Omeka S … 404 Not Found` au test des connexions | `OMKS_API_URL` ne pointe pas vers l'API (instance déplacée ou renommée) | corriger l'URL (elle doit se terminer par `/api`) et la clé d'API dans *Paramètres › Connexions* |
 | Page blanche ou erreur 500 sur Omeka S | `config/database.ini` incorrect, droits sur `files/` ou `logs/` | vérifier le fichier, les droits, et `/var/log/apache2/omeka_error.log` |
 | URL Omeka S en erreur 404 (sauf l'accueil) | réécriture d'URL inactive | `a2enmod rewrite` et `AllowOverride All` |
 | Échec de `certbot` | DNS non propagé ou port 80 fermé | vérifier l'enregistrement DNS et `ufw status` |

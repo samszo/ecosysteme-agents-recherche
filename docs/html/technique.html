@@ -536,7 +536,8 @@
 <h2 id="12-documentation-et-conteneur"><a class="anchor" href="#12-documentation-et-conteneur">#</a>12. Documentation et conteneur</h2>
 <ul>
 <li><code>npm run docs</code> convertit <code>docs/*.md</code> en <code>docs/html/*.html</code> (script <code>scripts/build-docs.ts</code>, bibliothèque <strong>marked</strong> ; les diagrammes <strong>Mermaid</strong> sont rendus dans le navigateur).</li>
-<li><code>Dockerfile</code> : image <code>node:22-bookworm-slim</code>, code dans <code>/app</code>, données dans le volume <code>/data</code>, utilisateur <code>node</code>, commandes <code>workflow-ui</code> (défaut) et <code>workflow</code>.</li>
+<li><code>Dockerfile</code> : image <code>node:22-bookworm-slim</code>, code dans <code>/app</code>, données dans le volume <code>/data</code>, commandes <code>workflow-ui</code> (défaut) et <code>workflow</code>.</li>
+<li><code>docker/entrypoint.sh</code> : le conteneur démarre en root, rétablit si besoin la propriété de <code>/data</code> pour l&#39;utilisateur <code>node</code> (uid 1000), puis exécute la commande sous <code>node</code> avec <code>setpriv</code>. Les commandes <code>workflow</code> et <code>workflow-ui</code> lancées par <code>docker compose exec</code> (en root) passent aussi par ce point d&#39;entrée.</li>
 <li><code>docker-compose.yml</code> : port publié sur <code>127.0.0.1:7272</code>, volume <code>./data:/data</code>, <code>host.docker.internal</code> pour un Omeka S local.</li>
 </ul>
 <h2 id="13-limites-connues"><a class="anchor" href="#13-limites-connues">#</a>13. Limites connues</h2>

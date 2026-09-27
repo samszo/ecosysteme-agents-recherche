@@ -209,6 +209,7 @@ cp .env.example data/.env      # puis renseigner les valeurs
 docker compose up -d --build   # construit l'image et démarre l'interface
 docker compose logs -f         # suivre le démarrage</code></pre>
 <p>L&#39;interface est disponible sur <a href="http://127.0.0.1:7272" target="_blank" rel="noopener">http://127.0.0.1:7272</a> (le port n&#39;est publié que sur la machine hôte).</p>
+<p>Le conteneur démarre en root le temps de vérifier le volume : si le dossier <code>data/</code> ou ses fichiers n&#39;appartiennent pas à l&#39;utilisateur <code>node</code> du conteneur (uid 1000), c&#39;est le cas quand ils ont été créés par root sur un serveur Linux, leur propriétaire est rétabli (<code>🔧 Droits du volume /data attribués à l&#39;utilisateur node</code> dans le journal). L&#39;interface et le workflow s&#39;exécutent ensuite sans les droits root. Sur l&#39;hôte, <code>data/</code> appartient donc à l&#39;uid 1000 : l&#39;éditer avec <code>sudo</code> ou avec l&#39;utilisateur d&#39;uid 1000.</p>
 <p>Autres commandes utiles :</p>
 <pre><code class="language-bash">docker compose exec workflow workflow        # lancer le workflow en ligne de commande dans le conteneur
 docker compose restart workflow              # redémarrer après une modification du .env
@@ -561,6 +562,16 @@ find /var/backups -name &quot;omeka-*.sql.gz&quot; -mtime +30 -delete</code></pr
 <td><code>EADDRINUSE</code> au lancement de l&#39;interface</td>
 <td>port déjà utilisé</td>
 <td>changer <code>PORT</code> dans <code>.env</code></td>
+</tr>
+<tr>
+<td><code>EACCES: permission denied, open &#39;/data/.env&#39;</code> (Docker)</td>
+<td><code>data/</code> créé par root, image antérieure au point d&#39;entrée</td>
+<td>reconstruire l&#39;image (<code>docker compose up -d --build</code>) ; ou <code>sudo chown -R 1000:1000 data</code></td>
+</tr>
+<tr>
+<td><code>Omeka S … 404 Not Found</code> au test des connexions</td>
+<td><code>OMKS_API_URL</code> ne pointe pas vers l&#39;API (instance déplacée ou renommée)</td>
+<td>corriger l&#39;URL (elle doit se terminer par <code>/api</code>) et la clé d&#39;API dans <em>Paramètres › Connexions</em></td>
 </tr>
 <tr>
 <td>Page blanche ou erreur 500 sur Omeka S</td>

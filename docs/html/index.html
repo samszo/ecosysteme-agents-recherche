@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Documentation – Écosystème d'agents</title>
+<style>
+  :root { --bg: #f6f5f1; --panel: #ffffff; --ink: #1d1f24; --muted: #6b6f78; --line: #e2e0d9; --accent: #2f5d8a; --code: #f0eee8; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #15171b; --panel: #1d2026; --ink: #e8e9ec; --muted: #9aa0aa; --line: #2e323a; --accent: #7fb0e0; --code: #111317; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { background: var(--panel); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 2; }
+  header .bar { max-width: 1180px; margin: 0 auto; padding: 10px 16px; display: flex; gap: 18px; align-items: center; flex-wrap: wrap; }
+  header .brand { font-weight: 650; }
+  header nav { display: flex; gap: 4px; flex-wrap: wrap; }
+  header nav a { color: var(--muted); text-decoration: none; padding: 4px 10px; border-radius: 6px; }
+  header nav a[aria-current] { color: var(--ink); background: var(--bg); }
+  .layout { max-width: 1180px; margin: 0 auto; padding: 24px 16px 80px; display: grid; grid-template-columns: minmax(0, 1fr) 230px; gap: 32px; }
+  main { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 8px 32px 32px; min-width: 0; }
+  .toc { position: sticky; top: 70px; align-self: start; font-size: 13.5px; display: flex; flex-direction: column; gap: 4px; max-height: calc(100vh - 90px); overflow: auto; }
+  .toc strong { margin-bottom: 4px; }
+  .toc a { color: var(--muted); text-decoration: none; }
+  .toc a.l3 { padding-left: 12px; }
+  .toc a:hover { color: var(--accent); }
+  h1 { font-size: 28px; line-height: 1.25; }
+  h2 { font-size: 21px; margin-top: 36px; padding-top: 8px; border-top: 1px solid var(--line); }
+  h3 { font-size: 17px; margin-top: 26px; }
+  .anchor { color: var(--line); text-decoration: none; margin-right: 6px; font-weight: 400; }
+  h2:hover .anchor, h3:hover .anchor { color: var(--accent); }
+  a { color: var(--accent); }
+  code { background: var(--code); padding: 1px 5px; border-radius: 4px; font-size: .9em; }
+  pre { background: var(--code); padding: 12px 14px; border-radius: 8px; overflow: auto; font-size: 13.5px; line-height: 1.45; }
+  pre code { background: none; padding: 0; }
+  pre.mermaid { background: var(--panel); border: 1px solid var(--line); text-align: center; }
+  table { border-collapse: collapse; width: 100%; font-size: 14.5px; margin: 12px 0 20px; display: block; overflow-x: auto; }
+  th, td { border: 1px solid var(--line); padding: 6px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--bg); }
+  blockquote { margin: 12px 0; padding: 4px 14px; border-left: 3px solid var(--accent); color: var(--muted); background: var(--bg); border-radius: 0 6px 6px 0; }
+  @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } .toc { display: none; } main { padding: 4px 16px 24px; } }
+</style>
+</head>
+<body>
+<header><div class="bar"><span class="brand">Écosystème d'agents – documentation</span><nav><a href="index.html" aria-current="page">Accueil</a><a href="installation.html">Installation</a><a href="utilisateur.html">Utilisateur</a><a href="technique.html">Technique</a></nav></div></header>
+<div class="layout">
+<main>
+<h1 id="documentation"><a class="anchor" href="#documentation">#</a>Documentation</h1>
+<p>Écosystème d&#39;agents IA pour la production d&#39;articles scientifiques : à partir d&#39;une <strong>collection Zotero</strong> annotée et d&#39;un <strong>appel à propositions</strong>, le workflow analyse les attendus de l&#39;appel, construit un graphe de concepts, mesure l&#39;accord entre annotateurs et rédige une <strong>proposition d&#39;article</strong>, le tout archivé dans <strong>Omeka S</strong>.</p>
+<table>
+<thead>
+<tr>
+<th>Document</th>
+<th>Pour qui</th>
+<th>Contenu</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><a href="installation.html">Installation</a></td>
+<td>administrateur</td>
+<td>prérequis, installation locale et Docker, préparation d&#39;Omeka S et de Zotero, dépannage</td>
+</tr>
+<tr>
+<td><a href="utilisateur.html">Utilisateur</a></td>
+<td>chercheur, annotateur</td>
+<td>préparer le corpus, utiliser l&#39;interface, lire les résultats</td>
+</tr>
+<tr>
+<td><a href="technique.html">Technique</a></td>
+<td>développeur</td>
+<td>architecture, workflow, modules, modèle de données, configuration, API</td>
+</tr>
+</tbody></table>
+<pre class="mermaid">flowchart LR
+    Z[(Zotero&lt;br/&gt;collection annotée)] --&gt; W{{Workflow d'agents}}
+    AAP[Appel à propositions] --&gt; W
+    W --&gt; A[AttenduAPP&lt;br/&gt;attendus de l'appel]
+    W --&gt; P[PropAPP&lt;br/&gt;proposition d'article]
+    W --&gt; G[Graphe de concepts]
+    W --&gt; K[Accord inter-juges]
+    A &amp; P &amp; G &amp; K --&gt; O[(Omeka S)]</pre>
+<p>La version HTML de cette documentation est générée par <code>npm run docs</code> dans <code>docs/html/</code> ; elle est aussi servie par l&#39;interface sur <a href="http://127.0.0.1:7272/docs/" target="_blank" rel="noopener">http://127.0.0.1:7272/docs/</a>.</p>
+
+</main>
+
+</div>
+<script type="module">
+import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+mermaid.initialize({ startOnLoad: true, theme: matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "default", flowchart: { htmlLabels: true } });
+</script>
+</body>
+</html>

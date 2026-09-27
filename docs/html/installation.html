@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Documentation d'installation – Écosystème d'agents</title>
+<style>
+  :root { --bg: #f6f5f1; --panel: #ffffff; --ink: #1d1f24; --muted: #6b6f78; --line: #e2e0d9; --accent: #2f5d8a; --code: #f0eee8; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #15171b; --panel: #1d2026; --ink: #e8e9ec; --muted: #9aa0aa; --line: #2e323a; --accent: #7fb0e0; --code: #111317; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { background: var(--panel); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 2; }
+  header .bar { max-width: 1180px; margin: 0 auto; padding: 10px 16px; display: flex; gap: 18px; align-items: center; flex-wrap: wrap; }
+  header .brand { font-weight: 650; }
+  header nav { display: flex; gap: 4px; flex-wrap: wrap; }
+  header nav a { color: var(--muted); text-decoration: none; padding: 4px 10px; border-radius: 6px; }
+  header nav a[aria-current] { color: var(--ink); background: var(--bg); }
+  .layout { max-width: 1180px; margin: 0 auto; padding: 24px 16px 80px; display: grid; grid-template-columns: minmax(0, 1fr) 230px; gap: 32px; }
+  main { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 8px 32px 32px; min-width: 0; }
+  .toc { position: sticky; top: 70px; align-self: start; font-size: 13.5px; display: flex; flex-direction: column; gap: 4px; max-height: calc(100vh - 90px); overflow: auto; }
+  .toc strong { margin-bottom: 4px; }
+  .toc a { color: var(--muted); text-decoration: none; }
+  .toc a.l3 { padding-left: 12px; }
+  .toc a:hover { color: var(--accent); }
+  h1 { font-size: 28px; line-height: 1.25; }
+  h2 { font-size: 21px; margin-top: 36px; padding-top: 8px; border-top: 1px solid var(--line); }
+  h3 { font-size: 17px; margin-top: 26px; }
+  .anchor { color: var(--line); text-decoration: none; margin-right: 6px; font-weight: 400; }
+  h2:hover .anchor, h3:hover .anchor { color: var(--accent); }
+  a { color: var(--accent); }
+  code { background: var(--code); padding: 1px 5px; border-radius: 4px; font-size: .9em; }
+  pre { background: var(--code); padding: 12px 14px; border-radius: 8px; overflow: auto; font-size: 13.5px; line-height: 1.45; }
+  pre code { background: none; padding: 0; }
+  pre.mermaid { background: var(--panel); border: 1px solid var(--line); text-align: center; }
+  table { border-collapse: collapse; width: 100%; font-size: 14.5px; margin: 12px 0 20px; display: block; overflow-x: auto; }
+  th, td { border: 1px solid var(--line); padding: 6px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--bg); }
+  blockquote { margin: 12px 0; padding: 4px 14px; border-left: 3px solid var(--accent); color: var(--muted); background: var(--bg); border-radius: 0 6px 6px 0; }
+  @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } .toc { display: none; } main { padding: 4px 16px 24px; } }
+</style>
+</head>
+<body>
+<header><div class="bar"><span class="brand">Écosystème d'agents – documentation</span><nav><a href="index.html">Accueil</a><a href="installation.html" aria-current="page">Installation</a><a href="utilisateur.html">Utilisateur</a><a href="technique.html">Technique</a></nav></div></header>
+<div class="layout">
+<main>
+<h1 id="documentation-d-39-installation"><a class="anchor" href="#documentation-d-39-installation">#</a>Documentation d&#39;installation</h1>
+<p>Ce guide explique comment installer l&#39;écosystème d&#39;agents de production d&#39;articles scientifiques, soit <strong>en local avec Node.js</strong>, soit <strong>dans un conteneur Docker</strong>, puis comment préparer les trois services dont il dépend : l&#39;API <strong>Albert</strong>, <strong>Zotero</strong> et <strong>Omeka S</strong>.</p>
+<pre class="mermaid">flowchart TD
+    A([Début]) --&gt; B{Docker disponible ?}
+    B -- oui --&gt; C[Installation Docker&lt;br/&gt;docker compose up -d]
+    B -- non --&gt; D[Installation locale&lt;br/&gt;Node.js 22+ et npm ci]
+    C --&gt; E[Créer data/.env]
+    D --&gt; F[Créer .env]
+    E --&gt; G[Préparer Omeka S&lt;br/&gt;vocabulaires, clé API, types de fichiers]
+    F --&gt; G
+    G --&gt; H[Préparer Zotero&lt;br/&gt;clé API, bibliothèque de groupe]
+    H --&gt; I[Ouvrir l'interface&lt;br/&gt;http://127.0.0.1:7272]
+    I --&gt; J[Tester les connexions]
+    J -- toutes vertes --&gt; K([Prêt : lancer un traitement])
+    J -- erreur --&gt; L[Voir la section Dépannage]
+    L --&gt; J</pre>
+<h2 id="1-prerequis"><a class="anchor" href="#1-prerequis">#</a>1. Prérequis</h2>
+<table>
+<thead>
+<tr>
+<th>Élément</th>
+<th>Version / détail</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Node.js</td>
+<td>22 ou plus récent (installation locale)</td>
+</tr>
+<tr>
+<td>npm</td>
+<td>fourni avec Node.js</td>
+</tr>
+<tr>
+<td>Docker</td>
+<td>Docker Engine 24+ et Docker Compose v2 (installation Docker)</td>
+</tr>
+<tr>
+<td>API Albert</td>
+<td>une clé d&#39;API (Etalab) donnant accès aux modèles <code>openai/gpt-oss-120b</code> et <code>mistralai/Ministral-3-8B-Instruct-2512</code> (modifiables)</td>
+</tr>
+<tr>
+<td>Zotero</td>
+<td>un compte, une clé d&#39;API en lecture, idéalement une <strong>bibliothèque de groupe</strong> pour les annotations de plusieurs juges</td>
+</tr>
+<tr>
+<td>Omeka S</td>
+<td>une instance accessible, une clé d&#39;API avec droits d&#39;écriture, les vocabulaires listés plus bas</td>
+</tr>
+<tr>
+<td>Accès internet</td>
+<td>pour les API, et pour les bibliothèques d&#39;affichage (marked, sigma.js, Mermaid) chargées depuis jsDelivr</td>
+</tr>
+</tbody></table>
+<h2 id="2-variables-d-39-environnement-env"><a class="anchor" href="#2-variables-d-39-environnement-env">#</a>2. Variables d&#39;environnement (<code>.env</code>)</h2>
+<p>Le fichier <code>.env</code> contient les accès aux services. Un modèle est fourni dans <code>.env.example</code>. Toutes ces valeurs sont aussi modifiables depuis l&#39;onglet <strong>Paramètres</strong> de l&#39;interface.</p>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Obligatoire</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>ALBERT_API_KEY</code></td>
+<td>oui</td>
+<td>Clé de l&#39;API Albert</td>
+</tr>
+<tr>
+<td><code>ZOTERO_API_KEY</code></td>
+<td>oui</td>
+<td>Clé Zotero (<a href="https://www.zotero.org/settings/keys" target="_blank" rel="noopener">https://www.zotero.org/settings/keys</a>), accès en lecture à la bibliothèque</td>
+</tr>
+<tr>
+<td><code>ZOTERO_USER_ID</code></td>
+<td>oui</td>
+<td>Identifiant numérique de l&#39;utilisateur Zotero (affiché sur la page des clés)</td>
+</tr>
+<tr>
+<td><code>ZOTERO_GROUP_ID</code></td>
+<td>non</td>
+<td>Identifiant du groupe Zotero ; s&#39;il est défini, c&#39;est la bibliothèque du groupe qui est lue</td>
+</tr>
+<tr>
+<td><code>OMKS_API_URL</code></td>
+<td>oui</td>
+<td>URL de l&#39;API Omeka S, par ex. <code>https://mon-omeka.fr/api</code></td>
+</tr>
+<tr>
+<td><code>OMKS_KEY_IDENTITY</code></td>
+<td>oui</td>
+<td>Identité de la clé d&#39;API Omeka S</td>
+</tr>
+<tr>
+<td><code>OMKS_KEY_CREDENTIAL</code></td>
+<td>oui</td>
+<td>Secret de la clé d&#39;API Omeka S</td>
+</tr>
+<tr>
+<td><code>PORT</code></td>
+<td>non</td>
+<td>Port de l&#39;interface (7272 par défaut)</td>
+</tr>
+</tbody></table>
+<blockquote>
+<p>Le fichier <code>.env</code> contient des secrets : il est exclu de git (<code>.gitignore</code>) et de l&#39;image Docker (<code>.dockerignore</code>).</p>
+</blockquote>
+<h2 id="3-installation-locale-node-js"><a class="anchor" href="#3-installation-locale-node-js">#</a>3. Installation locale (Node.js)</h2>
+<pre><code class="language-bash">git clone https://github.com/samszo/ecosysteme-agents-recherche.git
+cd ecosysteme-agents-recherche
+npm ci
+cp .env.example .env    # puis renseigner les valeurs
+npm run ui              # interface : http://127.0.0.1:7272</code></pre>
+<p>Commandes disponibles :</p>
+<table>
+<thead>
+<tr>
+<th>Commande</th>
+<th>Rôle</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>npm run ui</code></td>
+<td>Interface web : paramètres, lancement, suivi, résultats</td>
+</tr>
+<tr>
+<td><code>npm start</code></td>
+<td>Lance le workflow en ligne de commande avec la configuration enregistrée</td>
+</tr>
+<tr>
+<td><code>npm run docs</code></td>
+<td>Régénère la documentation HTML (<code>docs/html/</code>) à partir des fichiers markdown</td>
+</tr>
+</tbody></table>
+<p>En local, les fichiers produits (AttenduAPP, PropAPP, rapport, graphe…) sont écrits à la racine du projet.</p>
+<h2 id="4-installation-docker"><a class="anchor" href="#4-installation-docker">#</a>4. Installation Docker</h2>
+<p>L&#39;image contient le code dans <code>/app</code> ; les <strong>données</strong> (<code>.env</code>, <code>workflow.config.json</code>, résultats, fichiers d&#39;appels importés) sont dans le volume <code>/data</code>, monté depuis le dossier <code>data/</code> du projet.</p>
+<pre class="mermaid">flowchart LR
+    subgraph Hôte
+        B[Navigateur&lt;br/&gt;127.0.0.1:7272]
+        D[(dossier data/&lt;br/&gt;.env, workflow.config.json,&lt;br/&gt;PropAPP.md, rapport…)]
+        O[Omeka S local&lt;br/&gt;optionnel]
+    end
+    subgraph Conteneur[&quot;Conteneur ecosysteme-agents-recherche&quot;]
+        UI[Interface&lt;br/&gt;workflow-ui]
+        WF[Workflow&lt;br/&gt;processus enfant]
+        APP[/app : code&lt;br/&gt;et node_modules/]
+    end
+    B -- port publié sur 127.0.0.1 --&gt; UI
+    UI --&gt; WF
+    D &lt;-- volume /data --&gt; UI
+    D &lt;-- volume /data --&gt; WF
+    WF -- host.docker.internal --&gt; O
+    WF --&gt; Albert[(API Albert)]
+    WF --&gt; Zotero[(API Zotero)]</pre>
+<pre><code class="language-bash">mkdir -p data
+cp .env.example data/.env      # puis renseigner les valeurs
+docker compose up -d --build   # construit l'image et démarre l'interface
+docker compose logs -f         # suivre le démarrage</code></pre>
+<p>L&#39;interface est disponible sur <a href="http://127.0.0.1:7272" target="_blank" rel="noopener">http://127.0.0.1:7272</a> (le port n&#39;est publié que sur la machine hôte).</p>
+<p>Autres commandes utiles :</p>
+<pre><code class="language-bash">docker compose exec workflow workflow        # lancer le workflow en ligne de commande dans le conteneur
+docker compose restart workflow              # redémarrer après une modification du .env
+docker compose down                          # arrêter
+docker compose build --no-cache              # reconstruire après une mise à jour du code</code></pre>
+<p><strong>Omeka S installé sur la machine hôte</strong> : dans le conteneur, <code>localhost</code> désigne le conteneur lui-même. Utiliser <code>host.docker.internal</code> dans <code>OMKS_API_URL</code>, par exemple <code>http://host.docker.internal/omk_agents/api</code> (le nom est déclaré dans <code>docker-compose.yml</code>).</p>
+<h2 id="5-preparer-omeka-s"><a class="anchor" href="#5-preparer-omeka-s">#</a>5. Préparer Omeka S</h2>
+<h3 id="vocabulaires"><a class="anchor" href="#vocabulaires">#</a>Vocabulaires</h3>
+<p>Le workflow utilise les vocabulaires suivants (réglage <code>omeka.vocabs</code>). L&#39;onglet <strong>Paramètres › Tester les connexions</strong> signale ceux qui manquent.</p>
+<table>
+<thead>
+<tr>
+<th>Préfixe</th>
+<th>Usage</th>
+<th>Installation</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>dcterms</code></td>
+<td>métadonnées de tous les items</td>
+<td>fourni avec Omeka S</td>
+</tr>
+<tr>
+<td><code>bibo</code></td>
+<td>classes des documents, BibTeX (DOI, ISSN…)</td>
+<td>fourni avec Omeka S</td>
+</tr>
+<tr>
+<td><code>skos</code></td>
+<td>classe <code>skos:Concept</code> des concepts</td>
+<td>import (Admin › Vocabulaires)</td>
+</tr>
+<tr>
+<td><code>oa</code></td>
+<td>classe <code>oa:Annotation</code> des annotations</td>
+<td>module <strong>Annotate</strong> ou import de <code>http://www.w3.org/ns/oa#</code></td>
+</tr>
+<tr>
+<td><code>curation</code></td>
+<td><code>curation:access</code>, <code>curation:tag</code>, <code>curation:category</code>, <code>curation:type</code>…</td>
+<td>module <strong>Curation</strong> (Daniel Berthereau)</td>
+</tr>
+</tbody></table>
+<p>La classe de l&#39;appel à propositions, <code>bibo:CallForPapers</code>, ne fait pas partie de BIBO : si elle est absente, l&#39;appel est enregistré en <code>bibo:Document</code> (réglage <code>omeka.cfpClass</code>).</p>
+<h3 id="cle-d-39-api"><a class="anchor" href="#cle-d-39-api">#</a>Clé d&#39;API</h3>
+<p>Dans Omeka S : <em>Utilisateur › Modifier › Clés d&#39;API › Nouvelle clé</em>. L&#39;utilisateur doit pouvoir créer et modifier des items et des médias. Reporter l&#39;identité et le secret dans <code>OMKS_KEY_IDENTITY</code> et <code>OMKS_KEY_CREDENTIAL</code>.</p>
+<h3 id="types-de-fichiers-autorises"><a class="anchor" href="#types-de-fichiers-autorises">#</a>Types de fichiers autorisés</h3>
+<p>Le workflow dépose des médias de plusieurs formats. Dans <em>Admin › Paramètres › Sécurité</em>, ajouter si besoin :</p>
+<table>
+<thead>
+<tr>
+<th>Extension</th>
+<th>Type MIME</th>
+<th>Fichiers concernés</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>md</code></td>
+<td><code>text/markdown</code>, <code>text/plain</code></td>
+<td>AttenduAPP, PropAPP, rapport, relecture</td>
+</tr>
+<tr>
+<td><code>bib</code></td>
+<td><code>application/x-bibtex</code>, <code>text/plain</code></td>
+<td>références BibTeX</td>
+</tr>
+<tr>
+<td><code>csv</code></td>
+<td><code>text/csv</code>, <code>text/plain</code></td>
+<td>désaccords entre juges</td>
+</tr>
+<tr>
+<td><code>html</code></td>
+<td><code>text/html</code></td>
+<td>graphe sigma.js, pages web enregistrées</td>
+</tr>
+<tr>
+<td><code>json</code></td>
+<td><code>application/json</code></td>
+<td>graphe au format graphology</td>
+</tr>
+</tbody></table>
+<p>Un type refusé n&#39;interrompt pas le traitement : un avertissement est affiché et le fichier reste disponible localement.</p>
+<h2 id="6-preparer-zotero"><a class="anchor" href="#6-preparer-zotero">#</a>6. Préparer Zotero</h2>
+<ol>
+<li>Créer une clé sur <a href="https://www.zotero.org/settings/keys" target="_blank" rel="noopener">https://www.zotero.org/settings/keys</a> avec l&#39;accès en lecture à la bibliothèque (et au groupe).</li>
+<li>Pour mesurer l&#39;accord inter-juges, utiliser une <strong>bibliothèque de groupe</strong> : chaque annotation y garde son auteur. Renseigner alors <code>ZOTERO_GROUP_ID</code>.</li>
+<li>Choisir la collection à traiter dans l&#39;interface (la liste est chargée depuis Zotero).</li>
+</ol>
+<h2 id="7-verifier-l-39-installation"><a class="anchor" href="#7-verifier-l-39-installation">#</a>7. Vérifier l&#39;installation</h2>
+<ol>
+<li>Ouvrir <a href="http://127.0.0.1:7272" target="_blank" rel="noopener">http://127.0.0.1:7272</a>.</li>
+<li>Onglet <strong>Paramètres › Tester les connexions</strong> : Albert, Zotero et Omeka S doivent apparaître en vert.</li>
+<li>Choisir la collection Zotero et l&#39;appel à propositions, puis <strong>Enregistrer et lancer</strong>.</li>
+</ol>
+<pre class="mermaid">sequenceDiagram
+    actor U as Utilisateur
+    participant UI as Interface
+    participant A as Albert
+    participant Z as Zotero
+    participant O as Omeka S
+    U-&gt;&gt;UI: Tester les connexions
+    UI-&gt;&gt;UI: enregistre .env et workflow.config.json
+    UI-&gt;&gt;A: GET /models
+    A--&gt;&gt;UI: liste des modèles
+    UI-&gt;&gt;Z: GET /collections
+    Z--&gt;&gt;UI: collections de la bibliothèque
+    UI-&gt;&gt;O: GET /vocabularies et /users
+    O--&gt;&gt;UI: vocabulaires installés
+    UI--&gt;&gt;U: ✓ Albert ✓ Zotero ✓ Omeka S (ou vocabulaires manquants)</pre>
+<h2 id="8-depannage"><a class="anchor" href="#8-depannage">#</a>8. Dépannage</h2>
+<table>
+<thead>
+<tr>
+<th>Symptôme</th>
+<th>Cause probable</th>
+<th>Solution</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>Téléchargement de l&#39;appel impossible (403)</code></td>
+<td>le site de l&#39;appel est protégé contre les robots (Cloudflare)</td>
+<td>enregistrer la page depuis un navigateur (PDF ou HTML) et l&#39;importer comme <strong>fichier de l&#39;appel</strong></td>
+</tr>
+<tr>
+<td><code>vocabulaire(s) manquant(s)</code> au test des connexions</td>
+<td>vocabulaire non installé dans Omeka S</td>
+<td>voir <em>Préparer Omeka S › Vocabulaires</em></td>
+</tr>
+<tr>
+<td><code>Échec de l&#39;upload du media</code></td>
+<td>type de fichier refusé par Omeka S</td>
+<td>voir <em>Types de fichiers autorisés</em></td>
+</tr>
+<tr>
+<td>Omeka S injoignable depuis Docker</td>
+<td><code>localhost</code> dans <code>OMKS_API_URL</code></td>
+<td>utiliser <code>host.docker.internal</code></td>
+</tr>
+<tr>
+<td><code>EADDRINUSE</code> au lancement de l&#39;interface</td>
+<td>port déjà utilisé</td>
+<td>changer <code>PORT</code> dans <code>.env</code></td>
+</tr>
+<tr>
+<td>Aucune annotation codée pour le kappa</td>
+<td>codes absents ou bibliothèque personnelle</td>
+<td>ajouter les codes de la grille comme marqueurs, utiliser une bibliothèque de groupe</td>
+</tr>
+</tbody></table>
+
+</main>
+<nav class="toc"><strong>Sur cette page</strong><a class="l2" href="#1-prerequis">1. Prérequis</a><a class="l2" href="#2-variables-d-39-environnement-env">2. Variables d&amp;#39;environnement (.env)</a><a class="l2" href="#3-installation-locale-node-js">3. Installation locale (Node.js)</a><a class="l2" href="#4-installation-docker">4. Installation Docker</a><a class="l2" href="#5-preparer-omeka-s">5. Préparer Omeka S</a><a class="l3" href="#vocabulaires">Vocabulaires</a><a class="l3" href="#cle-d-39-api">Clé d&amp;#39;API</a><a class="l3" href="#types-de-fichiers-autorises">Types de fichiers autorisés</a><a class="l2" href="#6-preparer-zotero">6. Préparer Zotero</a><a class="l2" href="#7-verifier-l-39-installation">7. Vérifier l&amp;#39;installation</a><a class="l2" href="#8-depannage">8. Dépannage</a></nav>
+</div>
+<script type="module">
+import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+mermaid.initialize({ startOnLoad: true, theme: matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "default", flowchart: { htmlLabels: true } });
+</script>
+</body>
+</html>

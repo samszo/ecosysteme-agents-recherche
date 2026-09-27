@@ -5,7 +5,9 @@
   "main": "src/index.ts",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "tsx src/index.ts"
+    "start": "tsx src/index.ts",
+    "ui": "tsx src/ui/server.ts",
+    "docs": "tsx scripts/build-docs.ts"
   },
   "repository": {
     "type": "git",
@@ -23,13 +25,15 @@
     "@ai-sdk/openai": "^4.0.75",
     "@mastra/core": "^1.71.0",
     "ai": "^7.0.114",
-    "dotenv": "^18.0.3",
+    "dotenv": "^18.0.4",
     "pdf-parse": "^2.4.5",
+    "pdfjs-dist": "^5.4.296",
     "zod": "^4.6.5"
   },
   "devDependencies": {
-    "@types/node": "^26.6.2",
+    "@types/node": "^26.6.3",
     "@types/pdf-parse": "^1.1.5",
+    "marked": "^15.0.12",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2"
   }

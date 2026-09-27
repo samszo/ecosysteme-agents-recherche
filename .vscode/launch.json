@@ -1,0 +1,55 @@
+{
+    // Utilisez IntelliSense pour en savoir plus sur les attributs possibles.
+    // Pointez pour afficher la description des attributs existants.
+    // Pour plus d'informations, visitez : https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            // Lance src/index.ts avec tsx directement sous le débogueur Node (points d'arrêt dans les .ts)
+            "name": "Debug ecosysteme-agents-recherche (tsx)",
+            "type": "node",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/index.ts",
+            "runtimeExecutable": "${workspaceFolder}/node_modules/.bin/tsx",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "internalConsoleOptions": "neverOpen",
+            "sourceMaps": true,
+            // n'utilise que les source maps du projet (évite de lier les points d'arrêt aux fichiers de node_modules)
+            "resolveSourceMapLocations": [
+                "${workspaceFolder}/**",
+                "!**/node_modules/**"
+            ],
+            "skipFiles": [
+                "<node_internals>/**",
+                "${workspaceFolder}/node_modules/**"
+            ]
+        },
+        {
+            // Débogue le fichier .ts actuellement ouvert dans l'éditeur (pratique pour tester un outil isolément)
+            "name": "Debug fichier courant (tsx)",
+            "type": "node",
+            "request": "launch",
+            "program": "${file}",
+            "runtimeExecutable": "${workspaceFolder}/node_modules/.bin/tsx",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "internalConsoleOptions": "neverOpen",
+            "sourceMaps": true,
+            "resolveSourceMapLocations": [
+                "${workspaceFolder}/**",
+                "!**/node_modules/**"
+            ],
+            "skipFiles": [
+                "<node_internals>/**",
+                "${workspaceFolder}/node_modules/**"
+            ]
+        },
+        {
+            "command": "npm run start",
+            "name": "Run ecosysteme-agents-recherche",
+            "request": "launch",
+            "type": "node-terminal"
+        }
+    ]
+}

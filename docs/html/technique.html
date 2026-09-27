@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Documentation technique – Écosystème d'agents</title>
+<style>
+  :root { --bg: #f6f5f1; --panel: #ffffff; --ink: #1d1f24; --muted: #6b6f78; --line: #e2e0d9; --accent: #2f5d8a; --code: #f0eee8; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #15171b; --panel: #1d2026; --ink: #e8e9ec; --muted: #9aa0aa; --line: #2e323a; --accent: #7fb0e0; --code: #111317; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { background: var(--panel); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 2; }
+  header .bar { max-width: 1180px; margin: 0 auto; padding: 10px 16px; display: flex; gap: 18px; align-items: center; flex-wrap: wrap; }
+  header .brand { font-weight: 650; }
+  header nav { display: flex; gap: 4px; flex-wrap: wrap; }
+  header nav a { color: var(--muted); text-decoration: none; padding: 4px 10px; border-radius: 6px; }
+  header nav a[aria-current] { color: var(--ink); background: var(--bg); }
+  .layout { max-width: 1180px; margin: 0 auto; padding: 24px 16px 80px; display: grid; grid-template-columns: minmax(0, 1fr) 230px; gap: 32px; }
+  main { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 8px 32px 32px; min-width: 0; }
+  .toc { position: sticky; top: 70px; align-self: start; font-size: 13.5px; display: flex; flex-direction: column; gap: 4px; max-height: calc(100vh - 90px); overflow: auto; }
+  .toc strong { margin-bottom: 4px; }
+  .toc a { color: var(--muted); text-decoration: none; }
+  .toc a.l3 { padding-left: 12px; }
+  .toc a:hover { color: var(--accent); }
+  h1 { font-size: 28px; line-height: 1.25; }
+  h2 { font-size: 21px; margin-top: 36px; padding-top: 8px; border-top: 1px solid var(--line); }
+  h3 { font-size: 17px; margin-top: 26px; }
+  .anchor { color: var(--line); text-decoration: none; margin-right: 6px; font-weight: 400; }
+  h2:hover .anchor, h3:hover .anchor { color: var(--accent); }
+  a { color: var(--accent); }
+  code { background: var(--code); padding: 1px 5px; border-radius: 4px; font-size: .9em; }
+  pre { background: var(--code); padding: 12px 14px; border-radius: 8px; overflow: auto; font-size: 13.5px; line-height: 1.45; }
+  pre code { background: none; padding: 0; }
+  pre.mermaid { background: var(--panel); border: 1px solid var(--line); text-align: center; }
+  table { border-collapse: collapse; width: 100%; font-size: 14.5px; margin: 12px 0 20px; display: block; overflow-x: auto; }
+  th, td { border: 1px solid var(--line); padding: 6px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--bg); }
+  blockquote { margin: 12px 0; padding: 4px 14px; border-left: 3px solid var(--accent); color: var(--muted); background: var(--bg); border-radius: 0 6px 6px 0; }
+  @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } .toc { display: none; } main { padding: 4px 16px 24px; } }
+</style>
+</head>
+<body>
+<header><div class="bar"><span class="brand">Écosystème d'agents – documentation</span><nav><a href="index.html">Accueil</a><a href="installation.html">Installation</a><a href="utilisateur.html">Utilisateur</a><a href="technique.html" aria-current="page">Technique</a></nav></div></header>
+<div class="layout">
+<main>
+<h1 id="documentation-technique"><a class="anchor" href="#documentation-technique">#</a>Documentation technique</h1>
+<p>Écosystème d&#39;agents IA pour la production d&#39;articles scientifiques (Laboratoire Paragraphe, Université Paris 8). Le projet est écrit en <strong>TypeScript</strong>, exécuté par <strong>tsx</strong> sous <strong>Node.js 22+</strong>, et orchestré par un workflow <strong>Mastra</strong>. Les modèles de langage sont ceux de l&#39;<strong>API Albert</strong> (compatible OpenAI), les sources viennent de <strong>Zotero</strong> et les résultats sont archivés dans <strong>Omeka S</strong>.</p>
+<h2 id="1-architecture"><a class="anchor" href="#1-architecture">#</a>1. Architecture</h2>
+<pre class="mermaid">flowchart LR
+    subgraph Client
+        NAV[Navigateur]
+    end
+    subgraph Serveur[&quot;Serveur Node.js (src/ui/server.ts)&quot;]
+        UI[API HTTP + page&lt;br/&gt;src/ui/public/index.html]
+        CFG[(.env&lt;br/&gt;workflow.config.json)]
+    end
+    subgraph Traitement[&quot;Processus enfant (src/index.ts)&quot;]
+        WF[Workflow Mastra&lt;br/&gt;paperProductionWorkflow]
+        AG[Agents]
+        TL[Outils]
+    end
+    NAV -- HTTP / SSE --&gt; UI
+    UI -- lit / écrit --&gt; CFG
+    UI -- spawn tsx --&gt; WF
+    WF --&gt; AG
+    WF --&gt; TL
+    AG -- chat completions --&gt; ALB[(API Albert)]
+    TL -- API web v3 --&gt; ZOT[(Zotero)]
+    TL -- API REST --&gt; OMK[(Omeka S)]
+    WF -- fichiers résultats --&gt; FS[(répertoire de données)]
+    UI -- lit --&gt; FS</pre>
+<ul>
+<li><strong>Interface</strong> (<code>src/ui/server.ts</code>) : serveur <code>node:http</code> sans dépendance, qui gère <code>.env</code> et <code>workflow.config.json</code>, lance le workflow dans un <strong>processus enfant</strong> (la configuration et les connexions sont ainsi relues à chaque exécution), diffuse le journal en <strong>Server-Sent Events</strong> et sert les résultats.</li>
+<li><strong>Workflow</strong> (<code>src/index.ts</code>) : enregistre la configuration dans Omeka S, exécute le workflow Mastra, produit la visualisation du graphe, le rapport de traitement, et importe les documents de synthèse.</li>
+<li><strong>Répertoire de données</strong> : le répertoire courant. En local c&#39;est la racine du projet ; dans Docker c&#39;est le volume <code>/data</code>, le code étant dans <code>/app</code>.</li>
+</ul>
+<h2 id="2-le-workflow"><a class="anchor" href="#2-le-workflow">#</a>2. Le workflow</h2>
+<pre class="mermaid">flowchart TD
+    IN([cfpUrl, cfpFile, cfpText,&lt;br/&gt;zoteroCollection]) --&gt; P1
+    subgraph P1[parallèle]
+        S1[analyze-cfp&lt;br/&gt;fetchCfp + aapAnalystAgent&lt;br/&gt;→ AttenduAPP]
+        S2[fetch-literature&lt;br/&gt;fetchZoteroData]
+    end
+    P1 --&gt; P2
+    subgraph P2[parallèle]
+        S3[build-wiki&lt;br/&gt;buildLLMWiki + cleanGraph]
+        S4[kappa-analysis&lt;br/&gt;fetchOmekaAnnotations + calculateFleissKappa&lt;br/&gt;+ kappaAnalystAgent]
+    end
+    P2 --&gt; S5[normalize-okf&lt;br/&gt;exportToOpenKnowledge]
+    S5 --&gt; S6[draft-paper&lt;br/&gt;compileCollection + writerAgent&lt;br/&gt;→ PropAPP]
+    S6 --&gt; S7[review-paper&lt;br/&gt;epistemologistAgent]
+    S7 --&gt; OUT([relecture, graphe sigma.js,&lt;br/&gt;rapport de traitement])</pre>
+<p>Défini dans <code>src/workflow/paperProductionWorkflow.ts</code>. Règles de passage des données dans Mastra :</p>
+<ul>
+<li>après un <code>.parallel([...])</code>, l&#39;étape suivante reçoit <code>{ &quot;&lt;id étape&gt;&quot;: sortie, ... }</code> ;</li>
+<li>après un <code>.then(...)</code>, elle reçoit directement la sortie de l&#39;étape précédente ;</li>
+<li><code>getStepResult(&quot;&lt;id&gt;&quot;)</code> donne accès à la sortie de n&#39;importe quelle étape antérieure (utilisé par <code>draft-paper</code>).</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th>Étape</th>
+<th>Fichier</th>
+<th>Entrées</th>
+<th>Sorties principales</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>analyze-cfp</code></td>
+<td><code>analyzeCfpStep.ts</code></td>
+<td>paramètres de l&#39;appel</td>
+<td><code>cfpAnalysis</code> (AttenduAPP), <code>aapItemId</code>, <code>aapTitle</code>, <code>aapUrl</code></td>
+</tr>
+<tr>
+<td><code>fetch-literature</code></td>
+<td><code>fetchLiteratureStep.ts</code></td>
+<td><code>zoteroCollection</code></td>
+<td><code>articles[]</code>, <code>collectionItemId</code></td>
+</tr>
+<tr>
+<td><code>build-wiki</code></td>
+<td><code>buildWikiStep.ts</code></td>
+<td>articles, AttenduAPP</td>
+<td><code>conceptGraph</code>, <code>extractedKeys</code>, <code>wikiMetadata</code></td>
+</tr>
+<tr>
+<td><code>kappa-analysis</code></td>
+<td><code>kappaAnalysisStep.ts</code></td>
+<td><code>collectionItemId</code></td>
+<td><code>kappa</code>, <code>confusions</code>, <code>summary</code></td>
+</tr>
+<tr>
+<td><code>normalize-okf</code></td>
+<td><code>normalizeOkfStep.ts</code></td>
+<td>graphe, articles</td>
+<td><code>exportResult</code> (<code>omekaIds</code>, <code>stats</code>)</td>
+</tr>
+<tr>
+<td><code>draft-paper</code></td>
+<td><code>draftPaperStep.ts</code></td>
+<td>graphe + <code>getStepResult</code></td>
+<td><code>draft</code> (PropAPP), <code>proposal</code></td>
+</tr>
+<tr>
+<td><code>review-paper</code></td>
+<td><code>reviewPaperStep.ts</code></td>
+<td>PropAPP, AttenduAPP</td>
+<td><code>finalReview</code></td>
+</tr>
+</tbody></table>
+<p>Les outils sont appelés <strong>directement</strong> par les étapes (<code>outil.execute({ data })</code>) : les données brutes circulent entre les étapes sans passer par un modèle. Les agents ne reçoivent que ce qu&#39;ils doivent rédiger ou analyser.</p>
+<h2 id="3-organisation-du-code"><a class="anchor" href="#3-organisation-du-code">#</a>3. Organisation du code</h2>
+<pre><code class="language-">src/
+├── index.ts                 point d'entrée du workflow (npm start)
+├── config.ts                configuration par défaut (defaultWorkflowConfig) + surcharges
+├── configStore.ts           fusion / différences avec workflow.config.json
+├── models.ts                modèles Albert (analytique, rapide)
+├── graphViz.ts              export graphology et page sigma.js
+├── omekaVerify.ts           audit des derniers items Omeka
+├── agents/                  un fichier par agent (index.ts ré-exporte)
+├── tools/                   un fichier par outil ou utilitaire
+├── workflow/                une étape par fichier, assemblage, rapport, import
+└── ui/                      serveur de l'interface et page web</code></pre>
+<h3 id="agents-src-agents"><a class="anchor" href="#agents-src-agents">#</a>Agents (<code>src/agents/</code>)</h3>
+<table>
+<thead>
+<tr>
+<th>Agent</th>
+<th>Modèle</th>
+<th>Rôle</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>aapAnalystAgent</code></td>
+<td>analytique</td>
+<td>analyse des attendus de l&#39;appel (AttenduAPP, markdown)</td>
+</tr>
+<tr>
+<td><code>writerAgent</code></td>
+<td>analytique</td>
+<td>rédaction de PropAPP selon le plan, citations Pandoc</td>
+</tr>
+<tr>
+<td><code>epistemologistAgent</code></td>
+<td>analytique</td>
+<td>relecture critique de PropAPP au regard d&#39;AttenduAPP</td>
+</tr>
+<tr>
+<td><code>kappaAnalystAgent</code></td>
+<td>analytique</td>
+<td>bilan de l&#39;accord inter-juges et recommandations de recalibrage</td>
+</tr>
+<tr>
+<td><code>librarianAgent</code>, <code>wikiArchitectAgent</code>, <code>ontologistAgent</code></td>
+<td>rapide / analytique</td>
+<td>agents outillés disponibles pour un usage conversationnel</td>
+</tr>
+</tbody></table>
+<h3 id="outils-et-utilitaires-src-tools"><a class="anchor" href="#outils-et-utilitaires-src-tools">#</a>Outils et utilitaires (<code>src/tools/</code>)</h3>
+<table>
+<thead>
+<tr>
+<th>Module</th>
+<th>Rôle</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>fetchCfp</code></td>
+<td>télécharge ou lit l&#39;appel (URL ou fichier local), extrait le texte, crée ou met à jour l&#39;item Omeka de l&#39;appel</td>
+</tr>
+<tr>
+<td><code>fetchZoteroData</code></td>
+<td>parcourt la collection, extrait chaque pièce jointe, fusionne annotations et notes, enregistre documents, annotations et médias dans Omeka</td>
+</tr>
+<tr>
+<td><code>attachmentExtract</code></td>
+<td>extraction par format : PDF, page web enregistrée (zip), HTML, DOCX, ODT, EPUB, texte, image</td>
+</tr>
+<tr>
+<td><code>pdfExtract</code></td>
+<td>PDF.js : texte, surlignages (reconstruction par quadPoints), notes, auteur, images (encodage PNG via zlib)</td>
+</tr>
+<tr>
+<td><code>zip</code></td>
+<td>lecteur ZIP minimal (répertoire central + zlib)</td>
+</tr>
+<tr>
+<td><code>zotero</code></td>
+<td>client de l&#39;API Zotero v3 : bibliothèque personnelle ou de groupe, pagination, notes, annotations, BibTeX</td>
+</tr>
+<tr>
+<td><code>zoteroToOmeka</code></td>
+<td>correspondance métadonnées Zotero → dcterms / bibo / curation</td>
+</tr>
+<tr>
+<td><code>zoteroCollections</code></td>
+<td>items Omeka des collections Zotero (création à la demande, sous-collections)</td>
+</tr>
+<tr>
+<td><code>omk</code></td>
+<td>client de l&#39;API REST Omeka S (formatage des valeurs, liens, upload de médias)</td>
+</tr>
+<tr>
+<td><code>oaAnnotations</code></td>
+<td>enregistrement et relecture des <code>oa:Annotation</code></td>
+</tr>
+<tr>
+<td><code>buildLLMWiki</code></td>
+<td>extraction Map-Reduce des concepts (annotations par positionnement, marqueurs, extraits de texte)</td>
+</tr>
+<tr>
+<td><code>cleanGraph</code></td>
+<td>nettoyage déterministe puis sémantique (modèle analytique) du graphe</td>
+</tr>
+<tr>
+<td><code>conceptIndex</code></td>
+<td>recherche d&#39;un concept existant (identifiant ou titre) avant création</td>
+</tr>
+<tr>
+<td><code>conceptStore</code></td>
+<td>relecture du graphe d&#39;un document déjà extrait</td>
+</tr>
+<tr>
+<td><code>exportToOpenKnowledge</code></td>
+<td>concepts, relations, liens document → concepts, date d&#39;extraction</td>
+</tr>
+<tr>
+<td><code>annotationPositions</code></td>
+<td>couleur → positionnement (distance RVB)</td>
+</tr>
+<tr>
+<td><code>codebook</code></td>
+<td>codes de la grille d&#39;annotation (kappa)</td>
+</tr>
+<tr>
+<td><code>fetchOmekaAnnotations</code></td>
+<td>annotations codées par juge, regroupées par phrase (similarité de Jaccard)</td>
+</tr>
+<tr>
+<td><code>calculateFleissKappa</code></td>
+<td>kappa de Fleiss (nombre de juges variable), kappa de Cohen, CSV des désaccords</td>
+</tr>
+<tr>
+<td><code>compileCollection</code></td>
+<td>références BibTeX, citations, mots-clés, auteurs pour PropAPP</td>
+</tr>
+<tr>
+<td><code>chunkText</code></td>
+<td>découpage des textes en extraits avec chevauchement</td>
+</tr>
+</tbody></table>
+<h2 id="4-extraction-des-documents"><a class="anchor" href="#4-extraction-des-documents">#</a>4. Extraction des documents</h2>
+<pre class="mermaid">flowchart TD
+    A[Pièce jointe Zotero] --&gt; B{linkMode}
+    B -- linked_url --&gt; L[Lien sans fichier :&lt;br/&gt;métadonnées seules]
+    B -- fichier --&gt; C[Téléchargement /items/KEY/file]
+    C --&gt; D{Type}
+    D -- PDF --&gt; P[pdfExtract : texte,&lt;br/&gt;surlignages, notes, images]
+    D -- page web --&gt; H{Archive zip ?}
+    H -- oui --&gt; HZ[readZip → page principale&lt;br/&gt;+ images affichées]
+    H -- non --&gt; HT[HTML]
+    HZ --&gt; MC[mainContent : zone d'article&lt;br/&gt;article-texte, entry-content, article, main]
+    HT --&gt; MC
+    D -- DOCX / ODT --&gt; X[XML + commentaires&lt;br/&gt;+ images]
+    D -- EPUB --&gt; E[&quot;ordre de lecture (spine)&lt;br/&gt;+ images du manifeste&quot;]
+    D -- texte / image / autre --&gt; T[texte brut, image, ou dépôt seul]
+    P --&gt; M[Fusion : annotations du fichier&lt;br/&gt;+ lecteur Zotero + notes de la notice]
+    MC --&gt; M
+    X --&gt; M
+    E --&gt; M
+    T --&gt; M
+    M --&gt; O[Item Omeka : métadonnées de la notice,&lt;br/&gt;texte, oa:Annotation, médias]</pre>
+<p>Clé de fusion des annotations : phrase normalisée, commentaire, auteur et code (deux juges peuvent annoter la même phrase). Les codes de la grille présents dans les marqueurs sont séparés des marqueurs ordinaires (<code>splitCodes</code>).</p>
+<h2 id="5-graphe-de-concepts"><a class="anchor" href="#5-graphe-de-concepts">#</a>5. Graphe de concepts</h2>
+<pre class="mermaid">flowchart LR
+    A[Articles] --&gt; M0[Marqueurs Zotero&lt;br/&gt;→ nœuds verrouillés]
+    A --&gt; R{curation:access&lt;br/&gt;renseigné ?}
+    R -- oui --&gt; RL[Relecture Omeka :&lt;br/&gt;dcterms:subject + dcterms:relation]
+    R -- non --&gt; P0[Phase 0 : annotations&lt;br/&gt;regroupées par positionnement]
+    P0 --&gt; P1[Phase 1 : extraits de texte&lt;br/&gt;modèle rapide, schéma JSON]
+    P1 --&gt; RED[Reduce : fusion,&lt;br/&gt;sources par nœud]
+    M0 --&gt; RED
+    RL --&gt; RED
+    RED --&gt; C1[Nettoyage déterministe :&lt;br/&gt;markdown, identifiants,&lt;br/&gt;boucles, doublons]
+    C1 --&gt; C2[Nettoyage sémantique :&lt;br/&gt;modèle analytique par lots&lt;br/&gt;libellés, fusions, suppressions]
+    C2 --&gt; C3[Suppression des nœuds isolés]
+    C3 --&gt; G[Graphe final]</pre>
+<ul>
+<li>Les nœuds <strong>verrouillés</strong> (marqueurs) et <strong>connus</strong> (déjà dans Omeka) ne sont ni renommés ni supprimés par le nettoyage sémantique.</li>
+<li>Chaque nœud garde ses <code>sources</code> (clés Zotero des pièces jointes) à travers les fusions : elles servent aux liens <code>dcterms:subject</code>.</li>
+<li>Un article n&#39;est marqué extrait (<code>curation:access</code>) qu&#39;après une extraction sans erreur et l&#39;export de ses concepts.</li>
+</ul>
+<h2 id="6-accord-inter-juges"><a class="anchor" href="#6-accord-inter-juges">#</a>6. Accord inter-juges</h2>
+<pre class="mermaid">flowchart LR
+    A[oa:Annotation&lt;br/&gt;dcterms:creator = juge&lt;br/&gt;curation:type = code] --&gt; B[Regroupement par phrase&lt;br/&gt;Jaccard ≥ unitSimilarity]
+    B --&gt; C[Un code par juge et par phrase]
+    C --&gt; D[Phrases codées&lt;br/&gt;par ≥ 2 juges]
+    D --&gt; E[Kappa de Fleiss&lt;br/&gt;n juges variable]
+    D --&gt; F[Kappa de Cohen&lt;br/&gt;si 2 juges]
+    E --&gt; G[CSV des désaccords,&lt;br/&gt;confusions, bilan de l'agent]
+    F --&gt; G</pre>
+<p>Kappa de Fleiss généralisé : P̄ = moyenne des Pᵢ = (Σⱼ nᵢⱼ² − nᵢ) / (nᵢ(nᵢ − 1)), Pₑ = Σⱼ pⱼ² avec pⱼ = Σᵢ nᵢⱼ / Σᵢ nᵢ. Le calcul est validé sur l&#39;exemple de référence de Fleiss (κ = 0,210) et celui de Cohen (κ = 0,4).</p>
+<h2 id="7-proposition-d-39-article-propapp"><a class="anchor" href="#7-proposition-d-39-article-propapp">#</a>7. Proposition d&#39;article (PropAPP)</h2>
+<pre class="mermaid">sequenceDiagram
+    participant S as draft-paper
+    participant Z as Zotero
+    participant W as writerAgent
+    participant O as Omeka S
+    S-&gt;&gt;Z: items/top?include=data,bibtex,citation
+    Z--&gt;&gt;S: BibTeX (clés de citation) + citations APA
+    S-&gt;&gt;S: citations (passages, notes « … » § n),&lt;br/&gt;mots-clés, auteurs (annotateurs)
+    S-&gt;&gt;W: AttenduAPP, plan, mots-clés, références,&lt;br/&gt;citations, résumé du graphe (balises)
+    W--&gt;&gt;S: texte markdown selon le plan
+    S-&gt;&gt;S: assemblage : YAML, texte, annexe des citations,&lt;br/&gt;références (::: {#refs}) + BibTeX
+    S-&gt;&gt;O: médias PropAPP.md et PropAPP.bib&lt;br/&gt;dans l'item de l'appel</pre>
+<p>PropAPP est compatible <strong>Pandoc</strong> : <code>pandoc PropAPP.md --citeproc -o PropAPP.docx</code> produit un document avec la bibliographie (le fichier <code>PropAPP.bib</code> doit être à côté).</p>
+<h2 id="8-modele-de-donnees-omeka-s"><a class="anchor" href="#8-modele-de-donnees-omeka-s">#</a>8. Modèle de données Omeka S</h2>
+<pre class="mermaid">erDiagram
+    COLLECTION {
+        classe bibo_Collection
+        dcterms_title nom &quot;nom de la collection Zotero&quot;
+        dcterms_identifier cle &quot;clé de la collection&quot;
+        dcterms_isPartOf lien &quot;collection parente&quot;
+    }
+    DOCUMENT {
+        classe bibo_AcademicArticle &quot;ou BookSection, Webpage…&quot;
+        dcterms_identifier cle &quot;clé de la pièce jointe&quot;
+        dcterms_creator auteurs &quot;métadonnées de la notice&quot;
+        dcterms_description texte &quot;texte extrait&quot;
+        curation_access date &quot;date d'extraction&quot;
+        curation_tag marqueurs &quot;marqueurs Zotero&quot;
+    }
+    ANNOTATION {
+        classe oa_Annotation
+        oa_exact passage &quot;phrase surlignée&quot;
+        oa_bodyValue note &quot;commentaire ou note&quot;
+        oa_styleClass couleur &quot;couleur du surlignage&quot;
+        curation_category position &quot;positionnement&quot;
+        curation_type code &quot;code de la grille&quot;
+        dcterms_creator juge &quot;auteur de l'annotation&quot;
+    }
+    CONCEPT {
+        classe skos_Concept
+        dcterms_identifier id &quot;identifiant normalisé&quot;
+        dcterms_title libelle &quot;libellé&quot;
+        dcterms_type categorie &quot;concept, auteur, marqueur…&quot;
+    }
+    APPEL {
+        classe bibo_CallForPapers &quot;repli bibo:Document&quot;
+        dcterms_identifier url &quot;lien de l'appel&quot;
+        dcterms_description texte &quot;texte de l'appel&quot;
+        medias fichiers &quot;AttenduAPP, PropAPP, BibTeX&quot;
+    }
+    CONFIGURATION {
+        classe dcterms_MethodOfInstruction
+        dcterms_identifier runId &quot;exécution&quot;
+        dcterms_description json &quot;configuration&quot;
+        curation_status statut &quot;running, success, failed&quot;
+    }
+    DOCUMENT }o--|{ COLLECTION : &quot;dcterms:isPartOf&quot;
+    ANNOTATION }o--|| DOCUMENT : &quot;oa:hasTarget&quot;
+    DOCUMENT }o--o{ CONCEPT : &quot;dcterms:subject&quot;
+    ANNOTATION }o--o{ CONCEPT : &quot;curation:tag&quot;
+    CONCEPT }o--o{ CONCEPT : &quot;dcterms:relation&quot;
+    APPEL }o--|| COLLECTION : &quot;dcterms:relation&quot;
+    CONFIGURATION }o--|| COLLECTION : &quot;dcterms:isPartOf&quot;</pre>
+<p>Les termes utilisés sont paramétrables dans <code>config.omeka</code> (<code>accessTerm</code>, <code>subjectTerm</code>, <code>relationTerm</code>, <code>codeTerm</code>, <code>authorTerm</code>, <code>conceptClass</code>, <code>configClass</code>, <code>cfpClass</code>).</p>
+<h2 id="9-configuration"><a class="anchor" href="#9-configuration">#</a>9. Configuration</h2>
+<p>La configuration par défaut est dans <code>src/config.ts</code> (<code>defaultWorkflowConfig</code>). Les modifications faites dans l&#39;interface sont enregistrées dans <code>workflow.config.json</code> (seules les différences) et fusionnées au chargement (<code>configStore.ts</code>). Les chemins <code>kappa.codes</code>, <code>annotationPositions</code>, <code>omeka.vocabs</code> et <code>steps</code> sont remplacés en bloc, les autres objets sont fusionnés clé par clé. Le fichier est désigné par <code>WORKFLOW_CONFIG_FILE</code> s&#39;il est défini.</p>
+<table>
+<thead>
+<tr>
+<th>Clé</th>
+<th>Rôle</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>input.cfpUrl</code>, <code>input.cfpFile</code>, <code>input.cfpText</code></td>
+<td>appel à propositions : lien, fichier local, texte ou précisions</td>
+</tr>
+<tr>
+<td><code>input.zoteroCollection</code></td>
+<td>clé de la collection Zotero</td>
+</tr>
+<tr>
+<td><code>models.provider</code>, <code>models.analytics</code>, <code>models.fast</code></td>
+<td>API Albert et modèles</td>
+</tr>
+<tr>
+<td><code>zotero.automaticTags</code></td>
+<td>inclure les marqueurs automatiques</td>
+</tr>
+<tr>
+<td><code>extraction.chunkSize</code>, <code>chunkOverlap</code>, <code>maxAnnotationChars</code></td>
+<td>découpage des textes, taille du bloc d&#39;annotations</td>
+</tr>
+<tr>
+<td><code>tagCategory</code></td>
+<td>catégorie des concepts issus des marqueurs</td>
+</tr>
+<tr>
+<td><code>annotationPositions</code>, <code>annotationColorTolerance</code></td>
+<td>table couleur → positionnement → consigne</td>
+</tr>
+<tr>
+<td><code>kappa.codes</code>, <code>unitSimilarity</code>, <code>targetKappa</code>, <code>csvPath</code></td>
+<td>accord inter-juges</td>
+</tr>
+<tr>
+<td><code>proposal.plan</code>, <code>authors</code>, <code>maxKeywords</code>, <code>ignoredTags</code>, <code>maxCitations</code>, <code>citationStyle</code></td>
+<td>PropAPP</td>
+</tr>
+<tr>
+<td><code>proposal.expectationsFile</code>, <code>proposalFile</code>, <code>bibtexFile</code></td>
+<td>noms des fichiers produits</td>
+</tr>
+<tr>
+<td><code>cleaning.batchSize</code></td>
+<td>taille des lots de nettoyage sémantique</td>
+</tr>
+<tr>
+<td><code>omeka.*</code></td>
+<td>vocabulaires, classes et propriétés</td>
+</tr>
+</tbody></table>
+<h2 id="10-api-de-l-39-interface"><a class="anchor" href="#10-api-de-l-39-interface">#</a>10. API de l&#39;interface</h2>
+<table>
+<thead>
+<tr>
+<th>Méthode et route</th>
+<th>Rôle</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>GET /</code></td>
+<td>page de l&#39;interface</td>
+</tr>
+<tr>
+<td><code>GET /api/settings</code></td>
+<td>variables <code>.env</code> (secrets masqués), configuration effective et par défaut</td>
+</tr>
+<tr>
+<td><code>POST /api/settings</code></td>
+<td>enregistre <code>.env</code> (un secret vide est conservé) et <code>workflow.config.json</code></td>
+</tr>
+<tr>
+<td><code>POST /api/check</code></td>
+<td>teste Albert, Zotero et Omeka S (vocabulaires)</td>
+</tr>
+<tr>
+<td><code>GET /api/zotero/collections</code></td>
+<td>collections de la bibliothèque</td>
+</tr>
+<tr>
+<td><code>GET /api/albert/models</code></td>
+<td>modèles disponibles</td>
+</tr>
+<tr>
+<td><code>POST /api/cfp-file?name=</code></td>
+<td>importe le fichier de l&#39;appel dans <code>aap/</code></td>
+</tr>
+<tr>
+<td><code>POST /api/run</code>, <code>POST /api/run/stop</code>, <code>GET /api/run</code></td>
+<td>lancer, arrêter, état</td>
+</tr>
+<tr>
+<td><code>GET /api/run/events</code></td>
+<td>journal et statut en Server-Sent Events</td>
+</tr>
+<tr>
+<td><code>GET /api/results</code>, <code>GET /api/file?name=</code></td>
+<td>liste et contenu des résultats (liste blanche)</td>
+</tr>
+<tr>
+<td><code>GET /docs/…</code></td>
+<td>documentation HTML</td>
+</tr>
+</tbody></table>
+<p>Le serveur écoute sur <code>127.0.0.1</code> (variable <code>HOST</code> pour le conteneur) et le port <code>PORT</code> (7272).</p>
+<h2 id="11-etendre-le-projet"><a class="anchor" href="#11-etendre-le-projet">#</a>11. Étendre le projet</h2>
+<p><strong>Ajouter un outil</strong> : créer <code>src/tools/monOutil.ts</code> sur le modèle des outils existants (<code>new Tool({ name, description, schema, execute: async ({ data }) =&gt; … })</code>, schéma zod typé avec <code>z.infer</code>), puis l&#39;exporter dans <code>src/tools/index.ts</code>.</p>
+<p><strong>Ajouter une étape</strong> : créer <code>src/workflow/monEtape.ts</code> avec <code>createStep({ id, execute })</code>, l&#39;insérer dans <code>paperProductionWorkflow.ts</code>, ajouter son identifiant à <code>config.steps</code> et son libellé dans <code>processingReport.ts</code>.</p>
+<p><strong>Ajouter un paramètre</strong> : l&#39;ajouter à <code>defaultWorkflowConfig</code> ; il apparaît automatiquement dans l&#39;interface (ajouter un libellé dans <code>LABELS</code>, et la section dans <code>SECTIONS</code>, de <code>index.html</code>).</p>
+<h2 id="12-documentation-et-conteneur"><a class="anchor" href="#12-documentation-et-conteneur">#</a>12. Documentation et conteneur</h2>
+<ul>
+<li><code>npm run docs</code> convertit <code>docs/*.md</code> en <code>docs/html/*.html</code> (script <code>scripts/build-docs.ts</code>, bibliothèque <strong>marked</strong> ; les diagrammes <strong>Mermaid</strong> sont rendus dans le navigateur).</li>
+<li><code>Dockerfile</code> : image <code>node:22-bookworm-slim</code>, code dans <code>/app</code>, données dans le volume <code>/data</code>, utilisateur <code>node</code>, commandes <code>workflow-ui</code> (défaut) et <code>workflow</code>.</li>
+<li><code>docker-compose.yml</code> : port publié sur <code>127.0.0.1:7272</code>, volume <code>./data:/data</code>, <code>host.docker.internal</code> pour un Omeka S local.</li>
+</ul>
+<h2 id="13-limites-connues"><a class="anchor" href="#13-limites-connues">#</a>13. Limites connues</h2>
+<ul>
+<li><code>tsc --noEmit</code> signale des erreurs de typage liées à la configuration TypeScript (CommonJS avec <code>verbatimModuleSyntax</code>) et aux types Mastra (étapes sans schéma) ; l&#39;exécution par tsx n&#39;est pas affectée.</li>
+<li>La reconstruction des passages surlignés d&#39;un PDF est une approximation proportionnelle à la largeur des blocs de texte.</li>
+<li>Les sites protégés contre les robots ne peuvent pas être téléchargés : utiliser un fichier local.</li>
+<li>Le contexte des modèles limite la taille des textes transmis (appel très long, plan très détaillé).</li>
+</ul>
+
+</main>
+<nav class="toc"><strong>Sur cette page</strong><a class="l2" href="#1-architecture">1. Architecture</a><a class="l2" href="#2-le-workflow">2. Le workflow</a><a class="l2" href="#3-organisation-du-code">3. Organisation du code</a><a class="l3" href="#agents-src-agents">Agents (src/agents/)</a><a class="l3" href="#outils-et-utilitaires-src-tools">Outils et utilitaires (src/tools/)</a><a class="l2" href="#4-extraction-des-documents">4. Extraction des documents</a><a class="l2" href="#5-graphe-de-concepts">5. Graphe de concepts</a><a class="l2" href="#6-accord-inter-juges">6. Accord inter-juges</a><a class="l2" href="#7-proposition-d-39-article-propapp">7. Proposition d&amp;#39;article (PropAPP)</a><a class="l2" href="#8-modele-de-donnees-omeka-s">8. Modèle de données Omeka S</a><a class="l2" href="#9-configuration">9. Configuration</a><a class="l2" href="#10-api-de-l-39-interface">10. API de l&amp;#39;interface</a><a class="l2" href="#11-etendre-le-projet">11. Étendre le projet</a><a class="l2" href="#12-documentation-et-conteneur">12. Documentation et conteneur</a><a class="l2" href="#13-limites-connues">13. Limites connues</a></nav>
+</div>
+<script type="module">
+import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+mermaid.initialize({ startOnLoad: true, theme: matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "default", flowchart: { htmlLabels: true } });
+</script>
+</body>
+</html>

@@ -1,0 +1,354 @@
+// Interface client du workflow : paramètres (.env + configuration), lancement, suivi et résultats
+// Lancement : npm run ui (http://127.0.0.1:PORT)
+import http from "http";
+import fs from "fs";
+import path from "path";
+import { spawn, type ChildProcess } from "child_process";
+import dotenv from "dotenv";
+import { defaultWorkflowConfig } from "../config";
+import { mergeConfig, readConfigOverride, writeConfigOverride, CONFIG_FILE } from "../configStore";
+import { Zotero } from "../tools/zotero";
+import { Omk } from "../tools/omk";
+
+// ROOT : répertoire de données (.env, workflow.config.json, résultats) = répertoire courant
+// APP_DIR : code du projet (identique à ROOT en local, distinct dans le conteneur Docker)
+const ROOT = process.cwd();
+const APP_DIR = path.resolve(__dirname, "..", "..");
+const ENV_FILE = path.join(ROOT, ".env");
+const PUBLIC_DIR = path.join(__dirname, "public");
+const TSX = path.join(APP_DIR, "node_modules", ".bin", "tsx");
+
+// variables d'environnement gérées par l'interface
+const ENV_FIELDS = [
+  { key: "ALBERT_API_KEY", label: "Clé API Albert", secret: true, group: "Albert", help: "Clé de l'API Albert (Etalab) pour les modèles de langage." },
+  { key: "ZOTERO_API_KEY", label: "Clé API Zotero", secret: true, group: "Zotero", help: "À créer sur https://www.zotero.org/settings/keys (lecture de la bibliothèque)." },
+  { key: "ZOTERO_USER_ID", label: "Identifiant utilisateur Zotero", group: "Zotero", help: "Visible sur la page des clés Zotero (« Your userID for use in API calls »)." },
+  { key: "ZOTERO_GROUP_ID", label: "Identifiant du groupe Zotero", group: "Zotero", help: "Facultatif : bibliothèque de groupe (annotations de plusieurs juges). Vide = bibliothèque personnelle." },
+  { key: "OMKS_API_URL", label: "URL de l'API Omeka S", group: "Omeka S", help: "Ex. https://mon-omeka.fr/api" },
+  { key: "OMKS_KEY_IDENTITY", label: "Identité de la clé Omeka S", group: "Omeka S", help: "Clé API d'un utilisateur Omeka S (Utilisateur > Clés API)." },
+  { key: "OMKS_KEY_CREDENTIAL", label: "Secret de la clé Omeka S", secret: true, group: "Omeka S" },
+  { key: "PORT", label: "Port de l'interface", group: "Interface", help: "Pris en compte au prochain lancement de npm run ui." },
+];
+const SECRET_KEYS = new Set(ENV_FIELDS.filter(f => f.secret).map(f => f.key));
+
+// ==========================================
+// .env et configuration
+// ==========================================
+
+function readEnv(): Record<string, string> {
+  return fs.existsSync(ENV_FILE) ? dotenv.parse(fs.readFileSync(ENV_FILE)) : {};
+}
+
+// met à jour les clés du .env en conservant les commentaires et les autres variables
+function writeEnv(values: Record<string, string>) {
+  const lines = fs.existsSync(ENV_FILE) ? fs.readFileSync(ENV_FILE, "utf-8").split("\n") : [];
+  const done = new Set<string>();
+  const format = (v: string) => (/[\s#"'=]/.test(v) ? JSON.stringify(v) : v);
+  const out = lines.map(line => {
+    const m = /^\s*([A-Z0-9_]+)\s*=/.exec(line);
+    if (m && m[1]! in values) {
+      done.add(m[1]!);
+      return `${m[1]}=${format(values[m[1]!]!)}`;
+    }
+    return line;
+  });
+  for (const [k, v] of Object.entries(values)) if (!done.has(k)) out.push(`${k}=${format(v)}`);
+  fs.writeFileSync(ENV_FILE, out.join("\n").replace(/\n*$/, "\n"), "utf-8");
+}
+
+const currentConfig = () => mergeConfig(defaultWorkflowConfig, readConfigOverride());
+
+// ==========================================
+// Exécution du workflow (processus enfant : configuration et connexions relues à chaque lancement)
+// ==========================================
+
+interface Run {
+  id: number;
+  status: "running" | "success" | "failed" | "stopped";
+  startedAt: number;
+  endedAt?: number;
+  logs: string[];
+  child?: ChildProcess | undefined;
+}
+let run: Run | null = null;
+let runCounter = 0;
+const listeners = new Set<http.ServerResponse>();
+const stripAnsi = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, "");
+
+function broadcast(event: string, data: unknown) {
+  const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+  for (const res of listeners) res.write(payload);
+}
+
+function runState() {
+  return run && { id: run.id, status: run.status, startedAt: run.startedAt, endedAt: run.endedAt, lines: run.logs.length };
+}
+
+function startRun(): Run {
+  const r: Run = { id: ++runCounter, status: "running", startedAt: Date.now(), logs: [] };
+  run = r;
+  const child = spawn(TSX, [path.join(APP_DIR, "src", "index.ts")], {
+    cwd: ROOT,
+    env: { ...process.env, ...readEnv(), FORCE_COLOR: "0", NO_COLOR: "1" },
+  });
+  r.child = child;
+  let partial = "";
+  const onData = (chunk: Buffer) => {
+    const text = partial + stripAnsi(chunk.toString("utf-8"));
+    const lines = text.split("\n");
+    partial = lines.pop() ?? "";
+    for (const line of lines) {
+      r.logs.push(line);
+      if (r.logs.length > 20000) r.logs.shift();
+      broadcast("log", line);
+    }
+  };
+  child.stdout.on("data", onData);
+  child.stderr.on("data", onData);
+  child.on("close", code => {
+    if (partial) {
+      r.logs.push(partial);
+      broadcast("log", partial);
+    }
+    if (r.status === "running") {
+      // index.ts ne quitte pas en erreur si le workflow échoue : on lit le statut dans les logs
+      const failed = code !== 0 || r.logs.some(l => l.includes("❌ Le workflow a échoué"));
+      r.status = failed ? "failed" : "success";
+    }
+    r.endedAt = Date.now();
+    r.child = undefined;
+    broadcast("status", runState());
+  });
+  broadcast("status", runState());
+  return r;
+}
+
+// ==========================================
+// Tests de connexion
+// ==========================================
+
+async function checkConnections() {
+  const env = readEnv();
+  const result: Record<string, { ok: boolean; message: string }> = {};
+
+  try {
+    const res = await fetch(`${currentConfig().models.provider}/models`, { headers: { Authorization: `Bearer ${env.ALBERT_API_KEY}` } });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data: any = await res.json();
+    result.albert = { ok: true, message: `${data.data?.length ?? 0} modèle(s) disponible(s)` };
+  } catch (e) {
+    result.albert = { ok: false, message: (e as Error).message };
+  }
+
+  try {
+    if (!env.ZOTERO_API_KEY || !(env.ZOTERO_USER_ID || env.ZOTERO_GROUP_ID)) throw new Error("clé ou identifiant manquant");
+    const collections = await new Zotero(env.ZOTERO_USER_ID ?? "", env.ZOTERO_API_KEY, env.ZOTERO_GROUP_ID || undefined).collections();
+    result.zotero = { ok: true, message: `${collections.length} collection(s) dans la bibliothèque ${env.ZOTERO_GROUP_ID ? `du groupe ${env.ZOTERO_GROUP_ID}` : "personnelle"}` };
+  } catch (e) {
+    result.zotero = { ok: false, message: (e as Error).message };
+  }
+
+  try {
+    if (!env.OMKS_API_URL) throw new Error("URL manquante");
+    const omk = new Omk({ api: env.OMKS_API_URL, ident: env.OMKS_KEY_IDENTITY ?? "", key: env.OMKS_KEY_CREDENTIAL ?? "", vocabs: [] });
+    const vocabs = await omk.request(omk.url("vocabularies", { per_page: 100 }));
+    const prefixes = vocabs.map((v: any) => v["o:prefix"]);
+    const missing = currentConfig().omeka.vocabs.filter(v => !prefixes.includes(v));
+    // une requête authentifiée sur les utilisateurs vérifie la validité de la clé
+    await omk.request(omk.url("users", { per_page: 1 }));
+    result.omeka = {
+      ok: missing.length === 0,
+      message: missing.length ? `vocabulaire(s) manquant(s) : ${missing.join(", ")}` : `vocabulaires : ${prefixes.join(", ")}`,
+    };
+  } catch (e) {
+    result.omeka = { ok: false, message: (e as Error).message };
+  }
+  return result;
+}
+
+// ==========================================
+// Résultats
+// ==========================================
+
+function resultFiles() {
+  const config = currentConfig();
+  const files = [
+    { name: config.proposal.proposalFile, title: "PropAPP – Proposition d'article" },
+    { name: config.proposal.expectationsFile, title: "AttenduAPP – Attendus de l'appel" },
+    { name: "rapport_traitement.md", title: "Rapport de traitement" },
+    { name: config.proposal.bibtexFile, title: "Références BibTeX" },
+    { name: "relecture_article.md", title: "Relecture épistémologique" },
+    { name: "visualisation_graphe.html", title: "Graphe de concepts (sigma.js)" },
+    { name: config.kappa.csvPath, title: "Désaccords d'annotation entre juges" },
+  ];
+  return files
+    .map(f => {
+      const full = path.resolve(ROOT, f.name);
+      return fs.existsSync(full) ? { ...f, size: fs.statSync(full).size, mtime: fs.statSync(full).mtimeMs } : null;
+    })
+    .filter(Boolean);
+}
+
+// ==========================================
+// Serveur HTTP
+// ==========================================
+
+function sendJson(res: http.ServerResponse, status: number, data: unknown) {
+  res.writeHead(status, { "Content-Type": "application/json; charset=utf-8" });
+  res.end(JSON.stringify(data));
+}
+
+async function readBody(req: http.IncomingMessage): Promise<any> {
+  let body = "";
+  for await (const chunk of req) {
+    body += chunk;
+    if (body.length > 2_000_000) throw new Error("Requête trop volumineuse");
+  }
+  return body ? JSON.parse(body) : {};
+}
+
+const routes: Record<string, (req: http.IncomingMessage, res: http.ServerResponse, url: URL) => Promise<void> | void> = {
+  "GET /": (_req, res) => {
+    res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+    res.end(fs.readFileSync(path.join(PUBLIC_DIR, "index.html")));
+  },
+
+  "GET /api/settings": (_req, res) => {
+    const env = readEnv();
+    sendJson(res, 200, {
+      env: ENV_FIELDS.map(f => ({ ...f, value: f.secret ? "" : env[f.key] ?? "", isSet: !!env[f.key] })),
+      config: currentConfig(),
+      defaults: defaultWorkflowConfig,
+      configFile: path.relative(ROOT, CONFIG_FILE),
+    });
+  },
+
+  "POST /api/settings": async (req, res) => {
+    const { env = {}, config } = await readBody(req);
+    // un secret laissé vide n'est pas modifié ; clear:true l'efface
+    const values: Record<string, string> = {};
+    for (const f of ENV_FIELDS) {
+      const v = env[f.key];
+      if (v === undefined) continue;
+      if (SECRET_KEYS.has(f.key) && v.value === "" && !v.clear) continue;
+      values[f.key] = String(v.value ?? "").trim();
+    }
+    writeEnv(values);
+    const saved = config ? writeConfigOverride(defaultWorkflowConfig, config) : undefined;
+    sendJson(res, 200, { ok: true, override: saved });
+  },
+
+  // import du fichier de l'appel à propositions (enregistré depuis un navigateur quand le site bloque les robots)
+  "POST /api/cfp-file": async (req, res, url) => {
+    const name = path.basename(url.searchParams.get("name") ?? "appel").replace(/[^\w.\-]+/g, "_");
+    if (!/\.(pdf|html?|txt|md|docx|odt)$/i.test(name)) return sendJson(res, 400, { error: "Formats acceptés : PDF, HTML, TXT, MD, DOCX, ODT." });
+    const chunks: Buffer[] = [];
+    let size = 0;
+    for await (const chunk of req) {
+      size += chunk.length;
+      if (size > 50_000_000) return sendJson(res, 413, { error: "Fichier trop volumineux (50 Mo maximum)." });
+      chunks.push(chunk);
+    }
+    const dir = path.join(ROOT, "aap");
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, name), Buffer.concat(chunks));
+    sendJson(res, 200, { path: `aap/${name}` });
+  },
+
+  "POST /api/check": async (_req, res) => sendJson(res, 200, await checkConnections()),
+
+  "GET /api/zotero/collections": async (_req, res) => {
+    const env = readEnv();
+    try {
+      const zotero = new Zotero(env.ZOTERO_USER_ID ?? "", env.ZOTERO_API_KEY ?? "", env.ZOTERO_GROUP_ID || undefined);
+      const collections = (await zotero.collections()).map((c: any) => ({
+        key: c.key, name: c.data.name, parent: c.data.parentCollection || null, items: c.meta?.numItems ?? null,
+      }));
+      sendJson(res, 200, collections);
+    } catch (e) {
+      sendJson(res, 502, { error: (e as Error).message });
+    }
+  },
+
+  "GET /api/albert/models": async (_req, res) => {
+    const env = readEnv();
+    try {
+      const r = await fetch(`${currentConfig().models.provider}/models`, { headers: { Authorization: `Bearer ${env.ALBERT_API_KEY}` } });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const data: any = await r.json();
+      sendJson(res, 200, (data.data ?? []).map((m: any) => ({ id: m.id, type: m.type ?? null })));
+    } catch (e) {
+      sendJson(res, 502, { error: (e as Error).message });
+    }
+  },
+
+  "POST /api/run": (_req, res) => {
+    if (run?.status === "running") return sendJson(res, 409, { error: "Un traitement est déjà en cours." });
+    startRun();
+    sendJson(res, 200, runState());
+  },
+
+  "POST /api/run/stop": (_req, res) => {
+    if (run?.child) {
+      run.status = "stopped";
+      run.child.kill("SIGTERM");
+    }
+    sendJson(res, 200, runState());
+  },
+
+  "GET /api/run": (_req, res) => sendJson(res, 200, runState()),
+
+  // flux des logs (Server-Sent Events) : historique du traitement en cours puis lignes en direct
+  "GET /api/run/events": (req, res) => {
+    res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive" });
+    res.write(`event: status\ndata: ${JSON.stringify(runState())}\n\n`);
+    for (const line of run?.logs ?? []) res.write(`event: log\ndata: ${JSON.stringify(line)}\n\n`);
+    listeners.add(res);
+    req.on("close", () => listeners.delete(res));
+  },
+
+  "GET /api/results": (_req, res) => sendJson(res, 200, resultFiles()),
+
+  "GET /api/file": (_req, res, url) => {
+    const name = url.searchParams.get("name") ?? "";
+    // seuls les fichiers de résultats connus sont servis
+    if (!resultFiles().some((f: any) => f.name === name)) return sendJson(res, 404, { error: "Fichier inconnu" });
+    // raw=1 : page HTML servie telle quelle (ouverture du graphe en plein écran)
+    const raw = url.searchParams.get("raw") === "1" && name.endsWith(".html");
+    res.writeHead(200, { "Content-Type": `${raw ? "text/html" : "text/plain"}; charset=utf-8` });
+    res.end(fs.readFileSync(path.resolve(ROOT, name)));
+  },
+};
+
+// documentation HTML générée par npm run docs (docs/html)
+const DOCS_DIR = path.join(APP_DIR, "docs", "html");
+function serveDocs(res: http.ServerResponse, pathname: string) {
+  const name = path.basename(pathname.replace(/^\/docs\/?/, "") || "index.html");
+  const file = path.join(DOCS_DIR, name);
+  if (!name.endsWith(".html") || !fs.existsSync(file)) return sendJson(res, 404, { error: "Page de documentation introuvable (lancer npm run docs)" });
+  res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+  res.end(fs.readFileSync(file));
+}
+
+const server = http.createServer(async (req, res) => {
+  const url = new URL(req.url ?? "/", "http://localhost");
+  if (req.method === "GET" && (url.pathname === "/docs" || url.pathname.startsWith("/docs/"))) {
+    if (url.pathname === "/docs") { res.writeHead(302, { Location: "/docs/" }); return res.end(); }
+    return serveDocs(res, url.pathname);
+  }
+  const handler = routes[`${req.method} ${url.pathname}`];
+  if (!handler) return sendJson(res, 404, { error: "Introuvable" });
+  try {
+    await handler(req, res, url);
+  } catch (e) {
+    if (!res.headersSent) sendJson(res, 500, { error: (e as Error).message });
+  }
+});
+
+const port = Number(process.env.PORT || readEnv().PORT) || 7272;
+// écoute locale par défaut : l'interface manipule des clés d'API
+// (dans le conteneur Docker, HOST=0.0.0.0 et le port n'est publié que sur 127.0.0.1 de l'hôte)
+const host = process.env.HOST || "127.0.0.1";
+server.listen(port, host, () => {
+  console.log(`🖥️  Interface du workflow : http://${host === "0.0.0.0" ? "127.0.0.1" : host}:${port}`);
+});

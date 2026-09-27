@@ -1,27 +1,12 @@
 // src/omekaVerify.ts
+import { getOmk } from "./tools/omk";
 
 export async function verifyRecentOmekaItems(limit: number = 5) {
-  const apiUrl = process.env.OMEKA_S_API_URL;
-  const keyId = process.env.OMEKA_S_KEY_IDENTITY;
-  const keyCred = process.env.OMEKA_S_KEY_CREDENTIAL;
-
-  if (!apiUrl || !keyId || !keyCred) {
-    console.error("⚠️ Identifiants Omeka S manquants pour la vérification.");
-    return;
-  }
-
-  // Requête pour obtenir les X derniers items créés (triés par date de création décroissante)
-  const queryUrl = `${apiUrl}/items?key_identity=${keyId}&key_credential=${keyCred}&sort_by=created&sort_order=desc&per_page=${limit}`;
-
   try {
+    const omk = await getOmk();
     console.log(`\n🔍 Vérification des ${limit} derniers items dans Omeka S...`);
-    const response = await fetch(queryUrl);
-    
-    if (!response.ok) {
-      throw new Error(`Erreur HTTP: ${response.status}`);
-    }
-
-    const items = await response.json();
+    // Requête pour obtenir les X derniers items créés (triés par date de création décroissante)
+    const items = await omk.searchItems({ sort_by: "created", sort_order: "desc", per_page: limit });
 
     if (items.length === 0) {
       console.log("   Aucun item trouvé dans l'instance Omeka S.");
@@ -41,6 +26,9 @@ export async function verifyRecentOmekaItems(limit: number = 5) {
       for (const [propertyKey, propertyValues] of Object.entries(item)) {
         // Ignorer les propriétés internes d'Omeka (qui commencent par o:)
         if (propertyKey.startsWith("o:")) continue;
+
+        // Ignorer les champs JSON-LD et techniques qui ne sont pas des listes de valeurs (@context, @id, @type, thumbnail_display_urls…)
+        if (!Array.isArray(propertyValues)) continue;
 
         const values = propertyValues as any[];
         const linkedResources = values.filter(v => v.type === "resource");

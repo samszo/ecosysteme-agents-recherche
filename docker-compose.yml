@@ -1,0 +1,19 @@
+# Lancement : docker compose up -d   puis   http://127.0.0.1:7272
+services:
+  workflow:
+    build: .
+    image: ecosysteme-agents-recherche:latest
+    container_name: ecosysteme-agents-recherche
+    restart: unless-stopped
+    environment:
+      HOST: 0.0.0.0
+      PORT: 7272
+    # interface publiée uniquement sur la machine hôte : elle manipule des clés d'API
+    ports:
+      - "127.0.0.1:7272:7272"
+    # données persistantes : .env, workflow.config.json et résultats (à créer avant le premier lancement)
+    volumes:
+      - ./data:/data
+    # accès à un Omeka S installé sur la machine hôte : OMKS_API_URL=http://host.docker.internal/...
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

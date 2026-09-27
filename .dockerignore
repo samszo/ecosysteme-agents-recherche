@@ -1,0 +1,21 @@
+# dépendances et secrets : jamais dans l'image
+node_modules
+.env
+data
+# résultats et fichiers de travail
+generated
+aap
+*.md
+!README.md
+!grille_annotation.md
+!docs/**/*.md
+*.bib
+visualisation_graphe.*
+workflow.config.json
+# outils
+.git
+.vscode
+.claude
+.kilo
+.DS_Store
+**/.DS_Store

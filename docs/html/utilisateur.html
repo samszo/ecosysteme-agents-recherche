@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Documentation utilisateur – Écosystème d'agents</title>
+<style>
+  :root { --bg: #f6f5f1; --panel: #ffffff; --ink: #1d1f24; --muted: #6b6f78; --line: #e2e0d9; --accent: #2f5d8a; --code: #f0eee8; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #15171b; --panel: #1d2026; --ink: #e8e9ec; --muted: #9aa0aa; --line: #2e323a; --accent: #7fb0e0; --code: #111317; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { background: var(--panel); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 2; }
+  header .bar { max-width: 1180px; margin: 0 auto; padding: 10px 16px; display: flex; gap: 18px; align-items: center; flex-wrap: wrap; }
+  header .brand { font-weight: 650; }
+  header nav { display: flex; gap: 4px; flex-wrap: wrap; }
+  header nav a { color: var(--muted); text-decoration: none; padding: 4px 10px; border-radius: 6px; }
+  header nav a[aria-current] { color: var(--ink); background: var(--bg); }
+  .layout { max-width: 1180px; margin: 0 auto; padding: 24px 16px 80px; display: grid; grid-template-columns: minmax(0, 1fr) 230px; gap: 32px; }
+  main { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 8px 32px 32px; min-width: 0; }
+  .toc { position: sticky; top: 70px; align-self: start; font-size: 13.5px; display: flex; flex-direction: column; gap: 4px; max-height: calc(100vh - 90px); overflow: auto; }
+  .toc strong { margin-bottom: 4px; }
+  .toc a { color: var(--muted); text-decoration: none; }
+  .toc a.l3 { padding-left: 12px; }
+  .toc a:hover { color: var(--accent); }
+  h1 { font-size: 28px; line-height: 1.25; }
+  h2 { font-size: 21px; margin-top: 36px; padding-top: 8px; border-top: 1px solid var(--line); }
+  h3 { font-size: 17px; margin-top: 26px; }
+  .anchor { color: var(--line); text-decoration: none; margin-right: 6px; font-weight: 400; }
+  h2:hover .anchor, h3:hover .anchor { color: var(--accent); }
+  a { color: var(--accent); }
+  code { background: var(--code); padding: 1px 5px; border-radius: 4px; font-size: .9em; }
+  pre { background: var(--code); padding: 12px 14px; border-radius: 8px; overflow: auto; font-size: 13.5px; line-height: 1.45; }
+  pre code { background: none; padding: 0; }
+  pre.mermaid { background: var(--panel); border: 1px solid var(--line); text-align: center; }
+  table { border-collapse: collapse; width: 100%; font-size: 14.5px; margin: 12px 0 20px; display: block; overflow-x: auto; }
+  th, td { border: 1px solid var(--line); padding: 6px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--bg); }
+  blockquote { margin: 12px 0; padding: 4px 14px; border-left: 3px solid var(--accent); color: var(--muted); background: var(--bg); border-radius: 0 6px 6px 0; }
+  @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } .toc { display: none; } main { padding: 4px 16px 24px; } }
+</style>
+</head>
+<body>
+<header><div class="bar"><span class="brand">Écosystème d'agents – documentation</span><nav><a href="index.html">Accueil</a><a href="installation.html">Installation</a><a href="utilisateur.html" aria-current="page">Utilisateur</a><a href="technique.html">Technique</a></nav></div></header>
+<div class="layout">
+<main>
+<h1 id="documentation-utilisateur"><a class="anchor" href="#documentation-utilisateur">#</a>Documentation utilisateur</h1>
+<p>L&#39;écosystème d&#39;agents aide à <strong>répondre à un appel à propositions (AAP)</strong> à partir d&#39;une <strong>collection Zotero</strong> annotée. Il analyse les attendus de l&#39;appel, extrait les concepts de la collection, mesure l&#39;accord entre annotateurs, puis rédige une <strong>proposition d&#39;article</strong> avec références, citations et mots-clés. Tout est archivé dans <strong>Omeka S</strong>.</p>
+<pre class="mermaid">flowchart LR
+    subgraph Préparer[&quot;1. Préparer (Zotero)&quot;]
+        Z1[Collection de documents] --&gt; Z2[Surlignages en couleur,&lt;br/&gt;notes, marqueurs]
+    end
+    subgraph Paramétrer[&quot;2. Paramétrer (interface)&quot;]
+        P1[Collection Zotero] --&gt; P2[Lien ou fichier de l'appel]
+        P2 --&gt; P3[Plan de la proposition]
+    end
+    subgraph Lancer[&quot;3. Lancer&quot;]
+        L1[Enregistrer et lancer] --&gt; L2[Suivre le journal]
+    end
+    subgraph Exploiter[&quot;4. Exploiter&quot;]
+        E1[AttenduAPP] --&gt; E2[PropAPP]
+        E2 --&gt; E3[Relecture, rapport,&lt;br/&gt;graphe, kappa]
+    end
+    Préparer --&gt; Paramétrer --&gt; Lancer --&gt; Exploiter</pre>
+<h2 id="1-preparer-le-corpus-dans-zotero"><a class="anchor" href="#1-preparer-le-corpus-dans-zotero">#</a>1. Préparer le corpus dans Zotero</h2>
+<h3 id="la-collection"><a class="anchor" href="#la-collection">#</a>La collection</h3>
+<p>Rassembler dans une collection Zotero les documents à mobiliser : articles, chapitres, pages web enregistrées, PDF, DOCX, ODT, EPUB, textes. Chaque <strong>notice</strong> Zotero fournit la référence bibliographique (BibTeX) de la proposition ; ses <strong>pièces jointes</strong> fournissent le texte analysé.</p>
+<h3 id="surligner-avec-une-couleur-qui-indique-votre-positionnement"><a class="anchor" href="#surligner-avec-une-couleur-qui-indique-votre-positionnement">#</a>Surligner avec une couleur qui indique votre positionnement</h3>
+<p>La couleur d&#39;un surlignage indique votre position par rapport au passage. Elle oriente l&#39;extraction des concepts et apparaît dans les citations de la proposition. La table par défaut reprend la palette de Zotero ; elle est modifiable dans <strong>Paramètres › Positionnement par couleur</strong>.</p>
+<table>
+<thead>
+<tr>
+<th>Couleur</th>
+<th>Positionnement</th>
+<th>Effet sur l&#39;extraction</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>🟨 jaune</td>
+<td>Idée clé</td>
+<td>concepts centraux, reliés entre eux</td>
+</tr>
+<tr>
+<td>🟩 vert</td>
+<td>Accord</td>
+<td>idées reprises : relations « soutient », « fonde », « prolonge »</td>
+</tr>
+<tr>
+<td>🟥 rouge</td>
+<td>Désaccord</td>
+<td>thèses contestées : relations « s&#39;oppose à », « critique »</td>
+</tr>
+<tr>
+<td>🟦 bleu</td>
+<td>Définition</td>
+<td>concept défini et ses composantes</td>
+</tr>
+<tr>
+<td>🟪 violet</td>
+<td>Méthode</td>
+<td>méthodes et protocoles</td>
+</tr>
+<tr>
+<td>🟣 magenta</td>
+<td>Question ouverte</td>
+<td>questions à approfondir</td>
+</tr>
+<tr>
+<td>🟧 orange</td>
+<td>Exemple</td>
+<td>exemples, cas, terrains</td>
+</tr>
+<tr>
+<td>⬜ gris</td>
+<td>Contexte</td>
+<td>éléments secondaires</td>
+</tr>
+</tbody></table>
+<p>Les annotations faites dans le lecteur Zotero et celles déjà présentes dans un PDF sont toutes les deux prises en compte.</p>
+<h3 id="notes-et-marqueurs"><a class="anchor" href="#notes-et-marqueurs">#</a>Notes et marqueurs</h3>
+<ul>
+<li>Une <strong>note</strong> rattachée à une notice est traitée comme une annotation : c&#39;est typiquement une citation (« … » § 15) accompagnée de votre commentaire. Le repère (§ 15, p. 12) est repris dans la citation.</li>
+<li>Un <strong>marqueur</strong> (tag) sur une notice, une pièce jointe, une note ou une annotation devient un <strong>concept</strong> : il apparaît dans le graphe, dans les mots-clés de la proposition et dans Omeka S. Les marqueurs listés dans <em>Marqueurs exclus des mots-clés</em> (par défaut <code>citation</code>) ne deviennent pas des mots-clés.</li>
+</ul>
+<h3 id="coder-les-phrases-pour-l-39-accord-inter-juges"><a class="anchor" href="#coder-les-phrases-pour-l-39-accord-inter-juges">#</a>Coder les phrases pour l&#39;accord inter-juges</h3>
+<p>Pour mesurer l&#39;accord entre plusieurs annotateurs (juges), chaque juge ajoute <strong>comme marqueur</strong> le code de la grille d&#39;annotation (<code>grille_annotation.md</code>) sur la phrase annotée :</p>
+<table>
+<thead>
+<tr>
+<th>Code</th>
+<th>Positionnement argumentatif</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>ACC-S</code>, <code>ACC-E</code>, <code>ACC-C</code></td>
+<td>Accord – assentiment, expansion, concession</td>
+</tr>
+<tr>
+<td><code>DES-F</code>, <code>DES-A</code></td>
+<td>Désaccord – factuel/logique, absurde</td>
+</tr>
+<tr>
+<td><code>NEU-S</code>, <code>NEU-R</code></td>
+<td>Neutralité – suspension, relativisation</td>
+</tr>
+<tr>
+<td><code>RHET-H</code>, <code>RHET-E</code></td>
+<td>Rhétorique – ad hominem, épouvantail</td>
+</tr>
+<tr>
+<td><code>DEP-S</code></td>
+<td>Dépassement – synthèse</td>
+</tr>
+<tr>
+<td><code>AMB</code></td>
+<td>Ambigu</td>
+</tr>
+</tbody></table>
+<p>Les juges doivent travailler dans une <strong>bibliothèque de groupe</strong> Zotero : c&#39;est ce qui permet de savoir qui a codé quoi. Les codes ne deviennent pas des concepts.</p>
+<h2 id="2-utiliser-l-39-interface"><a class="anchor" href="#2-utiliser-l-39-interface">#</a>2. Utiliser l&#39;interface</h2>
+<p>L&#39;interface s&#39;ouvre sur <a href="http://127.0.0.1:7272" target="_blank" rel="noopener">http://127.0.0.1:7272</a>. Elle comporte trois onglets.</p>
+<h3 id="parametres"><a class="anchor" href="#parametres">#</a>Paramètres</h3>
+<table>
+<thead>
+<tr>
+<th>Section</th>
+<th>Contenu</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Connexions</td>
+<td>accès à Albert, Zotero et Omeka S (fichier <code>.env</code>). Les secrets ne sont jamais réaffichés : laisser le champ vide pour garder la valeur enregistrée. Le bouton <strong>Tester les connexions</strong> vérifie les trois services.</td>
+</tr>
+<tr>
+<td>Données d&#39;entrée</td>
+<td>collection Zotero (liste déroulante), <strong>lien vers l&#39;appel</strong>, <strong>fichier de l&#39;appel</strong> (si le site bloque le téléchargement), texte ou précisions sur l&#39;appel</td>
+</tr>
+<tr>
+<td>Proposition d&#39;article</td>
+<td><strong>plan en markdown</strong>, auteurs supplémentaires, nombre de mots-clés et de citations, style de citation</td>
+</tr>
+<tr>
+<td>Modèles de langage</td>
+<td>modèles Albert (suggestions chargées depuis l&#39;API)</td>
+</tr>
+<tr>
+<td>Extraction sémantique</td>
+<td>taille des extraits de texte, lots de nettoyage</td>
+</tr>
+<tr>
+<td>Zotero et marqueurs</td>
+<td>marqueurs automatiques, catégorie des concepts issus des marqueurs</td>
+</tr>
+<tr>
+<td>Positionnement par couleur</td>
+<td>table couleur → positionnement → consigne pour le modèle</td>
+</tr>
+<tr>
+<td>Accord inter-juges</td>
+<td>codes de la grille, similarité de phrase, kappa requis</td>
+</tr>
+<tr>
+<td>Omeka S (avancé)</td>
+<td>vocabulaires, classes et propriétés utilisées</td>
+</tr>
+</tbody></table>
+<p><strong>Enregistrer</strong> écrit les modifications dans <code>.env</code> et <code>workflow.config.json</code> ; <strong>Rétablir la configuration par défaut</strong> revient aux valeurs de <code>config.ts</code>.</p>
+<h4 id="le-plan-de-la-proposition"><a class="anchor" href="#le-plan-de-la-proposition">#</a>Le plan de la proposition</h4>
+<p>Le plan est un texte markdown : chaque titre devient une section de la proposition, les lignes <code>Consigne :</code> guident le rédacteur et ne figurent pas dans le texte final.</p>
+<pre><code class="language-markdown"># Titre de la proposition
+Consigne : titre court et explicite, en lien direct avec l'appel.
+
+## Résumé
+Consigne : 250 mots maximum ; problématique, démarche, apports attendus.
+
+## Cadre théorique
+Consigne : mobiliser les concepts du graphe et les références de la collection, avec citations.</code></pre>
+<h4 id="quand-le-site-de-l-39-appel-bloque-le-telechargement"><a class="anchor" href="#quand-le-site-de-l-39-appel-bloque-le-telechargement">#</a>Quand le site de l&#39;appel bloque le téléchargement</h4>
+<p>Certains sites (par exemple ceux protégés par Cloudflare) refusent les accès automatiques. Ouvrir la page dans le navigateur, l&#39;enregistrer en PDF (<em>Imprimer › Enregistrer au format PDF</em>) ou en HTML, puis l&#39;importer avec <strong>Fichier de l&#39;appel</strong>. Le lien reste la source de l&#39;appel dans Omeka S.</p>
+<h3 id="execution"><a class="anchor" href="#execution">#</a>Exécution</h3>
+<p><strong>Enregistrer et lancer</strong> enregistre les paramètres et démarre le traitement. Le journal s&#39;affiche en direct ; un traitement peut être <strong>arrêté</strong>. On peut fermer la page : le journal reprend à la réouverture.</p>
+<pre class="mermaid">stateDiagram-v2
+    [*] --&gt; Paramétré : Enregistrer
+    Paramétré --&gt; EnCours : Enregistrer et lancer
+    EnCours --&gt; Terminé : succès
+    EnCours --&gt; Échec : erreur d'une étape
+    EnCours --&gt; Arrêté : Arrêter
+    Terminé --&gt; EnCours : relancer
+    Échec --&gt; EnCours : corriger puis relancer
+    Arrêté --&gt; EnCours : relancer</pre>
+<p>Le traitement enchaîne les étapes suivantes (durée indicative : quelques minutes par document, selon la taille des textes) :</p>
+<pre class="mermaid">flowchart TD
+    A[Appel à propositions&lt;br/&gt;→ AttenduAPP] --&gt; C
+    B[Documents Zotero&lt;br/&gt;texte, annotations, notes] --&gt; C{ }
+    C --&gt; D[Graphe de concepts]
+    C --&gt; E[Accord inter-juges]
+    D --&gt; F[Export des concepts&lt;br/&gt;dans Omeka S]
+    E --&gt; F
+    F --&gt; G[Proposition d'article&lt;br/&gt;PropAPP]
+    G --&gt; H[Relecture épistémologique]
+    H --&gt; I[Rapport de traitement]</pre>
+<p>Un document dont l&#39;extraction sémantique est déjà faite (date <code>curation:access</code> renseignée dans Omeka S) n&#39;est pas retraité : ses concepts sont relus dans Omeka S. Relancer est donc rapide quand seuls quelques documents ont changé.</p>
+<h3 id="resultats"><a class="anchor" href="#resultats">#</a>Résultats</h3>
+<p>L&#39;onglet <strong>Résultats</strong> affiche les documents produits : markdown mis en forme, tableaux CSV, graphe interactif.</p>
+<table>
+<thead>
+<tr>
+<th>Document</th>
+<th>Contenu</th>
+<th>Emplacement dans Omeka S</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>PropAPP</strong></td>
+<td>proposition d&#39;article : métadonnées (titre, auteurs, mots-clés), texte selon le plan, annexe des citations, références BibTeX</td>
+<td>item de l&#39;appel</td>
+</tr>
+<tr>
+<td><strong>AttenduAPP</strong></td>
+<td>analyse des attendus de l&#39;appel : problématique, axes, contraintes formelles, critères, calendrier</td>
+<td>item de l&#39;appel</td>
+</tr>
+<tr>
+<td>Références BibTeX</td>
+<td><code>PropAPP.bib</code>, notices de la collection</td>
+<td>item de l&#39;appel</td>
+</tr>
+<tr>
+<td>Relecture épistémologique</td>
+<td>critique de PropAPP au regard d&#39;AttenduAPP</td>
+<td>item de la collection</td>
+</tr>
+<tr>
+<td>Graphe de concepts</td>
+<td>visualisation interactive sigma.js (et données graphology JSON)</td>
+<td>item de la collection</td>
+</tr>
+<tr>
+<td>Désaccords entre juges</td>
+<td>CSV des phrases codées, désaccords en tête</td>
+<td>item de la collection</td>
+</tr>
+<tr>
+<td>Rapport de traitement</td>
+<td>étapes, documents traités, graphe, accord inter-juges, appel et proposition</td>
+<td>item de la collection</td>
+</tr>
+</tbody></table>
+<h4 id="le-graphe-de-concepts"><a class="anchor" href="#le-graphe-de-concepts">#</a>Le graphe de concepts</h4>
+<p>La taille d&#39;un concept dépend de son nombre de relations, sa couleur de sa catégorie. <strong>Survoler</strong> un concept met en évidence ses voisins ; <strong>cliquer</strong> ouvre sa fiche (relations, documents sources, lien vers l&#39;item Omeka S). La recherche, la légende (pour masquer une catégorie) et le zoom sont dans le panneau.</p>
+<h4 id="les-auteurs-de-la-proposition"><a class="anchor" href="#les-auteurs-de-la-proposition">#</a>Les auteurs de la proposition</h4>
+<p>Les <strong>annotateurs Zotero</strong> sont auteurs de la proposition (par nombre d&#39;annotations décroissant), suivis des <em>auteurs supplémentaires</em> saisis dans les paramètres.</p>
+<h4 id="lire-l-39-accord-inter-juges"><a class="anchor" href="#lire-l-39-accord-inter-juges">#</a>Lire l&#39;accord inter-juges</h4>
+<table>
+<thead>
+<tr>
+<th>Kappa</th>
+<th>Interprétation (Landis et Koch)</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>≤ 0</td>
+<td>aucun accord</td>
+</tr>
+<tr>
+<td>0,01 – 0,20</td>
+<td>léger</td>
+</tr>
+<tr>
+<td>0,21 – 0,40</td>
+<td>passable</td>
+</tr>
+<tr>
+<td>0,41 – 0,60</td>
+<td>modéré</td>
+</tr>
+<tr>
+<td>0,61 – 0,80</td>
+<td><strong>substantiel</strong> : seuil de validation du corpus</td>
+</tr>
+<tr>
+<td>&gt; 0,80</td>
+<td>presque parfait</td>
+</tr>
+</tbody></table>
+<p>Le kappa de Fleiss est calculé pour trois juges ou plus, et le kappa de Cohen s&#39;y ajoute avec deux juges. Le rapport liste les codes les plus souvent confondus et un bilan rédigé par l&#39;agent analyste ; le CSV détaille chaque phrase pour un recalibrage ciblé.</p>
+<h2 id="3-ce-qui-est-enregistre-dans-omeka-s"><a class="anchor" href="#3-ce-qui-est-enregistre-dans-omeka-s">#</a>3. Ce qui est enregistré dans Omeka S</h2>
+<pre class="mermaid">flowchart TD
+    COL[Collection Zotero&lt;br/&gt;bibo:Collection] --- CFG[Configuration d'exécution&lt;br/&gt;dcterms:MethodOfInstruction]
+    AAP[Appel à propositions&lt;br/&gt;bibo:CallForPapers] -- dcterms:relation --&gt; COL
+    DOC[Document Zotero&lt;br/&gt;bibo:AcademicArticle, bibo:BookSection…] -- dcterms:isPartOf --&gt; COL
+    ANN[Annotation&lt;br/&gt;oa:Annotation] -- oa:hasTarget --&gt; DOC
+    DOC -- dcterms:subject --&gt; CON[Concept&lt;br/&gt;skos:Concept]
+    ANN -- curation:tag --&gt; CON
+    CON -- dcterms:relation --&gt; CON
+    AAP -. médias .-&gt; M1[AttenduAPP, PropAPP, BibTeX]
+    COL -. médias .-&gt; M2[relecture, graphe, rapport, CSV]</pre>
+<ul>
+<li>Chaque <strong>document</strong> porte les métadonnées de sa notice Zotero (auteurs, date, revue, DOI…), son texte, ses fichiers et images, et la date de sa dernière extraction (<code>curation:access</code>).</li>
+<li>Chaque <strong>annotation</strong> porte le passage, votre commentaire, la couleur et le positionnement, les marqueurs (liés aux concepts), le code de la grille et son auteur.</li>
+<li>Un <strong>concept</strong> n&#39;est jamais créé en double : avant de le créer, le workflow cherche un concept de même identifiant ou de même titre.</li>
+<li>Chaque <strong>exécution</strong> enregistre sa configuration (sans les clés d&#39;API) et son statut.</li>
+</ul>
+<h2 id="4-questions-frequentes"><a class="anchor" href="#4-questions-frequentes">#</a>4. Questions fréquentes</h2>
+<p><strong>Puis-je modifier le plan de la proposition ?</strong> Oui, dans <em>Paramètres › Proposition d&#39;article › Plan de la proposition</em>. Les titres et leur ordre sont respectés par le rédacteur.</p>
+<p><strong>Pourquoi un document n&#39;est-il pas retraité ?</strong> Son extraction est déjà faite (<code>curation:access</code>). Pour la relancer, vider cette propriété sur l&#39;item du document dans Omeka S.</p>
+<p><strong>Une nouvelle note Zotero est-elle prise en compte ?</strong> Oui : elle est ajoutée aux annotations du document dans Omeka S, et ses marqueurs deviennent des concepts, sans relancer l&#39;extraction du document.</p>
+<p><strong>Le rédacteur peut-il inventer des références ?</strong> Il ne reçoit que les clés BibTeX de la collection et doit citer uniquement celles-ci (syntaxe Pandoc <code>[@clé, p. 12]</code>) ; la relecture épistémologique vérifie l&#39;usage des références.</p>
+
+</main>
+<nav class="toc"><strong>Sur cette page</strong><a class="l2" href="#1-preparer-le-corpus-dans-zotero">1. Préparer le corpus dans Zotero</a><a class="l3" href="#la-collection">La collection</a><a class="l3" href="#surligner-avec-une-couleur-qui-indique-votre-positionnement">Surligner avec une couleur qui indique votre positionnement</a><a class="l3" href="#notes-et-marqueurs">Notes et marqueurs</a><a class="l3" href="#coder-les-phrases-pour-l-39-accord-inter-juges">Coder les phrases pour l&amp;#39;accord inter-juges</a><a class="l2" href="#2-utiliser-l-39-interface">2. Utiliser l&amp;#39;interface</a><a class="l3" href="#parametres">Paramètres</a><a class="l3" href="#execution">Exécution</a><a class="l3" href="#resultats">Résultats</a><a class="l2" href="#3-ce-qui-est-enregistre-dans-omeka-s">3. Ce qui est enregistré dans Omeka S</a><a class="l2" href="#4-questions-frequentes">4. Questions fréquentes</a></nav>
+</div>
+<script type="module">
+import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+mermaid.initialize({ startOnLoad: true, theme: matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "default", flowchart: { htmlLabels: true } });
+</script>
+</body>
+</html>

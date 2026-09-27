@@ -4,6 +4,7 @@ import { writerAgent } from "../agents/writerAgent";
 import { compileCollection, type Citation, type Keyword, type Reference } from "../tools/compileCollection";
 import { attachDocuments } from "./importSynthesis";
 import { workflowConfig } from "../config";
+import { recordUsage } from "../usage";
 
 const { plan, maxCitations, proposalFile, bibtexFile } = workflowConfig.proposal;
 
@@ -80,6 +81,7 @@ ${graphSummary(graph)}
 </graphe_de_concepts>`);
 
     // titre : premier titre de niveau 1 produit par le rédacteur
+    recordUsage("Rédaction PropAPP (writerAgent)", workflowConfig.models.analytics, (res as any).totalUsage ?? res.usage);
     let body = res.text.trim().replace(/^```(?:markdown)?\s*|\s*```$/g, "");
     const titleMatch = /^#\s+(.+)$/m.exec(body);
     const title = titleMatch?.[1]?.trim() ?? cfpStep.aapTitle ?? "Proposition d'article";

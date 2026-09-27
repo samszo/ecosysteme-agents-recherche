@@ -3,6 +3,35 @@
 
 import { workflowConfig } from "../config";
 
+// Dans le conteneur Docker (RUNNING_IN_DOCKER=1), "localhost" désigne le conteneur lui-même :
+// les requêtes vers un service de la machine hôte passent par host.docker.internal.
+// Les liens affichés à l'utilisateur gardent l'URL d'origine.
+export function containerUrl(url: string): string {
+  if (process.env.RUNNING_IN_DOCKER !== "1") return url;
+  return url.replace(/^(https?:\/\/)(localhost|127\.0\.0\.1|\[::1\])(?=[:/]|$)/i, "$1host.docker.internal");
+}
+
+// message explicite pour une erreur réseau ("fetch failed" n'indique pas la cause)
+export function networkError(url: string, e: unknown): Error {
+  const err = e as any;
+  const code = err?.cause?.code ?? err?.cause?.errors?.[0]?.code ?? "";
+  const target = url.split("?")[0];
+  const hints: Record<string, string> = {
+    ECONNREFUSED: "le serveur refuse la connexion (service arrêté ou mauvais port)",
+    ENOTFOUND: "nom de serveur introuvable",
+    EAI_AGAIN: "résolution DNS impossible",
+    ETIMEDOUT: "délai de connexion dépassé",
+    ECONNRESET: "connexion interrompue",
+    CERT_HAS_EXPIRED: "certificat HTTPS expiré",
+    DEPTH_ZERO_SELF_SIGNED_CERT: "certificat HTTPS auto-signé",
+  };
+  let message = `${target} injoignable : ${hints[code] ?? (code || err?.cause?.message || err?.message)}`;
+  if (process.env.RUNNING_IN_DOCKER === "1" && /host\.docker\.internal/.test(target)) {
+    message += ". Depuis Docker, vérifier que le serveur web de la machine hôte est démarré (sous Linux, il ne doit pas écouter uniquement sur 127.0.0.1).";
+  }
+  return new Error(message);
+}
+
 export type OmkResourceType = "items" | "media" | "item_sets";
 export type OmkMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
@@ -26,6 +55,8 @@ const types: Record<OmkResourceType, string> = { items: "o:Item", media: "o:Medi
 
 export class Omk {
   api: string;
+  // URL de l'API telle que saisie (liens affichés), api pouvant être adaptée au conteneur Docker
+  publicApi: string;
   ident: string | false;
   key: string | false;
   mail: string | false;
@@ -43,7 +74,10 @@ export class Omk {
 
   constructor(params: OmkParams) {
     // on normalise l'URL de l'API pour qu'elle se termine par "/"
-    this.api = params.api.endsWith("/") ? params.api : params.api + "/";
+    const api = params.api.endsWith("/") ? params.api : params.api + "/";
+    // URL affichée dans les liens (admin, médias) et URL utilisée pour les requêtes (adaptée au conteneur)
+    this.publicApi = api;
+    this.api = containerUrl(api);
     this.ident = params.ident ?? false;
     this.key = params.key ?? false;
     this.mail = params.mail ?? false;
@@ -89,7 +123,12 @@ export class Omk {
         options.headers = { "Content-Type": "application/json" };
       }
     }
-    const response = await fetch(url, options);
+    let response: Response;
+    try {
+      response = await fetch(url, options);
+    } catch (e) {
+      throw networkError(url, e);
+    }
     if (!response.ok) {
       throw new Error(`Omeka S ${method} ${url.split("?")[0]} : ${response.status} ${await response.text()}`);
     }
@@ -372,10 +411,10 @@ export class Omk {
   getAdminLink(r: any, id?: number, type?: string) {
     type = type ?? r["@type"][0];
     const path = type == "o:Item" ? "/admin/item/" : "/admin/media/";
-    return this.api.replace("/api/", path) + (id ?? r["o:id"]);
+    return this.publicApi.replace("/api/", path) + (id ?? r["o:id"]);
   }
   getMediaLink(file: string) {
-    return this.api.replace("/api/", "/") + file;
+    return this.publicApi.replace("/api/", "/") + file;
   }
 }
 

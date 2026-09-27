@@ -5,6 +5,7 @@ import { fetchCfp } from "../tools/fetchCfp";
 import { getZoteroCollections } from "../tools/zoteroCollections";
 import { attachDocuments } from "./importSynthesis";
 import { workflowConfig } from "../config";
+import { recordUsage } from "../usage";
 
 // 1. Appel à propositions : enregistrement dans Omeka S et analyse des attendus (AttenduAPP)
 export const analyzeCfpStep = createStep({
@@ -15,6 +16,7 @@ export const analyzeCfpStep = createStep({
 
     console.log("🧠 Agent : Analyse des attendus de l'appel à propositions...");
     const res = await aapAnalystAgent.generate(`Titre : ${cfp.title}\n${cfp.url ? `Source : ${cfp.url}\n` : ""}\nTexte de l'appel :\n${cfp.text}`);
+    recordUsage("Attendus de l'appel (aapAnalystAgent)", workflowConfig.models.analytics, (res as any).totalUsage ?? res.usage);
     const expectations = `# Attendus de l'appel : ${cfp.title}\n\n${cfp.url ? `Source : <${cfp.url}>\n\n` : ""}${res.text.replace(/^#\s+Attendus[^\n]*\n+/i, "")}`;
 
     // AttenduAPP : enregistré localement et dans l'item Omeka de l'appel

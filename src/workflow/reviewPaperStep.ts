@@ -1,5 +1,7 @@
 import { createStep } from "@mastra/core/workflows";
 import { epistemologistAgent } from "../agents/epistemologistAgent";
+import { recordUsage } from "../usage";
+import { workflowConfig } from "../config";
 
 // 6. Critique (Agent)
 export const reviewPaperStep = createStep({
@@ -15,6 +17,7 @@ ${inputData.cfpAnalysis}
 # Proposition d'article (PropAPP)
 ${inputData.draft}`);
     
+    recordUsage("Relecture (epistemologistAgent)", workflowConfig.models.analytics, (res as any).totalUsage ?? res.usage);
     return { 
       finalReview: res.text, 
       draft: inputData.draft, 

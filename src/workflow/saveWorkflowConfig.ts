@@ -30,8 +30,14 @@ export async function saveWorkflowConfig(runId: string, input: { cfpUrl?: string
   return item["o:id"];
 }
 
-// statut final de l'exécution
-export async function updateWorkflowStatus(itemId: number, status: string) {
+// statut final de l'exécution et tokens consommés (curation:data, JSON)
+export async function updateWorkflowStatus(itemId: number, status: string, usage?: { calls: number; inputTokens: number; outputTokens: number; totalTokens: number }) {
   const omk = await getOmk();
-  await omk.updateResource(itemId, { "curation:status": status, "curation:dateEnd": new Date().toISOString() }, "items", "PATCH");
+  await omk.updateResource(itemId, {
+    "curation:status": status,
+    "curation:dateEnd": new Date().toISOString(),
+    ...(usage && omk.getPropByTerm("curation:data")
+      ? { "curation:data": JSON.stringify({ tokens: { calls: usage.calls, input: usage.inputTokens, output: usage.outputTokens, total: usage.totalTokens } }) }
+      : {}),
+  }, "items", "PATCH");
 }

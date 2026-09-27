@@ -5,6 +5,7 @@ import { z } from "zod";
 import { generateObject } from "ai";
 import { ALBERT_MODEL_ANALYTICS } from "../models";
 import { workflowConfig } from "../config";
+import { recordUsage } from "../usage";
 
 export interface GraphNode {
   id: string;
@@ -134,7 +135,7 @@ export async function cleanGraphWithLLM(graph: Graph, batchSize = workflowConfig
     const batch = sorted.slice(i, i + batchSize);
     console.log(`   🧹 Nettoyage sémantique des concepts ${i + 1}-${i + batch.length}/${sorted.length}...`);
     try {
-      const { object } = await generateObject({
+      const { object, usage } = await generateObject({
         model: ALBERT_MODEL_ANALYTICS,
         schema: CleanBatchSchema,
         prompt: `Tu es un ontologue relisant un graphe de concepts extrait automatiquement d'articles en sciences humaines.
@@ -148,6 +149,7 @@ export async function cleanGraphWithLLM(graph: Graph, batchSize = workflowConfig
         Nœuds (id | libellé | catégorie) :
         ${batch.map(n => `${n.id} | ${n.label} | ${n.category}`).join("\n        ")}`
       });
+      recordUsage("Nettoyage du graphe (cleanGraph)", workflowConfig.models.analytics, usage);
 
       for (const c of object.nodes) {
         const node = byId.get(c.id);

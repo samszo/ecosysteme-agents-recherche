@@ -24,8 +24,19 @@ const CfpSchema = z.object({
 async function extract(buffer: Buffer, contentType: string, fileName: string, fallbackTitle: string) {
   const extracted = await extractAttachment(buffer, contentType, fileName);
   // titre : <title> d'une page web, sinon première ligne du texte
-  const htmlTitle = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(buffer.toString("utf8"))?.[1];
-  const title = (htmlTitle ? decodeEntities(htmlTitle) : extracted.text.split("\n").find(l => l.trim()) ?? fallbackTitle).replace(/\s+/g, " ").trim();
+  const clean = (s: string) => decodeEntities(s.replace(/<[^>]+>/g, " ")).replace(/\s+/g, " ").trim();
+  // un titre exploitable : au moins 12 caractères et des lettres (écarte « 1 », « Accueil »…)
+  const meaningful = (s: string | undefined) => !!s && s.length >= 12 && /\p{L}{3}/u.test(s);
+  // page web : titre de partage (og:title), puis premier <h1>, puis <title> ; sinon première ligne significative du texte
+  const html = extracted.format === "html" ? buffer.toString("utf8") : "";
+  const candidates = [
+    /<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i.exec(html)?.[1],
+    /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:title["']/i.exec(html)?.[1],
+    /<h1[^>]*>([\s\S]*?)<\/h1>/i.exec(html)?.[1],
+    /<title[^>]*>([\s\S]*?)<\/title>/i.exec(html)?.[1],
+    ...extracted.text.split("\n").slice(0, 40),
+  ].map(c => (c ? clean(c) : ""));
+  const title = (candidates.find(meaningful) ?? candidates.find(Boolean) ?? fallbackTitle).slice(0, 250);
   return { title, text: extracted.text, file: extracted.file, format: extracted.format };
 }
 

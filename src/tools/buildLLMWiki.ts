@@ -8,6 +8,7 @@ import { loadConceptGraph } from "./conceptStore";
 import { getOmk } from "./omk";
 import { workflowConfig } from "../config";
 import { positionForColor } from "./annotationPositions";
+import { recordUsage } from "../usage";
 
 const { chunkSize, chunkOverlap, maxAnnotationChars } = workflowConfig.extraction;
 
@@ -208,7 +209,7 @@ export const buildLLMWiki = new Tool({
       if (annotationsBlock) {
         console.log(`   🖍️ Extraction sémantique des ${article.annotations!.length} annotation(s) et note(s)...`);
         try {
-          const { object: subGraph } = await generateObject({
+          const { object: subGraph, usage } = await generateObject({
             model: ALBERT_MODEL_FAST,
             schema: GraphSchema,
             prompt: `Tu es un ontologue extrayant des concepts philosophiques et structurels.
@@ -224,6 +225,7 @@ export const buildLLMWiki = new Tool({
             Annotations :
             ${annotationsBlock}`
           });
+          recordUsage("Extraction : annotations et notes", workflowConfig.models.fast, usage);
           mergeGraph(subGraph, article.zoteroKey);
         } catch (error) {
           failures++;
@@ -238,7 +240,7 @@ export const buildLLMWiki = new Tool({
         console.log(`   🧠 Extraction sémantique du chunk ${index + 1}/${chunks.length}...`);
         
         try {
-          const { object: subGraph } = await generateObject({
+          const { object: subGraph, usage } = await generateObject({
             model: ALBERT_MODEL_FAST,
             schema: GraphSchema,
             prompt: `Tu es un ontologue extrayant des concepts philosophiques et structurels.
@@ -255,6 +257,7 @@ export const buildLLMWiki = new Tool({
             Extrait : 
             "${chunk}"`
           });
+          recordUsage("Extraction : extraits de texte", workflowConfig.models.fast, usage);
 
           // PHASE 2 : REDUCE
           mergeGraph(subGraph, article.zoteroKey);

@@ -9,6 +9,8 @@ import { defaultWorkflowConfig } from "../config";
 import { mergeConfig, readConfigOverride, writeConfigOverride, CONFIG_FILE } from "../configStore";
 import { Zotero } from "../tools/zotero";
 import { Omk } from "../tools/omk";
+import crypto from "crypto";
+import { readHistory, type HistoryEntry } from "../workflow/history";
 
 // ROOT : répertoire de données (.env, workflow.config.json, résultats) = répertoire courant
 // APP_DIR : code du projet (identique à ROOT en local, distinct dans le conteneur Docker)
@@ -167,6 +169,82 @@ async function checkConnections() {
 }
 
 // ==========================================
+// Appels traités : historique local + configurations d'exécution enregistrées dans Omeka S
+// ==========================================
+
+// clé d'un appel : lien, sinon fichier, sinon empreinte du texte
+const cfpKey = (input: any) =>
+  input?.cfpUrl || input?.cfpFile || `texte:${crypto.createHash("sha1").update(String(input?.cfpText ?? "")).digest("hex").slice(0, 12)}`;
+
+async function omekaRuns(): Promise<{ runs: HistoryEntry[]; error?: string }> {
+  const env = readEnv();
+  if (!env.OMKS_API_URL) return { runs: [], error: "Omeka S non configuré" };
+  try {
+    const omk = new Omk({ api: env.OMKS_API_URL, ident: env.OMKS_KEY_IDENTITY ?? "", key: env.OMKS_KEY_CREDENTIAL ?? "", vocabs: [] });
+    const items = await omk.getAllItems("property[0][property]=dcterms:type&property[0][type]=eq&property[0][text]=Configuration de workflow&sort_by=created&sort_order=desc");
+    const val = (it: any, t: string) => it[t]?.[0]?.["@value"] ?? null;
+    // items des appels à propositions (identifiant = lien ou empreinte) : titre et item de l'appel
+    const aapItems = await omk.getAllItems("property[0][property]=dcterms:type&property[0][type]=eq&property[0][text]=Appel à propositions");
+    const aapByIdentifier = new Map(aapItems.map((it: any) => [val(it, "dcterms:identifier"), { title: it["o:title"] ?? null, itemId: it["o:id"] }]));
+    const runs: HistoryEntry[] = [];
+    for (const it of items) {
+      let config: any = {};
+      try { config = JSON.parse(val(it, "dcterms:description") ?? "{}"); } catch { /* description illisible */ }
+      if (!config.input) continue;
+      let tokens: any = null;
+      try { tokens = JSON.parse(val(it, "curation:data") ?? "null")?.tokens ?? null; } catch { /* pas de consommation */ }
+      runs.push({
+        runId: val(it, "dcterms:identifier") ?? `omeka-${it["o:id"]}`,
+        startedAt: val(it, "curation:dateStart") ?? val(it, "dcterms:date") ?? it["o:created"]?.["@value"],
+        endedAt: val(it, "curation:dateEnd") ?? "",
+        status: val(it, "curation:status") ?? "inconnu",
+        input: config.input,
+        aap: { ...(aapByIdentifier.get(config.input.cfpUrl) ?? { title: null, itemId: null }), url: config.input.cfpUrl || null },
+        collectionItemId: it["dcterms:isPartOf"]?.[0]?.value_resource_id ?? null,
+        configItemId: it["o:id"],
+        proposalTitle: null,
+        tokens,
+      });
+    }
+    return { runs };
+  } catch (e) {
+    return { runs: [], error: (e as Error).message };
+  }
+}
+
+async function history() {
+  const [local, omeka] = await Promise.all([readHistory(), omekaRuns()]);
+  // fusion par identifiant d'exécution : l'historique local est plus complet (titre de l'appel, proposition)
+  const byRun = new Map<string, HistoryEntry & { source: string }>();
+  for (const r of omeka.runs) byRun.set(r.runId, { ...r, source: "omeka" });
+  for (const r of local) byRun.set(r.runId, { ...byRun.get(r.runId), ...r, tokens: r.tokens ?? byRun.get(r.runId)?.tokens ?? null, source: byRun.has(r.runId) ? "local+omeka" : "local" });
+
+  const omekaAdmin = readEnv().OMKS_API_URL?.replace(/\/api\/?$/, "/admin/item/") ?? "";
+  const calls = new Map<string, any>();
+  for (const r of [...byRun.values()].sort((a, b) => String(b.startedAt).localeCompare(String(a.startedAt)))) {
+    const key = cfpKey(r.input);
+    if (!calls.has(key)) {
+      calls.set(key, {
+        key,
+        title: (r.aap?.title && r.aap.title.length >= 12 && /\p{L}{3}/u.test(r.aap.title) ? r.aap.title : null) || r.input.cfpUrl || r.input.cfpFile || String(r.input.cfpText ?? "").slice(0, 120),
+        url: r.input.cfpUrl || null,
+        file: r.input.cfpFile || null,
+        fileExists: r.input.cfpFile ? fs.existsSync(path.resolve(ROOT, r.input.cfpFile)) : null,
+        aapItemId: r.aap?.itemId ?? null,
+        runs: [],
+      });
+    }
+    const call = calls.get(key);
+    if (!call.aapItemId && r.aap?.itemId) call.aapItemId = r.aap.itemId;
+    // titre enregistré exploitable (les premiers appels ont parfois « 1 » ou « Call for Papers »), sinon le lien
+    const goodTitle = (t: string | null | undefined) => !!t && t.length >= 12 && /\p{L}{3}/u.test(t);
+    if (!goodTitle(call.title) && goodTitle(r.aap?.title)) call.title = r.aap!.title;
+    call.runs.push(r);
+  }
+  return { calls: [...calls.values()], omekaAdmin, omekaError: omeka.error ?? null };
+}
+
+// ==========================================
 // Résultats
 // ==========================================
 
@@ -308,6 +386,8 @@ const routes: Record<string, (req: http.IncomingMessage, res: http.ServerRespons
   },
 
   "GET /api/results": (_req, res) => sendJson(res, 200, resultFiles()),
+
+  "GET /api/history": async (_req, res) => sendJson(res, 200, await history()),
 
   "GET /api/file": (_req, res, url) => {
     const name = url.searchParams.get("name") ?? "";

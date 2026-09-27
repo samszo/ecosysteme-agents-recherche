@@ -159,7 +159,7 @@
 </tbody></table>
 <p>Les juges doivent travailler dans une <strong>bibliothèque de groupe</strong> Zotero : c&#39;est ce qui permet de savoir qui a codé quoi. Les codes ne deviennent pas des concepts.</p>
 <h2 id="2-utiliser-l-39-interface"><a class="anchor" href="#2-utiliser-l-39-interface">#</a>2. Utiliser l&#39;interface</h2>
-<p>L&#39;interface s&#39;ouvre sur <a href="http://127.0.0.1:7272" target="_blank" rel="noopener">http://127.0.0.1:7272</a>. Elle comporte trois onglets.</p>
+<p>L&#39;interface s&#39;ouvre sur <a href="http://127.0.0.1:7272" target="_blank" rel="noopener">http://127.0.0.1:7272</a>. Elle comporte quatre onglets : Paramètres, Exécution, Résultats et Appels traités.</p>
 <h3 id="parametres"><a class="anchor" href="#parametres">#</a>Paramètres</h3>
 <table>
 <thead>
@@ -273,7 +273,7 @@ Consigne : mobiliser les concepts du graphe et les références de la collection
 </tr>
 <tr>
 <td>Graphe de concepts</td>
-<td>visualisation interactive sigma.js (et données graphology JSON)</td>
+<td>visualisation interactive sigma.js (les données graphology JSON restent en local)</td>
 <td>item de la collection</td>
 </tr>
 <tr>
@@ -283,7 +283,7 @@ Consigne : mobiliser les concepts du graphe et les références de la collection
 </tr>
 <tr>
 <td>Rapport de traitement</td>
-<td>étapes, documents traités, graphe, accord inter-juges, appel et proposition</td>
+<td>étapes, documents traités, graphe, accord inter-juges, appel et proposition, <strong>tokens consommés</strong></td>
 <td>item de la collection</td>
 </tr>
 </tbody></table>
@@ -325,6 +325,16 @@ Consigne : mobiliser les concepts du graphe et les références de la collection
 </tr>
 </tbody></table>
 <p>Le kappa de Fleiss est calculé pour trois juges ou plus, et le kappa de Cohen s&#39;y ajoute avec deux juges. Le rapport liste les codes les plus souvent confondus et un bilan rédigé par l&#39;agent analyste ; le CSV détaille chaque phrase pour un recalibrage ciblé.</p>
+<h4 id="la-consommation-de-tokens"><a class="anchor" href="#la-consommation-de-tokens">#</a>La consommation de tokens</h4>
+<p>Le rapport de traitement indique le nombre de tokens consommés par les modèles : total, entrée, sortie (et raisonnement), détaillé par traitement (attendus de l&#39;appel, extraction, nettoyage du graphe, rédaction, relecture, bilan kappa) et par modèle. Le total est aussi enregistré dans l&#39;item de configuration de l&#39;exécution (<code>curation:data</code>) et affiché dans l&#39;onglet <em>Appels traités</em>.</p>
+<h3 id="appels-traites"><a class="anchor" href="#appels-traites">#</a>Appels traités</h3>
+<p>L&#39;onglet <strong>Appels traités</strong> liste les appels à propositions déjà analysés, avec l&#39;historique de leurs exécutions (date, collection, statut, durée, tokens, titre de la proposition, lien vers la configuration dans Omeka S). Il réunit l&#39;historique local (<code>workflow.history.json</code>) et les configurations enregistrées dans Omeka S : les exécutions faites depuis une autre machine ou avant une réinstallation y figurent aussi.</p>
+<p>Pour chaque appel :</p>
+<ul>
+<li><strong>Rejouer</strong> relance l&#39;analyse avec la collection choisie (par défaut, la dernière utilisée), <strong>avec les paramètres et les connexions actuels</strong> : c&#39;est l&#39;usage prévu après une modification de la collection Zotero (nouveaux documents, annotations, notes), un changement de modèle ou de connexion ;</li>
+<li><strong>Charger dans les paramètres</strong> reprend l&#39;appel et la collection dans l&#39;onglet Paramètres, pour les ajuster avant de lancer.</li>
+</ul>
+<p>Seuls les documents nouveaux ou modifiés sont retraités : ceux dont l&#39;extraction est déjà faite sont relus dans Omeka S. Un appel importé depuis un fichier local ne peut être rejoué que si le fichier est toujours présent dans <code>aap/</code>.</p>
 <h2 id="3-ce-qui-est-enregistre-dans-omeka-s"><a class="anchor" href="#3-ce-qui-est-enregistre-dans-omeka-s">#</a>3. Ce qui est enregistré dans Omeka S</h2>
 <pre class="mermaid">flowchart TD
     COL[Collection Zotero&lt;br/&gt;bibo:Collection] --- CFG[Configuration d'exécution&lt;br/&gt;dcterms:MethodOfInstruction]
@@ -340,7 +350,7 @@ Consigne : mobiliser les concepts du graphe et les références de la collection
 <li>Chaque <strong>document</strong> porte les métadonnées de sa notice Zotero (auteurs, date, revue, DOI…), son texte, ses fichiers et images, et la date de sa dernière extraction (<code>curation:access</code>).</li>
 <li>Chaque <strong>annotation</strong> porte le passage, votre commentaire, la couleur et le positionnement, les marqueurs (liés aux concepts), le code de la grille et son auteur.</li>
 <li>Un <strong>concept</strong> n&#39;est jamais créé en double : avant de le créer, le workflow cherche un concept de même identifiant ou de même titre.</li>
-<li>Chaque <strong>exécution</strong> enregistre sa configuration (sans les clés d&#39;API) et son statut.</li>
+<li>Chaque <strong>exécution</strong> enregistre sa configuration (sans les clés d&#39;API), son statut et les tokens consommés.</li>
 </ul>
 <h2 id="4-questions-frequentes"><a class="anchor" href="#4-questions-frequentes">#</a>4. Questions fréquentes</h2>
 <p><strong>Puis-je modifier le plan de la proposition ?</strong> Oui, dans <em>Paramètres › Proposition d&#39;article › Plan de la proposition</em>. Les titres et leur ordre sont respectés par le rédacteur.</p>
@@ -349,7 +359,7 @@ Consigne : mobiliser les concepts du graphe et les références de la collection
 <p><strong>Le rédacteur peut-il inventer des références ?</strong> Il ne reçoit que les clés BibTeX de la collection et doit citer uniquement celles-ci (syntaxe Pandoc <code>[@clé, p. 12]</code>) ; la relecture épistémologique vérifie l&#39;usage des références.</p>
 
 </main>
-<nav class="toc"><strong>Sur cette page</strong><a class="l2" href="#1-preparer-le-corpus-dans-zotero">1. Préparer le corpus dans Zotero</a><a class="l3" href="#la-collection">La collection</a><a class="l3" href="#surligner-avec-une-couleur-qui-indique-votre-positionnement">Surligner avec une couleur qui indique votre positionnement</a><a class="l3" href="#notes-et-marqueurs">Notes et marqueurs</a><a class="l3" href="#coder-les-phrases-pour-l-39-accord-inter-juges">Coder les phrases pour l&amp;#39;accord inter-juges</a><a class="l2" href="#2-utiliser-l-39-interface">2. Utiliser l&amp;#39;interface</a><a class="l3" href="#parametres">Paramètres</a><a class="l3" href="#execution">Exécution</a><a class="l3" href="#resultats">Résultats</a><a class="l2" href="#3-ce-qui-est-enregistre-dans-omeka-s">3. Ce qui est enregistré dans Omeka S</a><a class="l2" href="#4-questions-frequentes">4. Questions fréquentes</a></nav>
+<nav class="toc"><strong>Sur cette page</strong><a class="l2" href="#1-preparer-le-corpus-dans-zotero">1. Préparer le corpus dans Zotero</a><a class="l3" href="#la-collection">La collection</a><a class="l3" href="#surligner-avec-une-couleur-qui-indique-votre-positionnement">Surligner avec une couleur qui indique votre positionnement</a><a class="l3" href="#notes-et-marqueurs">Notes et marqueurs</a><a class="l3" href="#coder-les-phrases-pour-l-39-accord-inter-juges">Coder les phrases pour l&#39;accord inter-juges</a><a class="l2" href="#2-utiliser-l-39-interface">2. Utiliser l&#39;interface</a><a class="l3" href="#parametres">Paramètres</a><a class="l3" href="#execution">Exécution</a><a class="l3" href="#resultats">Résultats</a><a class="l3" href="#appels-traites">Appels traités</a><a class="l2" href="#3-ce-qui-est-enregistre-dans-omeka-s">3. Ce qui est enregistré dans Omeka S</a><a class="l2" href="#4-questions-frequentes">4. Questions fréquentes</a></nav>
 </div>
 <script type="module">
 import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";

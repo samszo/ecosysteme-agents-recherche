@@ -93,6 +93,7 @@
     <button data-tab="settings" class="active">Paramètres</button>
     <button data-tab="run">Exécution</button>
     <button data-tab="results">Résultats</button>
+    <button data-tab="history">Appels traités</button>
   </nav>
 </header>
 
@@ -161,6 +162,16 @@
   </div>
 
   <!-- ======================= RÉSULTATS ======================= -->
+  <!-- ======================= APPELS TRAITÉS ======================= -->
+  <div id="tab-history" class="hidden">
+    <div class="toolbar">
+      <span class="muted">Rejouer l'analyse d'un appel après une modification de la collection Zotero ou un changement de connexion : les paramètres et connexions actuels sont utilisés, seuls l'appel et la collection sont repris.</span>
+      <div class="spacer"></div>
+      <button id="btn-history" class="btn">Actualiser</button>
+    </div>
+    <div id="history" class="muted">Chargement…</div>
+  </div>
+
   <div id="tab-results" class="hidden">
     <div class="files" id="files"></div>
     <section class="card"><div id="viewer" class="muted">Choisir un document.</div></section>
@@ -250,8 +261,9 @@ function toast(msg) {
 document.querySelectorAll("nav button").forEach(b => b.onclick = () => showTab(b.dataset.tab));
 function showTab(tab) {
   document.querySelectorAll("nav button").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
-  for (const t of ["settings", "run", "results"]) $(`#tab-${t}`).classList.toggle("hidden", t !== tab);
+  for (const t of ["settings", "run", "results", "history"]) $(`#tab-${t}`).classList.toggle("hidden", t !== tab);
   if (tab === "results") loadResults();
+  if (tab === "history") loadHistory();
 }
 
 // ==========================================
@@ -407,6 +419,7 @@ async function loadCollections() {
   const current = config.input.zoteroCollection;
   try {
     const cols = await api("/api/zotero/collections");
+    zoteroCollections = cols;
     const byParent = new Map();
     for (const c of cols) { const k = c.parent ?? ""; if (!byParent.has(k)) byParent.set(k, []); byParent.get(k).push(c); }
     const options = [];
@@ -564,6 +577,88 @@ function parseCsvLine(line) {
 }
 
 // ==========================================
+// ==========================================
+// Appels traités : rejouer une analyse
+// ==========================================
+let zoteroCollections = [];
+const collectionName = key => { const c = zoteroCollections.find(c => c.key === key); return c ? `${c.name} (${key})` : key; };
+const fmtTokens = t => t?.total ? `${t.total.toLocaleString("fr-FR")} tokens` : "—";
+const fmtDuration = r => {
+  if (!r.endedAt || !r.startedAt) return "—";
+  const s = Math.round((new Date(r.endedAt) - new Date(r.startedAt)) / 1000);
+  return s >= 60 ? `${Math.floor(s / 60)} min ${s % 60} s` : `${s} s`;
+};
+
+async function loadHistory() {
+  const box = $("#history");
+  box.className = "muted"; box.textContent = "Chargement…";
+  let data;
+  try { data = await api("/api/history"); } catch (e) { box.textContent = "Historique indisponible : " + e.message; return; }
+  box.className = ""; box.replaceChildren();
+  if (data.omekaError) box.append(el("p", { className: "muted", textContent: `Configurations Omeka S non lues (${data.omekaError}) : seul l'historique local est affiché.` }));
+  if (!data.calls.length) { box.append(el("p", { className: "muted", textContent: "Aucun appel traité pour le moment." })); return; }
+
+  for (const call of data.calls) {
+    const last = call.runs[0];
+    // collection à utiliser pour rejouer : la dernière utilisée, modifiable
+    const select = el("select", { style: "width:auto;max-width:100%" },
+      [...new Set([last.input.zoteroCollection, ...zoteroCollections.map(c => c.key)])].map(k => el("option", { value: k, textContent: collectionName(k) })));
+    select.value = last.input.zoteroCollection;
+    const inputFor = run => ({ ...run.input, zoteroCollection: select.value });
+
+    const source = call.url
+      ? el("a", { href: call.url, target: "_blank", rel: "noopener", textContent: call.url })
+      : call.file ? el("span", { textContent: `fichier ${call.file}${call.fileExists === false ? " (introuvable : réimporter le fichier)" : ""}`, className: call.fileExists === false ? "ko" : "" })
+      : el("span", { textContent: "texte saisi" });
+
+    const runsTable = el("table", { className: "edit" },
+      el("thead", {}, el("tr", {}, ["Date", "Collection", "Statut", "Durée", "Tokens", "Proposition", ""].map(h => el("th", { textContent: h })))),
+      el("tbody", {}, call.runs.map(r => el("tr", {},
+        el("td", { textContent: r.startedAt ? new Date(r.startedAt).toLocaleString("fr-FR") : "—" }),
+        el("td", { textContent: collectionName(r.input.zoteroCollection) }),
+        el("td", {}, el("span", { className: `badge ${r.status}`, textContent: STATUS_TEXT[r.status] ?? r.status })),
+        el("td", { textContent: fmtDuration(r) }),
+        el("td", { textContent: fmtTokens(r.tokens) }),
+        el("td", { textContent: r.proposalTitle ?? "—" }),
+        el("td", {}, r.configItemId && data.omekaAdmin ? el("a", { href: data.omekaAdmin + r.configItemId, target: "_blank", rel: "noopener", textContent: "configuration" }) : "")
+      )))
+    );
+
+    box.append(el("section", { className: "card" },
+      el("h2", { textContent: call.title }),
+      el("p", { className: "lead" }, source,
+        call.aapItemId && data.omekaAdmin ? [" · ", el("a", { href: data.omekaAdmin + call.aapItemId, target: "_blank", rel: "noopener", textContent: "item Omeka de l'appel (AttenduAPP, PropAPP)" })] : null,
+        ` · ${call.runs.length} exécution(s)`),
+      el("div", { className: "toolbar" },
+        el("label", { textContent: "Collection :", style: "font-weight:600" }), select,
+        el("button", { className: "btn primary", textContent: "Rejouer", disabled: call.fileExists === false, onclick: () => replay(inputFor(last), call.title) }),
+        el("button", { className: "btn", textContent: "Charger dans les paramètres", onclick: () => loadInput(inputFor(last)) })),
+      el("div", { className: "table-wrap" }, runsTable)));
+  }
+}
+
+// reprend l'appel et la collection d'une exécution dans les paramètres (sans les enregistrer)
+function loadInput(input) {
+  config.input = { ...config.input, cfpUrl: input.cfpUrl ?? "", cfpFile: input.cfpFile ?? "", cfpText: input.cfpText ?? "", zoteroCollection: input.zoteroCollection };
+  renderConfig(); loadCollections();
+  showTab("settings");
+  toast("Appel et collection chargés — enregistrer pour confirmer");
+}
+
+async function replay(input, title) {
+  if (lastState?.status === "running") return toast("Un traitement est déjà en cours.");
+  if (!confirm(`Rejouer l'analyse de l'appel « ${title} » sur la collection ${collectionName(input.zoteroCollection)} avec les paramètres et connexions actuels ?`)) return;
+  config.input = { ...config.input, cfpUrl: input.cfpUrl ?? "", cfpFile: input.cfpFile ?? "", cfpText: input.cfpText ?? "", zoteroCollection: input.zoteroCollection };
+  renderConfig();
+  try {
+    await save(true);
+    log.textContent = "";
+    await api("/api/run", { method: "POST" });
+    showTab("run");
+  } catch (e) { toast("Erreur : " + e.message); }
+}
+$("#btn-history").onclick = loadHistory;
+
 loadSettings().catch(e => toast("Erreur de chargement : " + e.message));
 connectEvents();
 </script>

@@ -2,6 +2,8 @@ import { createStep } from "@mastra/core/workflows";
 import { kappaAnalystAgent } from "../agents/kappaAnalystAgent";
 import { fetchOmekaAnnotations, type CodedAnnotation } from "../tools/fetchOmekaAnnotations";
 import { calculateFleissKappa } from "../tools/calculateFleissKappa";
+import { recordUsage } from "../usage";
+import { workflowConfig } from "../config";
 
 // codes les plus souvent confondus sur une même phrase
 function confusions(annotations: CodedAnnotation[]) {
@@ -48,6 +50,7 @@ export const kappaAnalysisStep = createStep({
         Statistiques : ${JSON.stringify(kappa)}
         Codes les plus souvent confondus sur une même phrase : ${JSON.stringify(topConfusions)}`
       );
+      recordUsage("Bilan kappa (kappaAnalystAgent)", workflowConfig.models.analytics, (res as any).totalUsage ?? res.usage);
       summary = res.text;
     }
 

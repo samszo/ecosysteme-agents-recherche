@@ -66,7 +66,7 @@ Les juges doivent travailler dans une **bibliothèque de groupe** Zotero : c'est
 
 ## 2. Utiliser l'interface
 
-L'interface s'ouvre sur http://127.0.0.1:7272. Elle comporte trois onglets.
+L'interface s'ouvre sur http://127.0.0.1:7272. Elle comporte quatre onglets : Paramètres, Exécution, Résultats et Appels traités.
 
 ### Paramètres
 
@@ -146,9 +146,9 @@ L'onglet **Résultats** affiche les documents produits : markdown mis en forme, 
 | **AttenduAPP** | analyse des attendus de l'appel : problématique, axes, contraintes formelles, critères, calendrier | item de l'appel |
 | Références BibTeX | `PropAPP.bib`, notices de la collection | item de l'appel |
 | Relecture épistémologique | critique de PropAPP au regard d'AttenduAPP | item de la collection |
-| Graphe de concepts | visualisation interactive sigma.js (et données graphology JSON) | item de la collection |
+| Graphe de concepts | visualisation interactive sigma.js (les données graphology JSON restent en local) | item de la collection |
 | Désaccords entre juges | CSV des phrases codées, désaccords en tête | item de la collection |
-| Rapport de traitement | étapes, documents traités, graphe, accord inter-juges, appel et proposition | item de la collection |
+| Rapport de traitement | étapes, documents traités, graphe, accord inter-juges, appel et proposition, **tokens consommés** | item de la collection |
 
 #### Le graphe de concepts
 
@@ -171,6 +171,21 @@ Les **annotateurs Zotero** sont auteurs de la proposition (par nombre d'annotati
 
 Le kappa de Fleiss est calculé pour trois juges ou plus, et le kappa de Cohen s'y ajoute avec deux juges. Le rapport liste les codes les plus souvent confondus et un bilan rédigé par l'agent analyste ; le CSV détaille chaque phrase pour un recalibrage ciblé.
 
+#### La consommation de tokens
+
+Le rapport de traitement indique le nombre de tokens consommés par les modèles : total, entrée, sortie (et raisonnement), détaillé par traitement (attendus de l'appel, extraction, nettoyage du graphe, rédaction, relecture, bilan kappa) et par modèle. Le total est aussi enregistré dans l'item de configuration de l'exécution (`curation:data`) et affiché dans l'onglet *Appels traités*.
+
+### Appels traités
+
+L'onglet **Appels traités** liste les appels à propositions déjà analysés, avec l'historique de leurs exécutions (date, collection, statut, durée, tokens, titre de la proposition, lien vers la configuration dans Omeka S). Il réunit l'historique local (`workflow.history.json`) et les configurations enregistrées dans Omeka S : les exécutions faites depuis une autre machine ou avant une réinstallation y figurent aussi.
+
+Pour chaque appel :
+
+- **Rejouer** relance l'analyse avec la collection choisie (par défaut, la dernière utilisée), **avec les paramètres et les connexions actuels** : c'est l'usage prévu après une modification de la collection Zotero (nouveaux documents, annotations, notes), un changement de modèle ou de connexion ;
+- **Charger dans les paramètres** reprend l'appel et la collection dans l'onglet Paramètres, pour les ajuster avant de lancer.
+
+Seuls les documents nouveaux ou modifiés sont retraités : ceux dont l'extraction est déjà faite sont relus dans Omeka S. Un appel importé depuis un fichier local ne peut être rejoué que si le fichier est toujours présent dans `aap/`.
+
 ## 3. Ce qui est enregistré dans Omeka S
 
 ```mermaid
@@ -189,7 +204,7 @@ flowchart TD
 - Chaque **document** porte les métadonnées de sa notice Zotero (auteurs, date, revue, DOI…), son texte, ses fichiers et images, et la date de sa dernière extraction (`curation:access`).
 - Chaque **annotation** porte le passage, votre commentaire, la couleur et le positionnement, les marqueurs (liés aux concepts), le code de la grille et son auteur.
 - Un **concept** n'est jamais créé en double : avant de le créer, le workflow cherche un concept de même identifiant ou de même titre.
-- Chaque **exécution** enregistre sa configuration (sans les clés d'API) et son statut.
+- Chaque **exécution** enregistre sa configuration (sans les clés d'API), son statut et les tokens consommés.
 
 ## 4. Questions fréquentes
 

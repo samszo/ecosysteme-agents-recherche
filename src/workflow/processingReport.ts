@@ -2,6 +2,7 @@
 import { workflowConfig } from "../config";
 import type { Omk } from "../tools/omk";
 import { positionForColor } from "../tools/annotationPositions";
+import type { UsageSummary } from "../usage";
 
 const STEP_LABELS: Record<string, string> = {
   "analyze-cfp": "Appel à propositions et attendus (AttenduAPP)",
@@ -30,6 +31,7 @@ export interface ReportContext {
   configItemId: number | null;
   documents: { filePath: string; title: string }[];
   omk: Omk | null;
+  usage?: UsageSummary;
 }
 
 const fmtDate = (d: Date | number) => new Date(d).toLocaleString("fr-FR", { timeZone: "Europe/Paris" });
@@ -230,6 +232,32 @@ export function buildProcessingReport(ctx: ReportContext): string {
       }
       if (kappaStep.summary) push("### Bilan de l'analyste", "", kappaStep.summary, "");
     }
+  }
+
+  // ==========================================
+  // Consommation de tokens
+  // ==========================================
+  if (ctx.usage?.calls) {
+    const u = ctx.usage;
+    const n = (x: number) => x.toLocaleString("fr-FR");
+    push(
+      "## Consommation de tokens",
+      "",
+      `**${n(u.totalTokens)} tokens** au total pour ${u.calls} appel(s) aux modèles : ${n(u.inputTokens)} en entrée, ${n(u.outputTokens)} en sortie` +
+        (u.reasoningTokens ? ` (dont ${n(u.reasoningTokens)} de raisonnement)` : "") + ".",
+      "",
+      "| Traitement | Modèle | Appels | Entrée | Sortie | Total |",
+      "|---|---|---|---|---|---|"
+    );
+    for (const e of [...u.entries].sort((a, b) => b.totalTokens - a.totalTokens)) {
+      push(`| ${cell(e.source)} | \`${e.model}\` | ${e.calls} | ${n(e.inputTokens)} | ${n(e.outputTokens)} | ${n(e.totalTokens)} |`);
+    }
+    // total par modèle
+    const byModel = new Map<string, number>();
+    for (const e of u.entries) byModel.set(e.model, (byModel.get(e.model) ?? 0) + e.totalTokens);
+    for (const [model, total] of byModel) push(`| **Total** | \`${model}\` | | | | **${n(total)}** |`);
+    push("");
+    if (u.unknown) push(`> ${u.unknown} appel(s) sans consommation renvoyée par l'API, non comptés.`, "");
   }
 
   // ==========================================

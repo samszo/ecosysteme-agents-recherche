@@ -12,6 +12,7 @@ aap
 *.bib
 visualisation_graphe.*
 workflow.config.json
+workflow.history.json
 # outils
 .git
 .vscode
@@ -19,3 +20,5 @@ workflow.config.json
 .kilo
 .DS_Store
 **/.DS_Store
+# instance Omeka S préparée (distribuée à part)
+omk_academic-paper-factory.*

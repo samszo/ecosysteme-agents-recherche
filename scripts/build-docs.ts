@@ -34,6 +34,7 @@ function render(markdown: string) {
       heading({ tokens, depth }) {
         const text = this.parser.parseInline(tokens);
         const id = slug(text);
+        // texte déjà échappé par marked : seules les balises (code, liens) sont retirées
         if (depth === 2 || depth === 3) toc.push({ level: depth, text: text.replace(/<[^>]+>/g, ""), id });
         return `<h${depth} id="${id}"><a class="anchor" href="#${id}">#</a>${text}</h${depth}>\n`;
       },
@@ -54,7 +55,7 @@ function render(markdown: string) {
 function page(current: (typeof PAGES)[number], body: string, toc: { level: number; text: string; id: string }[], docTitle: string) {
   const nav = PAGES.map(p => `<a href="${p.html}"${p === current ? ' aria-current="page"' : ""}>${p.title}</a>`).join("");
   const tocHtml = toc.length
-    ? `<nav class="toc"><strong>Sur cette page</strong>${toc.map(t => `<a class="l${t.level}" href="#${t.id}">${escapeHtml(t.text)}</a>`).join("")}</nav>`
+    ? `<nav class="toc"><strong>Sur cette page</strong>${toc.map(t => `<a class="l${t.level}" href="#${t.id}">${t.text}</a>`).join("")}</nav>`
     : "";
   return `<!DOCTYPE html>
 <html lang="fr">

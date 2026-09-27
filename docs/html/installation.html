@@ -46,15 +46,19 @@
 <div class="layout">
 <main>
 <h1 id="documentation-d-39-installation"><a class="anchor" href="#documentation-d-39-installation">#</a>Documentation d&#39;installation</h1>
-<p>Ce guide explique comment installer l&#39;écosystème d&#39;agents de production d&#39;articles scientifiques, soit <strong>en local avec Node.js</strong>, soit <strong>dans un conteneur Docker</strong>, puis comment préparer les trois services dont il dépend : l&#39;API <strong>Albert</strong>, <strong>Zotero</strong> et <strong>Omeka S</strong>.</p>
+<p>Ce guide explique comment installer l&#39;écosystème d&#39;agents de production d&#39;articles scientifiques, soit <strong>en local avec Node.js</strong>, soit <strong>dans un conteneur Docker</strong>, puis comment préparer les trois services dont il dépend : l&#39;API <strong>Albert</strong>, <strong>Zotero</strong> et <strong>Omeka S</strong>. Pour débuter rapidement, une <strong>instance Omeka S préparée</strong> (application et base de données) est fournie, et la section 8 décrit l&#39;installation complète sur un <strong>serveur Debian / Apache / Let&#39;s Encrypt</strong>.</p>
 <pre class="mermaid">flowchart TD
     A([Début]) --&gt; B{Docker disponible ?}
     B -- oui --&gt; C[Installation Docker&lt;br/&gt;docker compose up -d]
     B -- non --&gt; D[Installation locale&lt;br/&gt;Node.js 22+ et npm ci]
     C --&gt; E[Créer data/.env]
     D --&gt; F[Créer .env]
-    E --&gt; G[Préparer Omeka S&lt;br/&gt;vocabulaires, clé API, types de fichiers]
-    F --&gt; G
+    E --&gt; O{Omeka S disponible ?}
+    F --&gt; O
+    O -- oui --&gt; G[Préparer Omeka S&lt;br/&gt;vocabulaires, clé API, types de fichiers]
+    O -- non --&gt; P[Instance préparée&lt;br/&gt;omk_academic-paper-factory.zip + .sql]
+    P --&gt; S[Sécuriser : nouveau compte,&lt;br/&gt;nouvelle clé, compte de démo supprimé]
+    S --&gt; H
     G --&gt; H[Préparer Zotero&lt;br/&gt;clé API, bibliothèque de groupe]
     H --&gt; I[Ouvrir l'interface&lt;br/&gt;http://127.0.0.1:7272]
     I --&gt; J[Tester les connexions]
@@ -210,8 +214,86 @@ docker compose logs -f         # suivre le démarrage</code></pre>
 docker compose restart workflow              # redémarrer après une modification du .env
 docker compose down                          # arrêter
 docker compose build --no-cache              # reconstruire après une mise à jour du code</code></pre>
-<p><strong>Omeka S installé sur la machine hôte</strong> : dans le conteneur, <code>localhost</code> désigne le conteneur lui-même. Utiliser <code>host.docker.internal</code> dans <code>OMKS_API_URL</code>, par exemple <code>http://host.docker.internal/omk_agents/api</code> (le nom est déclaré dans <code>docker-compose.yml</code>).</p>
+<p><strong>Omeka S installé sur la machine hôte</strong> : dans le conteneur, <code>localhost</code> désigne le conteneur lui-même. Le même <code>.env</code> peut pourtant servir en local et dans Docker : dans le conteneur (<code>RUNNING_IN_DOCKER=1</code>), une URL <code>http://localhost/…</code> ou <code>http://127.0.0.1/…</code> est automatiquement redirigée vers <code>host.docker.internal</code> (déclaré dans <code>docker-compose.yml</code>) pour les requêtes, tandis que les liens affichés (rapport, graphe) gardent l&#39;URL d&#39;origine, ouvrable depuis le navigateur de l&#39;hôte.</p>
 <h2 id="5-preparer-omeka-s"><a class="anchor" href="#5-preparer-omeka-s">#</a>5. Préparer Omeka S</h2>
+<h3 id="demarrer-avec-l-39-instance-omeka-s-preparee"><a class="anchor" href="#demarrer-avec-l-39-instance-omeka-s-preparee">#</a>Démarrer avec l&#39;instance Omeka S préparée</h3>
+<p>Deux fichiers permettent de démarrer avec une instance Omeka S déjà configurée pour le workflow :</p>
+<table>
+<thead>
+<tr>
+<th>Fichier</th>
+<th>Contenu</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>omk_academic-paper-factory.zip</code></td>
+<td>application <strong>Omeka S 4.2.1</strong> avec les modules Annotate, Common, CustomVocab, EasyAdmin et Log</td>
+</tr>
+<tr>
+<td><code>omk_academic-paper-factory.sql</code></td>
+<td>base de données (MariaDB / MySQL, utf8mb4) : vocabulaires <code>dcterms</code>, <code>dctype</code>, <code>bibo</code>, <code>foaf</code>, <code>jdc</code>, <code>skos</code>, <code>curation</code>, <code>oa</code>, <code>rdf</code> ; types de fichiers autorisés (<code>md</code>, <code>csv</code>, <code>bib</code>, <code>html</code>, <code>json</code>, <code>txt</code>…) ; aucun contenu, aucune session ni journal</td>
+</tr>
+</tbody></table>
+<p>La base contient un <strong>compte d&#39;administration de démarrage</strong>, à supprimer après la première connexion :</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Identifiant</td>
+<td><code>admin@academic-article-factory.ai</code></td>
+</tr>
+<tr>
+<td>Mot de passe</td>
+<td><code>MotDePasseAChanger</code></td>
+</tr>
+<tr>
+<td>Clé d&#39;API – identité (<code>OMKS_KEY_IDENTITY</code>)</td>
+<td><code>KKdoJi6f8SZUncBjK1YEZr32QTP5W0BF</code></td>
+</tr>
+<tr>
+<td>Clé d&#39;API – secret (<code>OMKS_KEY_CREDENTIAL</code>)</td>
+<td><code>eibRXdDZkY7O5YkIvkAjHmmgT3GSlMKt</code></td>
+</tr>
+</tbody></table>
+<blockquote>
+<p>⚠️ <strong>Ces identifiants sont publics</strong> (ils figurent dans cette documentation). Une instance accessible depuis internet qui les conserve est ouverte à tous en écriture. Les étapes de sécurisation ci-dessous sont <strong>obligatoires</strong>, avant toute mise en ligne.</p>
+</blockquote>
+<pre class="mermaid">flowchart LR
+    A[Créer la base&lt;br/&gt;et son utilisateur] --&gt; B[Importer&lt;br/&gt;omk_academic-paper-factory.sql]
+    B --&gt; C[Décompresser&lt;br/&gt;omk_academic-paper-factory.zip]
+    C --&gt; D[Renseigner&lt;br/&gt;config/database.ini]
+    D --&gt; E[Connexion avec&lt;br/&gt;le compte de démarrage]
+    E --&gt; F[Créer son compte&lt;br/&gt;administrateur global]
+    F --&gt; G[Se reconnecter,&lt;br/&gt;créer sa clé d'API]
+    G --&gt; H[Supprimer le compte&lt;br/&gt;de démarrage et sa clé]
+    H --&gt; I[Reporter la nouvelle clé&lt;br/&gt;dans .env]</pre>
+<p><strong>1. Base de données</strong> (adapter le nom, l&#39;utilisateur et le mot de passe) :</p>
+<pre><code class="language-bash">sudo mysql -e &quot;CREATE DATABASE omeka CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER 'omeka'@'localhost' IDENTIFIED BY 'un-mot-de-passe-solide';
+GRANT ALL PRIVILEGES ON omeka.* TO 'omeka'@'localhost'; FLUSH PRIVILEGES;&quot;</code></pre>
+<pre><code class="language-bash">mysql -u omeka -p omeka &lt; omk_academic-paper-factory.sql</code></pre>
+<p><strong>2. Application</strong> : décompresser l&#39;archive dans le dossier servi par le serveur web.</p>
+<pre><code class="language-bash">unzip -q omk_academic-paper-factory.zip -d /var/www/</code></pre>
+<p><strong>3. Connexion à la base</strong> : remplacer <strong>tout</strong> le contenu de <code>config/database.ini</code> (le fichier livré contient les paramètres de la machine où l&#39;archive a été préparée).</p>
+<pre><code class="language-ini">user     = &quot;omeka&quot;
+password = &quot;un-mot-de-passe-solide&quot;
+dbname   = &quot;omeka&quot;
+host     = &quot;localhost&quot;</code></pre>
+<p><strong>4. Droits d&#39;écriture</strong> : le serveur web doit pouvoir écrire dans <code>files/</code> et <code>logs/</code> (sous Debian, utilisateur <code>www-data</code>).</p>
+<p><strong>5. Sécurisation</strong> (dans l&#39;interface d&#39;administration d&#39;Omeka S) :</p>
+<ol>
+<li>Se connecter avec <code>admin@academic-article-factory.ai</code> / <code>MotDePasseAChanger</code>.</li>
+<li><em>Utilisateurs › Ajouter</em> : créer son propre compte, rôle <strong>Administrateur global</strong>, puis définir son mot de passe.</li>
+<li>Se déconnecter, se reconnecter avec ce nouveau compte.</li>
+<li><em>Utilisateurs › son compte › Clés d&#39;API</em> : créer une clé pour le workflow et noter immédiatement son <strong>secret</strong> (il n&#39;est affiché qu&#39;une fois).</li>
+<li><em>Utilisateurs</em> : <strong>supprimer</strong> le compte <code>admin@academic-article-factory.ai</code> (sa clé d&#39;API est supprimée avec lui).</li>
+<li>Reporter la nouvelle clé dans <code>.env</code> (<code>OMKS_KEY_IDENTITY</code>, <code>OMKS_KEY_CREDENTIAL</code>) et l&#39;URL de l&#39;instance dans <code>OMKS_API_URL</code> (par exemple <code>https://omeka.example.org/api</code>).</li>
+</ol>
+<p>Pour un simple essai en local, la clé de démarrage peut être utilisée telle quelle dans <code>.env</code>, à condition que l&#39;instance ne soit pas accessible depuis le réseau.</p>
 <h3 id="vocabulaires"><a class="anchor" href="#vocabulaires">#</a>Vocabulaires</h3>
 <p>Le workflow utilise les vocabulaires suivants (réglage <code>omeka.vocabs</code>). L&#39;onglet <strong>Paramètres › Tester les connexions</strong> signale ceux qui manquent.</p>
 <table>
@@ -281,13 +363,8 @@ docker compose build --no-cache              # reconstruire après une mise à j
 <td><code>text/html</code></td>
 <td>graphe sigma.js, pages web enregistrées</td>
 </tr>
-<tr>
-<td><code>json</code></td>
-<td><code>application/json</code></td>
-<td>graphe au format graphology</td>
-</tr>
 </tbody></table>
-<p>Un type refusé n&#39;interrompt pas le traitement : un avertissement est affiché et le fichier reste disponible localement.</p>
+<p>Un type refusé n&#39;interrompt pas le traitement. Si seule l&#39;<strong>extension</strong> est refusée (cas fréquent de <code>csv</code>, <code>bib</code> ou <code>md</code>), le fichier est déposé une seconde fois avec l&#39;extension <code>.txt</code>, son format d&#39;origine étant noté dans <code>dcterms:format</code>. Si le <strong>type de contenu</strong> est refusé aussi, un avertissement indique quoi autoriser et le fichier reste disponible localement. Le graphe au format JSON (<code>visualisation_graphe.json</code>) n&#39;est pas déposé : ses données sont incluses dans <code>visualisation_graphe.html</code>.</p>
 <h2 id="6-preparer-zotero"><a class="anchor" href="#6-preparer-zotero">#</a>6. Préparer Zotero</h2>
 <ol>
 <li>Créer une clé sur <a href="https://www.zotero.org/settings/keys" target="_blank" rel="noopener">https://www.zotero.org/settings/keys</a> avec l&#39;accès en lecture à la bibliothèque (et au groupe).</li>
@@ -315,7 +392,143 @@ docker compose build --no-cache              # reconstruire après une mise à j
     UI-&gt;&gt;O: GET /vocabularies et /users
     O--&gt;&gt;UI: vocabulaires installés
     UI--&gt;&gt;U: ✓ Albert ✓ Zotero ✓ Omeka S (ou vocabulaires manquants)</pre>
-<h2 id="8-depannage"><a class="anchor" href="#8-depannage">#</a>8. Dépannage</h2>
+<h2 id="8-installation-sur-un-serveur-debian-apache-let-39-s-encrypt"><a class="anchor" href="#8-installation-sur-un-serveur-debian-apache-let-39-s-encrypt">#</a>8. Installation sur un serveur Debian / Apache / Let&#39;s Encrypt</h2>
+<p>Protocole pour un serveur <strong>Debian 12 (bookworm) ou 13 (trixie)</strong> hébergeant Omeka S (à partir de l&#39;instance préparée) derrière <strong>Apache</strong> en <strong>HTTPS</strong> (certificat <strong>Let&#39;s Encrypt</strong>), et, sur le même serveur, le workflow et son interface. Les commandes sont à lancer en root (ou avec <code>sudo</code>). Dans les exemples, remplacer <code>omeka.example.org</code> et <code>workflow.example.org</code> par vos noms de domaine.</p>
+<pre class="mermaid">flowchart TB
+    U[Navigateur] -- HTTPS 443 --&gt; AP
+    subgraph Serveur[&quot;Serveur Debian&quot;]
+        AP[Apache&lt;br/&gt;certificats Let's Encrypt]
+        AP -- PHP-FPM / mod_php --&gt; OM[Omeka S&lt;br/&gt;/var/www/omeka]
+        AP -- proxy + authentification --&gt; UI[Interface du workflow&lt;br/&gt;127.0.0.1:7272]
+        OM --&gt; DB[(MariaDB)]
+        UI --&gt; WF[Workflow&lt;br/&gt;Docker ou Node.js]
+        WF -- HTTPS --&gt; AP
+    end
+    WF --&gt; ALB[(API Albert)]
+    WF --&gt; ZOT[(API Zotero)]</pre>
+<h3 id="8-1-prerequis"><a class="anchor" href="#8-1-prerequis">#</a>8.1 Prérequis</h3>
+<ul>
+<li>un serveur Debian à jour, avec un accès SSH et un compte administrateur ;</li>
+<li>des <strong>enregistrements DNS</strong> (A et, si besoin, AAAA) de <code>omeka.example.org</code> et <code>workflow.example.org</code> pointant vers le serveur ;</li>
+<li>les ports <strong>80</strong> et <strong>443</strong> ouverts (Let&#39;s Encrypt valide le domaine par le port 80).</li>
+</ul>
+<h3 id="8-2-paquets"><a class="anchor" href="#8-2-paquets">#</a>8.2 Paquets</h3>
+<pre><code class="language-bash">apt update &amp;&amp; apt full-upgrade -y
+apt install -y apache2 mariadb-server unzip imagemagick \
+  php php-mysql php-xml php-mbstring php-intl php-gd php-curl php-zip libapache2-mod-php \
+  certbot python3-certbot-apache ufw
+a2enmod rewrite headers ssl proxy proxy_http</code></pre>
+<p>Omeka S 4.2 demande PHP 8.1 ou plus : Debian 12 fournit PHP 8.2, Debian 13 PHP 8.4.</p>
+<h3 id="8-3-pare-feu"><a class="anchor" href="#8-3-pare-feu">#</a>8.3 Pare-feu</h3>
+<pre><code class="language-bash">ufw allow OpenSSH
+ufw allow &quot;WWW Full&quot;
+ufw enable</code></pre>
+<h3 id="8-4-base-de-donnees"><a class="anchor" href="#8-4-base-de-donnees">#</a>8.4 Base de données</h3>
+<pre><code class="language-bash">mariadb-secure-installation</code></pre>
+<p>Créer ensuite la base et importer le dump comme indiqué dans <em>Démarrer avec l&#39;instance Omeka S préparée</em> (étape 1).</p>
+<h3 id="8-5-omeka-s"><a class="anchor" href="#8-5-omeka-s">#</a>8.5 Omeka S</h3>
+<pre><code class="language-bash">unzip -q omk_academic-paper-factory.zip -d /var/www/
+mv /var/www/omk_academic-paper-factory /var/www/omeka
+nano /var/www/omeka/config/database.ini          # voir l'étape 3 ci-dessus
+chown -R root:www-data /var/www/omeka
+find /var/www/omeka -type d -exec chmod 750 {} \;
+find /var/www/omeka -type f -exec chmod 640 {} \;
+chown -R www-data:www-data /var/www/omeka/files /var/www/omeka/logs
+chmod 640 /var/www/omeka/config/database.ini</code></pre>
+<p>Limites PHP adaptées aux dépôts de PDF (fichier <code>/etc/php/8.x/apache2/conf.d/99-omeka.ini</code>, en remplaçant <code>8.x</code> par la version installée) :</p>
+<pre><code class="language-ini">upload_max_filesize = 64M
+post_max_size = 64M
+memory_limit = 512M
+max_execution_time = 120</code></pre>
+<h3 id="8-6-hote-virtuel-apache"><a class="anchor" href="#8-6-hote-virtuel-apache">#</a>8.6 Hôte virtuel Apache</h3>
+<p>Fichier <code>/etc/apache2/sites-available/omeka.conf</code> :</p>
+<pre><code class="language-apache">&lt;VirtualHost *:80&gt;
+    ServerName omeka.example.org
+    DocumentRoot /var/www/omeka
+
+    &lt;Directory /var/www/omeka&gt;
+        AllowOverride All
+        Require all granted
+    &lt;/Directory&gt;
+
+    ErrorLog ${APACHE_LOG_DIR}/omeka_error.log
+    CustomLog ${APACHE_LOG_DIR}/omeka_access.log combined
+&lt;/VirtualHost&gt;</code></pre>
+<pre><code class="language-bash">a2ensite omeka
+a2dissite 000-default
+apachectl configtest &amp;&amp; systemctl reload apache2</code></pre>
+<p>Le fichier <code>.htaccess</code> fourni avec Omeka S gère la réécriture des URL (<code>AllowOverride All</code> est nécessaire).</p>
+<h3 id="8-7-certificat-let-39-s-encrypt"><a class="anchor" href="#8-7-certificat-let-39-s-encrypt">#</a>8.7 Certificat Let&#39;s Encrypt</h3>
+<pre><code class="language-bash">certbot --apache -d omeka.example.org --redirect -m admin@example.org --agree-tos --no-eff-email</code></pre>
+<p>Certbot obtient le certificat, crée l&#39;hôte virtuel HTTPS et redirige HTTP vers HTTPS. Le renouvellement est automatique (minuteur systemd <code>certbot.timer</code>) ; le vérifier avec :</p>
+<pre><code class="language-bash">certbot renew --dry-run</code></pre>
+<p>Ouvrir ensuite <code>https://omeka.example.org/admin</code> et suivre l&#39;<strong>étape 5 – Sécurisation</strong> de l&#39;instance préparée (nouveau compte, nouvelle clé, suppression du compte de démarrage). C&#39;est à faire <strong>immédiatement</strong> : tant que le compte de démarrage existe, l&#39;instance est ouverte à quiconque lit cette documentation.</p>
+<h3 id="8-8-workflow-et-interface"><a class="anchor" href="#8-8-workflow-et-interface">#</a>8.8 Workflow et interface</h3>
+<p>Le plus simple est d&#39;utiliser Docker (voir la <a href="https://docs.docker.com/engine/install/debian/" target="_blank" rel="noopener">documentation Docker pour Debian</a>), puis :</p>
+<pre><code class="language-bash">git clone https://github.com/samszo/ecosysteme-agents-recherche.git /opt/ecosysteme-agents-recherche
+cd /opt/ecosysteme-agents-recherche
+mkdir -p data &amp;&amp; cp .env.example data/.env &amp;&amp; chmod 600 data/.env
+nano data/.env        # OMKS_API_URL=https://omeka.example.org/api et la nouvelle clé d'API
+docker compose up -d --build</code></pre>
+<p>Sans Docker : installer Node.js 22 (paquets NodeSource), puis <code>npm ci</code> dans <code>/opt/ecosysteme-agents-recherche</code> et créer un service systemd (<code>/etc/systemd/system/workflow-ui.service</code>) :</p>
+<pre><code class="language-ini">[Unit]
+Description=Interface du workflow academic-paper-factory
+After=network-online.target
+
+[Service]
+User=workflow
+WorkingDirectory=/opt/ecosysteme-agents-recherche
+ExecStart=/opt/ecosysteme-agents-recherche/node_modules/.bin/tsx src/ui/server.ts
+Restart=on-failure
+Environment=HOST=127.0.0.1 PORT=7272
+
+[Install]
+WantedBy=multi-user.target</code></pre>
+<pre><code class="language-bash">useradd --system --home /opt/ecosysteme-agents-recherche workflow
+chown -R workflow:workflow /opt/ecosysteme-agents-recherche
+systemctl daemon-reload &amp;&amp; systemctl enable --now workflow-ui</code></pre>
+<h3 id="8-9-acces-a-l-39-interface"><a class="anchor" href="#8-9-acces-a-l-39-interface">#</a>8.9 Accès à l&#39;interface</h3>
+<p>L&#39;interface manipule les clés d&#39;API : elle n&#39;écoute que sur <code>127.0.0.1</code> et <strong>ne doit jamais être exposée sans authentification</strong>. Deux possibilités :</p>
+<p><strong>Tunnel SSH</strong> (le plus simple, rien à exposer) :</p>
+<pre><code class="language-bash">ssh -L 7272:127.0.0.1:7272 utilisateur@serveur</code></pre>
+<p>puis ouvrir <a href="http://127.0.0.1:7272" target="_blank" rel="noopener">http://127.0.0.1:7272</a> sur le poste local.</p>
+<p><strong>Proxy Apache avec authentification</strong>, sur un sous-domaine en HTTPS :</p>
+<pre><code class="language-bash">htpasswd -c /etc/apache2/.htpasswd-workflow chercheur</code></pre>
+<p>Fichier <code>/etc/apache2/sites-available/workflow.conf</code> :</p>
+<pre><code class="language-apache">&lt;VirtualHost *:80&gt;
+    ServerName workflow.example.org
+
+    &lt;Location /&gt;
+        AuthType Basic
+        AuthName &quot;Workflow academic-paper-factory&quot;
+        AuthUserFile /etc/apache2/.htpasswd-workflow
+        Require valid-user
+    &lt;/Location&gt;
+
+    ProxyPreserveHost On
+    # journal en direct (Server-Sent Events) : pas de mise en tampon
+    ProxyPass        /api/run/events http://127.0.0.1:7272/api/run/events flushpackets=on timeout=3600
+    ProxyPassReverse /api/run/events http://127.0.0.1:7272/api/run/events
+    ProxyPass        / http://127.0.0.1:7272/ timeout=600
+    ProxyPassReverse / http://127.0.0.1:7272/
+&lt;/VirtualHost&gt;</code></pre>
+<pre><code class="language-bash">a2ensite workflow &amp;&amp; systemctl reload apache2
+certbot --apache -d workflow.example.org --redirect</code></pre>
+<h3 id="8-10-sauvegardes-et-mises-a-jour"><a class="anchor" href="#8-10-sauvegardes-et-mises-a-jour">#</a>8.10 Sauvegardes et mises à jour</h3>
+<ul>
+<li><p><strong>Base Omeka S</strong> : sauvegarde quotidienne, par exemple dans <code>/etc/cron.daily/omeka-backup</code> :</p>
+<pre><code class="language-bash">#!/bin/sh
+mysqldump --single-transaction omeka | gzip &gt; /var/backups/omeka-$(date +%F).sql.gz
+find /var/backups -name &quot;omeka-*.sql.gz&quot; -mtime +30 -delete</code></pre>
+</li>
+<li><p><strong>Fichiers</strong> : sauvegarder <code>/var/www/omeka/files</code> et le dossier <code>data/</code> du workflow (<code>.env</code>, <code>workflow.config.json</code>, <code>workflow.history.json</code>, résultats).</p>
+</li>
+<li><p><strong>Système</strong> : <code>apt update &amp;&amp; apt upgrade</code> régulièrement (ou le paquet <code>unattended-upgrades</code>).</p>
+</li>
+<li><p><strong>Workflow</strong> : <code>git pull</code> puis <code>docker compose up -d --build</code> (ou <code>npm ci</code> puis <code>systemctl restart workflow-ui</code>).</p>
+</li>
+</ul>
+<h2 id="9-depannage"><a class="anchor" href="#9-depannage">#</a>9. Dépannage</h2>
 <table>
 <thead>
 <tr>
@@ -340,14 +553,39 @@ docker compose build --no-cache              # reconstruire après une mise à j
 <td>voir <em>Types de fichiers autorisés</em></td>
 </tr>
 <tr>
-<td>Omeka S injoignable depuis Docker</td>
-<td><code>localhost</code> dans <code>OMKS_API_URL</code></td>
-<td>utiliser <code>host.docker.internal</code></td>
+<td>Omeka S injoignable depuis Docker (<code>… injoignable : …</code>)</td>
+<td>serveur web de l&#39;hôte arrêté, ou (sous Linux) serveur qui n&#39;écoute que sur 127.0.0.1</td>
+<td>démarrer le serveur ; sous Linux, le faire écouter sur l&#39;interface du pont Docker ; vérifier <code>extra_hosts</code> dans <code>docker-compose.yml</code></td>
 </tr>
 <tr>
 <td><code>EADDRINUSE</code> au lancement de l&#39;interface</td>
 <td>port déjà utilisé</td>
 <td>changer <code>PORT</code> dans <code>.env</code></td>
+</tr>
+<tr>
+<td>Page blanche ou erreur 500 sur Omeka S</td>
+<td><code>config/database.ini</code> incorrect, droits sur <code>files/</code> ou <code>logs/</code></td>
+<td>vérifier le fichier, les droits, et <code>/var/log/apache2/omeka_error.log</code></td>
+</tr>
+<tr>
+<td>URL Omeka S en erreur 404 (sauf l&#39;accueil)</td>
+<td>réécriture d&#39;URL inactive</td>
+<td><code>a2enmod rewrite</code> et <code>AllowOverride All</code></td>
+</tr>
+<tr>
+<td>Échec de <code>certbot</code></td>
+<td>DNS non propagé ou port 80 fermé</td>
+<td>vérifier l&#39;enregistrement DNS et <code>ufw status</code></td>
+</tr>
+<tr>
+<td>Journal de l&#39;interface figé derrière le proxy</td>
+<td>mise en tampon des Server-Sent Events</td>
+<td><code>flushpackets=on</code> sur <code>/api/run/events</code></td>
+</tr>
+<tr>
+<td>Refus du CSV par Omeka S (type de contenu)</td>
+<td><code>text/csv</code> absent des types autorisés</td>
+<td>l&#39;ajouter dans <em>Admin › Paramètres › Sécurité</em></td>
 </tr>
 <tr>
 <td>Aucune annotation codée pour le kappa</td>
@@ -357,7 +595,7 @@ docker compose build --no-cache              # reconstruire après une mise à j
 </tbody></table>
 
 </main>
-<nav class="toc"><strong>Sur cette page</strong><a class="l2" href="#1-prerequis">1. Prérequis</a><a class="l2" href="#2-variables-d-39-environnement-env">2. Variables d&amp;#39;environnement (.env)</a><a class="l2" href="#3-installation-locale-node-js">3. Installation locale (Node.js)</a><a class="l2" href="#4-installation-docker">4. Installation Docker</a><a class="l2" href="#5-preparer-omeka-s">5. Préparer Omeka S</a><a class="l3" href="#vocabulaires">Vocabulaires</a><a class="l3" href="#cle-d-39-api">Clé d&amp;#39;API</a><a class="l3" href="#types-de-fichiers-autorises">Types de fichiers autorisés</a><a class="l2" href="#6-preparer-zotero">6. Préparer Zotero</a><a class="l2" href="#7-verifier-l-39-installation">7. Vérifier l&amp;#39;installation</a><a class="l2" href="#8-depannage">8. Dépannage</a></nav>
+<nav class="toc"><strong>Sur cette page</strong><a class="l2" href="#1-prerequis">1. Prérequis</a><a class="l2" href="#2-variables-d-39-environnement-env">2. Variables d&#39;environnement (.env)</a><a class="l2" href="#3-installation-locale-node-js">3. Installation locale (Node.js)</a><a class="l2" href="#4-installation-docker">4. Installation Docker</a><a class="l2" href="#5-preparer-omeka-s">5. Préparer Omeka S</a><a class="l3" href="#demarrer-avec-l-39-instance-omeka-s-preparee">Démarrer avec l&#39;instance Omeka S préparée</a><a class="l3" href="#vocabulaires">Vocabulaires</a><a class="l3" href="#cle-d-39-api">Clé d&#39;API</a><a class="l3" href="#types-de-fichiers-autorises">Types de fichiers autorisés</a><a class="l2" href="#6-preparer-zotero">6. Préparer Zotero</a><a class="l2" href="#7-verifier-l-39-installation">7. Vérifier l&#39;installation</a><a class="l2" href="#8-installation-sur-un-serveur-debian-apache-let-39-s-encrypt">8. Installation sur un serveur Debian / Apache / Let&#39;s Encrypt</a><a class="l3" href="#8-1-prerequis">8.1 Prérequis</a><a class="l3" href="#8-2-paquets">8.2 Paquets</a><a class="l3" href="#8-3-pare-feu">8.3 Pare-feu</a><a class="l3" href="#8-4-base-de-donnees">8.4 Base de données</a><a class="l3" href="#8-5-omeka-s">8.5 Omeka S</a><a class="l3" href="#8-6-hote-virtuel-apache">8.6 Hôte virtuel Apache</a><a class="l3" href="#8-7-certificat-let-39-s-encrypt">8.7 Certificat Let&#39;s Encrypt</a><a class="l3" href="#8-8-workflow-et-interface">8.8 Workflow et interface</a><a class="l3" href="#8-9-acces-a-l-39-interface">8.9 Accès à l&#39;interface</a><a class="l3" href="#8-10-sauvegardes-et-mises-a-jour">8.10 Sauvegardes et mises à jour</a><a class="l2" href="#9-depannage">9. Dépannage</a></nav>
 </div>
 <script type="module">
 import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";

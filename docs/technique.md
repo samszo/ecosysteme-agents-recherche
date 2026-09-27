@@ -82,6 +82,7 @@ src/
 ├── models.ts                modèles Albert (analytique, rapide)
 ├── graphViz.ts              export graphology et page sigma.js
 ├── omekaVerify.ts           audit des derniers items Omeka
+├── usage.ts                 comptage des tokens consommés par les appels aux modèles
 ├── agents/                  un fichier par agent (index.ts ré-exporte)
 ├── tools/                   un fichier par outil ou utilitaire
 ├── workflow/                une étape par fichier, assemblage, rapport, import
@@ -123,6 +124,14 @@ src/
 | `calculateFleissKappa` | kappa de Fleiss (nombre de juges variable), kappa de Cohen, CSV des désaccords |
 | `compileCollection` | références BibTeX, citations, mots-clés, auteurs pour PropAPP |
 | `chunkText` | découpage des textes en extraits avec chevauchement |
+
+### Comptage des tokens (`src/usage.ts`)
+
+Chaque appel à un modèle enregistre sa consommation avec `recordUsage(source, modèle, usage)` : `totalUsage` pour les agents Mastra (appels d'outils compris), `usage` pour `generateObject` du SDK `ai`. Le workflow tourne dans un seul processus : le compteur est partagé par toutes les étapes, et `usageSummary()` fournit le détail par traitement et par modèle au rapport de traitement, à l'item de configuration (`curation:data`, JSON) et à l'historique. Un appel en erreur n'est pas compté.
+
+### Historique des exécutions (`src/workflow/history.ts`)
+
+À la fin de chaque exécution, `index.ts` ajoute une entrée à `workflow.history.json` (répertoire de données, 500 entrées au plus ; chemin modifiable par `WORKFLOW_HISTORY_FILE`) : identifiant, dates, statut, paramètres d'entrée, appel (titre, item), collection, configuration, titre de la proposition, tokens. L'interface fusionne cet historique avec les items de configuration d'Omeka S (`GET /api/history`) et regroupe les exécutions par appel (lien, fichier ou empreinte du texte).
 
 ## 4. Extraction des documents
 
@@ -251,6 +260,7 @@ erDiagram
         dcterms_identifier runId "exécution"
         dcterms_description json "configuration"
         curation_status statut "running, success, failed"
+        curation_data tokens "consommation (JSON)"
     }
     DOCUMENT }o--|{ COLLECTION : "dcterms:isPartOf"
     ANNOTATION }o--|| DOCUMENT : "oa:hasTarget"
@@ -296,6 +306,7 @@ La configuration par défaut est dans `src/config.ts` (`defaultWorkflowConfig`).
 | `POST /api/run`, `POST /api/run/stop`, `GET /api/run` | lancer, arrêter, état |
 | `GET /api/run/events` | journal et statut en Server-Sent Events |
 | `GET /api/results`, `GET /api/file?name=` | liste et contenu des résultats (liste blanche) |
+| `GET /api/history` | appels traités : historique local et configurations Omeka S, regroupés par appel |
 | `GET /docs/…` | documentation HTML |
 
 Le serveur écoute sur `127.0.0.1` (variable `HOST` pour le conteneur) et le port `PORT` (7272).

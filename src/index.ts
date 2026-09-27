@@ -10,6 +10,8 @@ import { saveWorkflowConfig, updateWorkflowStatus } from "./workflow/saveWorkflo
 import { importSynthesis, type SynthesisDocument } from "./workflow/importSynthesis";
 import { buildProcessingReport } from "./workflow/processingReport";
 import { getOmk } from "./tools/omk";
+import { usageSummary } from "./usage";
+import { appendHistory } from "./workflow/history";
 
 async function main() {
   console.log("🚀 Lancement de l'écosystème de production scientifique...");
@@ -28,9 +30,11 @@ async function main() {
   const startedAt = new Date();
   const runResult = await run.start({ inputData });
   const endedAt = new Date();
+  const usage = usageSummary();
+  console.log(`🔢 Tokens consommés : ${usage.totalTokens.toLocaleString("fr-FR")} (${usage.calls} appel(s) aux modèles)`);
 
   if (configItemId) {
-    await updateWorkflowStatus(configItemId, runResult.status).catch(e =>
+    await updateWorkflowStatus(configItemId, runResult.status, usage).catch(e =>
       console.warn("⚠️ Statut du workflow non enregistré dans Omeka S :", (e as Error).message)
     );
   }
@@ -60,14 +64,12 @@ async function main() {
     await fs.writeFile('./visualisation_graphe.html', generateGraphHtml(conceptGraph, {
       title: `Graphe de concepts – collection ${inputData.zoteroCollection}`,
       omekaIds,
-      ...(omk ? { omekaAdminUrl: omk.api.replace("/api/", "/admin/item/") } : {}),
+      ...(omk ? { omekaAdminUrl: omk.publicApi.replace("/api/", "/admin/item/") } : {}),
     }));
     await fs.writeFile('./visualisation_graphe.json', JSON.stringify(toGraphologyJSON(conceptGraph, omekaIds), null, 2));
     console.log("📈 Graphe de concepts (sigma.js) généré dans './visualisation_graphe.html'");
-    synthesis.push(
-      { filePath: './visualisation_graphe.html', title: "Graphe de concepts (sigma.js)", type: "text/html" },
-      { filePath: './visualisation_graphe.json', title: "Graphe de concepts (graphology JSON)", type: "application/json" },
-    );
+    // le JSON reste local : ses données sont déjà incluses dans la page HTML déposée dans Omeka S
+    synthesis.push({ filePath: './visualisation_graphe.html', title: "Graphe de concepts (sigma.js)", type: "text/html" });
   }
 
   // CSV des désaccords entre juges (produit même si la suite du workflow a échoué)
@@ -87,6 +89,7 @@ async function main() {
       ...synthesis,
     ],
     omk: await getOmk().catch(() => null),
+    usage,
   });
   await fs.writeFile('./rapport_traitement.md', report);
   console.log("📋 Rapport de traitement généré dans './rapport_traitement.md'");
@@ -96,6 +99,21 @@ async function main() {
   await importSynthesis(inputData.zoteroCollection, synthesis, run.runId, configItemId).catch(e =>
     console.warn("⚠️ Documents de synthèse non importés dans Omeka S :", (e as Error).message)
   );
+
+  // 6. Historique des appels traités (interface : rejouer une analyse)
+  const cfp = steps["analyze-cfp"]?.output ?? {};
+  await appendHistory({
+    runId: run.runId,
+    startedAt: startedAt.toISOString(),
+    endedAt: endedAt.toISOString(),
+    status: runResult.status,
+    input: { ...inputData },
+    aap: { title: cfp.aapTitle ?? null, itemId: cfp.aapItemId ?? null, url: cfp.aapUrl ?? null },
+    collectionItemId: steps["fetch-literature"]?.output?.collectionItemId ?? null,
+    configItemId,
+    proposalTitle: steps["draft-paper"]?.output?.proposal?.title ?? null,
+    tokens: { calls: usage.calls, input: usage.inputTokens, output: usage.outputTokens, total: usage.totalTokens },
+  }).catch(e => console.warn("⚠️ Historique non enregistré :", (e as Error).message));
 }
 
 main().catch(console.error);

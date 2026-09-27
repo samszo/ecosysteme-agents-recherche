@@ -152,15 +152,31 @@ async function checkConnections() {
 
   try {
     if (!env.OMKS_API_URL) throw new Error("URL manquante");
-    const omk = new Omk({ api: env.OMKS_API_URL, ident: env.OMKS_KEY_IDENTITY ?? "", key: env.OMKS_KEY_CREDENTIAL ?? "", vocabs: [] });
+    if (!env.OMKS_KEY_IDENTITY || !env.OMKS_KEY_CREDENTIAL) throw new Error("clé d'API incomplète (identité et secret requis)");
+    const omk = new Omk({ api: env.OMKS_API_URL, ident: env.OMKS_KEY_IDENTITY, key: env.OMKS_KEY_CREDENTIAL, vocabs: [] });
     const vocabs = await omk.request(omk.url("vocabularies", { per_page: 100 }));
     const prefixes = vocabs.map((v: any) => v["o:prefix"]);
     const missing = currentConfig().omeka.vocabs.filter(v => !prefixes.includes(v));
-    // une requête authentifiée sur les utilisateurs vérifie la validité de la clé
-    await omk.request(omk.url("users", { per_page: 1 }));
+
+    // Vérification de la clé sans aucun effet : Omeka ignore une clé invalide en lecture (requête traitée comme
+    // anonyme), on demande donc la modification d'un item qui ne peut pas exister. Omeka contrôle les droits avant
+    // de chercher l'item : 403 = clé refusée ou droits insuffisants, 404 = clé valide avec droit d'écriture.
+    let keyStatus = "";
+    try {
+      await omk.request(omk.url("items/2147483647"), "PATCH", {});
+      keyStatus = "clé valide";
+    } catch (e) {
+      const msg = (e as Error).message;
+      if (/ : 404 /.test(msg)) keyStatus = "clé valide, droits d'écriture";
+      else if (/ : 403 /.test(msg)) {
+        throw new Error("clé d'API refusée ou droits insuffisants : vérifier l'identité et le secret de la clé, et que son utilisateur a au moins le rôle Auteur");
+      } else throw e;
+    }
     result.omeka = {
       ok: missing.length === 0,
-      message: missing.length ? `vocabulaire(s) manquant(s) : ${missing.join(", ")}` : `vocabulaires : ${prefixes.join(", ")}`,
+      message: missing.length
+        ? `${keyStatus} ; vocabulaire(s) manquant(s) : ${missing.join(", ")}`
+        : `${keyStatus} ; vocabulaires : ${prefixes.join(", ")}`,
     };
   } catch (e) {
     result.omeka = { ok: false, message: (e as Error).message };

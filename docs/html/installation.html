@@ -569,6 +569,16 @@ find /var/backups -name &quot;omeka-*.sql.gz&quot; -mtime +30 -delete</code></pr
 <td>reconstruire l&#39;image (<code>docker compose up -d --build</code>) ; ou <code>sudo chown -R 1000:1000 data</code></td>
 </tr>
 <tr>
+<td><code>clé d&#39;API refusée ou droits insuffisants</code> au test des connexions</td>
+<td>secret de la clé erroné, clé supprimée, ou utilisateur sans droit d&#39;écriture (rôle Chercheur)</td>
+<td>recréer la clé dans Omeka S (<em>Utilisateurs › Clés d&#39;API</em>), recopier identité et secret ; rôle Auteur au minimum</td>
+</tr>
+<tr>
+<td><code>injoignable : UNABLE_TO_VERIFY_LEAF_SIGNATURE</code></td>
+<td>le serveur HTTPS d&#39;Omeka S n&#39;envoie pas son certificat intermédiaire (les navigateurs le masquent, pas Node.js)</td>
+<td>sur ce serveur, déclarer la chaîne complète (certificat + intermédiaire) dans <code>SSLCertificateFile</code> ; à défaut, fournir l&#39;intermédiaire au workflow avec <code>NODE_EXTRA_CA_CERTS</code></td>
+</tr>
+<tr>
 <td><code>Omeka S … 404 Not Found</code> au test des connexions</td>
 <td><code>OMKS_API_URL</code> ne pointe pas vers l&#39;API (instance déplacée ou renommée)</td>
 <td>corriger l&#39;URL (elle doit se terminer par <code>/api</code>) et la clé d&#39;API dans <em>Paramètres › Connexions</em></td>

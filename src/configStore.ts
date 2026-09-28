@@ -6,7 +6,7 @@ import path from "path";
 export const CONFIG_FILE = path.resolve(process.cwd(), process.env.WORKFLOW_CONFIG_FILE || "workflow.config.json");
 
 // valeurs remplacées en bloc (et non fusionnées clé par clé) : on doit pouvoir y supprimer des entrées
-export const REPLACED_PATHS = new Set(["kappa.codes", "annotationPositions", "omeka.vocabs", "steps"]);
+export const REPLACED_PATHS = new Set(["kappa.codes", "annotationPositions", "omeka.vocabs", "steps", "costs.models"]);
 
 const isObject = (v: unknown): v is Record<string, any> => !!v && typeof v === "object" && !Array.isArray(v);
 

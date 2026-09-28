@@ -3,6 +3,7 @@ import { workflowConfig } from "../config";
 import type { Omk } from "../tools/omk";
 import { positionForColor } from "../tools/annotationPositions";
 import type { UsageSummary } from "../usage";
+import { fmtCo2, fmtEnergy, fmtMoney, type ImpactSummary } from "../impact";
 
 const STEP_LABELS: Record<string, string> = {
   "analyze-cfp": "Appel à propositions et attendus (AttenduAPP)",
@@ -32,6 +33,7 @@ export interface ReportContext {
   documents: { filePath: string; title: string }[];
   omk: Omk | null;
   usage?: UsageSummary;
+  impact?: ImpactSummary;
 }
 
 const fmtDate = (d: Date | number) => new Date(d).toLocaleString("fr-FR", { timeZone: "Europe/Paris" });
@@ -258,6 +260,46 @@ export function buildProcessingReport(ctx: ReportContext): string {
     for (const [model, total] of byModel) push(`| **Total** | \`${model}\` | | | | **${n(total)}** |`);
     push("");
     if (u.unknown) push(`> ${u.unknown} appel(s) sans consommation renvoyée par l'API, non comptés.`, "");
+  }
+
+  // ==========================================
+  // Coût du traitement (estimation)
+  // ==========================================
+  if (ctx.impact?.models.length) {
+    const im = ctx.impact;
+    const h = im.hypotheses;
+    const cur = im.currency;
+    push(
+      "## Coût du traitement (estimation)",
+      "",
+      "| | |",
+      "|---|---|",
+      `| Énergie | **${fmtEnergy(im.energyWh)}** |`,
+      `| Émissions | **${fmtCo2(im.co2g)}** |`,
+      `| Coût de l'électricité | ${fmtMoney(im.electricityCost, cur)} |`,
+      `| Coût équivalent API (tarifs de référence) | **${fmtMoney(im.apiCost, cur)}** |`,
+      "",
+      "| Modèle | Tokens | Énergie | Émissions | Coût équivalent API |",
+      "|---|---|---|---|---|"
+    );
+    for (const m of im.models) {
+      push(`| \`${m.model}\`${m.known ? "" : " ¹"} | ${m.tokens.toLocaleString("fr-FR")} | ${fmtEnergy(m.energyWh)} | ${fmtCo2(m.co2g)} | ${fmtMoney(m.apiCost, cur)} |`);
+    }
+    push("");
+    if (im.models.some(m => !m.known)) push("¹ Modèle absent de la configuration des coûts : valeurs par défaut utilisées.", "");
+    // ordres de grandeur pour situer l'estimation
+    const ledMinutes = (im.energyWh / 10) * 60;
+    const phoneCharges = im.energyWh / 15;
+    push(
+      `Ordres de grandeur : l'énergie équivaut à ${ledMinutes < 1 ? `${Math.round(ledMinutes * 60)} secondes` : `${Math.round(ledMinutes)} minutes`} d'une ampoule LED de 10 W, soit ${phoneCharges.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} recharge(s) de smartphone (≈ 15 Wh).`,
+      "",
+      "> **Méthode et hypothèses** — estimation, non mesure. Énergie par token ≈ 2 × paramètres actifs du modèle (opérations) ÷ " +
+        `(rendement GPU ${h.hardware.flopsPerJoule.toExponential(1).replace(".", ",").replace("e+", " × 10^")} opérations/J × utilisation ${Math.round(h.hardware.utilization * 100)} %) × PUE ${h.hardware.pue.toLocaleString("fr-FR")} ; ` +
+        `émissions = énergie × ${h.carbonIntensity.toLocaleString("fr-FR")} gCO₂e/kWh ; électricité à ${h.electricityPrice.toLocaleString("fr-FR")} ${cur}/kWh. ` +
+        "Le coût équivalent API applique les tarifs de référence du marché (€ par million de tokens en entrée et en sortie) : l'API Albert étant mise à disposition par l'État, ce n'est pas un montant facturé. " +
+        "Non compris : fabrication du matériel, réseau, postes de travail. Hypothèses modifiables dans *Paramètres › Coût du traitement*.",
+      ""
+    );
   }
 
   // ==========================================

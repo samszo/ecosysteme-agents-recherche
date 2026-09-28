@@ -269,22 +269,22 @@ Consigne : mobiliser les concepts du graphe et les références de la collection
 <tr>
 <td>Relecture épistémologique</td>
 <td>critique de PropAPP au regard d&#39;AttenduAPP</td>
-<td>item de la collection</td>
+<td>item de configuration de l&#39;exécution</td>
 </tr>
 <tr>
 <td>Graphe de concepts</td>
 <td>visualisation interactive sigma.js (les données graphology JSON restent en local)</td>
-<td>item de la collection</td>
+<td>item de configuration de l&#39;exécution</td>
 </tr>
 <tr>
 <td>Désaccords entre juges</td>
 <td>CSV des phrases codées, désaccords en tête</td>
-<td>item de la collection</td>
+<td>item de configuration de l&#39;exécution</td>
 </tr>
 <tr>
 <td>Rapport de traitement</td>
-<td>étapes, documents traités, graphe, accord inter-juges, appel et proposition, <strong>tokens consommés</strong></td>
-<td>item de la collection</td>
+<td>étapes, documents traités, graphe, accord inter-juges, appel et proposition, <strong>tokens consommés, coût estimé (énergie, carbone, argent)</strong></td>
+<td>item de configuration de l&#39;exécution</td>
 </tr>
 </tbody></table>
 <h4 id="le-graphe-de-concepts"><a class="anchor" href="#le-graphe-de-concepts">#</a>Le graphe de concepts</h4>
@@ -327,8 +327,12 @@ Consigne : mobiliser les concepts du graphe et les références de la collection
 <p>Le kappa de Fleiss est calculé pour trois juges ou plus, et le kappa de Cohen s&#39;y ajoute avec deux juges. Le rapport liste les codes les plus souvent confondus et un bilan rédigé par l&#39;agent analyste ; le CSV détaille chaque phrase pour un recalibrage ciblé.</p>
 <h4 id="la-consommation-de-tokens"><a class="anchor" href="#la-consommation-de-tokens">#</a>La consommation de tokens</h4>
 <p>Le rapport de traitement indique le nombre de tokens consommés par les modèles : total, entrée, sortie (et raisonnement), détaillé par traitement (attendus de l&#39;appel, extraction, nettoyage du graphe, rédaction, relecture, bilan kappa) et par modèle. Le total est aussi enregistré dans l&#39;item de configuration de l&#39;exécution (<code>curation:data</code>) et affiché dans l&#39;onglet <em>Appels traités</em>.</p>
+<h4 id="le-cout-du-traitement"><a class="anchor" href="#le-cout-du-traitement">#</a>Le coût du traitement</h4>
+<p>Le rapport estime aussi le <strong>coût du traitement</strong> : énergie consommée (Wh), émissions de gaz à effet de serre (g CO₂e), coût de l&#39;électricité et <strong>coût équivalent API</strong> (ce qu&#39;aurait coûté le même volume de tokens aux tarifs du marché ; l&#39;API Albert étant mise à disposition par l&#39;État, ce n&#39;est pas un montant facturé), détaillés par modèle, avec des ordres de grandeur (ampoule LED, recharge de smartphone).</p>
+<p>Il s&#39;agit d&#39;une <strong>estimation</strong>, pas d&#39;une mesure : l&#39;énergie par token est déduite de la taille du modèle (paramètres actifs), du rendement des processeurs graphiques, de leur taux d&#39;utilisation et du PUE du centre de données. Toutes ces hypothèses, l&#39;intensité carbone de l&#39;électricité et les tarifs de référence sont modifiables dans <strong>Paramètres › Coût du traitement</strong> et rappelées en bas de la section du rapport. La fabrication du matériel, le réseau et les postes de travail ne sont pas comptés.</p>
+<p>L&#39;estimation est aussi enregistrée dans l&#39;item de configuration de l&#39;exécution (<code>curation:data</code>) et affichée dans l&#39;onglet <em>Appels traités</em>.</p>
 <h3 id="appels-traites"><a class="anchor" href="#appels-traites">#</a>Appels traités</h3>
-<p>L&#39;onglet <strong>Appels traités</strong> liste les appels à propositions déjà analysés, avec l&#39;historique de leurs exécutions (date, collection, statut, durée, tokens, titre de la proposition, lien vers la configuration dans Omeka S). Il réunit l&#39;historique local (<code>workflow.history.json</code>) et les configurations enregistrées dans Omeka S : les exécutions faites depuis une autre machine ou avant une réinstallation y figurent aussi.</p>
+<p>L&#39;onglet <strong>Appels traités</strong> liste les appels à propositions déjà analysés, avec l&#39;historique de leurs exécutions (date, collection, statut, durée, tokens, coût estimé, titre de la proposition, lien vers la configuration dans Omeka S). Il réunit l&#39;historique local (<code>workflow.history.json</code>) et les configurations enregistrées dans Omeka S : les exécutions faites depuis une autre machine ou avant une réinstallation y figurent aussi.</p>
 <p>Pour chaque appel :</p>
 <ul>
 <li><strong>Rejouer</strong> relance l&#39;analyse avec la collection choisie (par défaut, la dernière utilisée), <strong>avec les paramètres et les connexions actuels</strong> : c&#39;est l&#39;usage prévu après une modification de la collection Zotero (nouveaux documents, annotations, notes), un changement de modèle ou de connexion ;</li>
@@ -345,12 +349,12 @@ Consigne : mobiliser les concepts du graphe et les références de la collection
     ANN -- curation:tag --&gt; CON
     CON -- dcterms:relation --&gt; CON
     AAP -. médias .-&gt; M1[AttenduAPP, PropAPP, BibTeX]
-    COL -. médias .-&gt; M2[relecture, graphe, rapport, CSV]</pre>
+    CFG -. médias .-&gt; M2[relecture, graphe, rapport, CSV]</pre>
 <ul>
 <li>Chaque <strong>document</strong> porte les métadonnées de sa notice Zotero (auteurs, date, revue, DOI…), son texte, ses fichiers et images, et la date de sa dernière extraction (<code>curation:access</code>).</li>
 <li>Chaque <strong>annotation</strong> porte le passage, votre commentaire, la couleur et le positionnement, les marqueurs (liés aux concepts), le code de la grille et son auteur.</li>
 <li>Un <strong>concept</strong> n&#39;est jamais créé en double : avant de le créer, le workflow cherche un concept de même identifiant ou de même titre.</li>
-<li>Chaque <strong>exécution</strong> enregistre sa configuration (sans les clés d&#39;API), son statut et les tokens consommés.</li>
+<li>Chaque <strong>exécution</strong> enregistre sa configuration (sans les clés d&#39;API), son statut, les tokens consommés et, en médias, ses documents de fin d&#39;analyse (relecture, graphe, rapport, désaccords).</li>
 </ul>
 <h2 id="4-questions-frequentes"><a class="anchor" href="#4-questions-frequentes">#</a>4. Questions fréquentes</h2>
 <p><strong>Puis-je modifier le plan de la proposition ?</strong> Oui, dans <em>Paramètres › Proposition d&#39;article › Plan de la proposition</em>. Les titres et leur ordre sont respectés par le rédacteur.</p>

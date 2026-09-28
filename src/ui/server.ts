@@ -207,8 +207,9 @@ async function omekaRuns(): Promise<{ runs: HistoryEntry[]; error?: string }> {
       let config: any = {};
       try { config = JSON.parse(val(it, "dcterms:description") ?? "{}"); } catch { /* description illisible */ }
       if (!config.input) continue;
-      let tokens: any = null;
-      try { tokens = JSON.parse(val(it, "curation:data") ?? "null")?.tokens ?? null; } catch { /* pas de consommation */ }
+      let data: any = null;
+      try { data = JSON.parse(val(it, "curation:data") ?? "null"); } catch { /* pas de consommation */ }
+      const tokens = data?.tokens ?? null;
       runs.push({
         runId: val(it, "dcterms:identifier") ?? `omeka-${it["o:id"]}`,
         startedAt: val(it, "curation:dateStart") ?? val(it, "dcterms:date") ?? it["o:created"]?.["@value"],
@@ -220,6 +221,7 @@ async function omekaRuns(): Promise<{ runs: HistoryEntry[]; error?: string }> {
         configItemId: it["o:id"],
         proposalTitle: null,
         tokens,
+        impact: data?.impact ?? null,
       });
     }
     return { runs };
@@ -233,7 +235,7 @@ async function history() {
   // fusion par identifiant d'exécution : l'historique local est plus complet (titre de l'appel, proposition)
   const byRun = new Map<string, HistoryEntry & { source: string }>();
   for (const r of omeka.runs) byRun.set(r.runId, { ...r, source: "omeka" });
-  for (const r of local) byRun.set(r.runId, { ...byRun.get(r.runId), ...r, tokens: r.tokens ?? byRun.get(r.runId)?.tokens ?? null, source: byRun.has(r.runId) ? "local+omeka" : "local" });
+  for (const r of local) byRun.set(r.runId, { ...byRun.get(r.runId), ...r, tokens: r.tokens ?? byRun.get(r.runId)?.tokens ?? null, impact: r.impact ?? byRun.get(r.runId)?.impact ?? null, source: byRun.has(r.runId) ? "local+omeka" : "local" });
 
   const omekaAdmin = readEnv().OMKS_API_URL?.replace(/\/api\/?$/, "/admin/item/") ?? "";
   const calls = new Map<string, any>();

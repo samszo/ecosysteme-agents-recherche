@@ -31,7 +31,7 @@ flowchart LR
 ```
 
 - **Interface** (`src/ui/server.ts`) : serveur `node:http` sans dépendance, qui gère `.env` et `workflow.config.json`, lance le workflow dans un **processus enfant** (la configuration et les connexions sont ainsi relues à chaque exécution), diffuse le journal en **Server-Sent Events** et sert les résultats.
-- **Workflow** (`src/index.ts`) : enregistre la configuration dans Omeka S, exécute le workflow Mastra, produit la visualisation du graphe, le rapport de traitement, et importe les documents de synthèse.
+- **Workflow** (`src/index.ts`) : enregistre la configuration dans Omeka S, exécute le workflow Mastra, produit la visualisation du graphe, le rapport de traitement, et importe les documents de fin d'analyse dans l'item de configuration de l'exécution.
 - **Répertoire de données** : le répertoire courant. En local c'est la racine du projet ; dans Docker c'est le volume `/data`, le code étant dans `/app`.
 
 ## 2. Le workflow
@@ -83,6 +83,7 @@ src/
 ├── graphViz.ts              export graphology et page sigma.js
 ├── omekaVerify.ts           audit des derniers items Omeka
 ├── usage.ts                 comptage des tokens consommés par les appels aux modèles
+├── impact.ts                estimation du coût : énergie, carbone, argent
 ├── agents/                  un fichier par agent (index.ts ré-exporte)
 ├── tools/                   un fichier par outil ou utilitaire
 ├── workflow/                une étape par fichier, assemblage, rapport, import
@@ -128,6 +129,16 @@ src/
 ### Comptage des tokens (`src/usage.ts`)
 
 Chaque appel à un modèle enregistre sa consommation avec `recordUsage(source, modèle, usage)` : `totalUsage` pour les agents Mastra (appels d'outils compris), `usage` pour `generateObject` du SDK `ai`. Le workflow tourne dans un seul processus : le compteur est partagé par toutes les étapes, et `usageSummary()` fournit le détail par traitement et par modèle au rapport de traitement, à l'item de configuration (`curation:data`, JSON) et à l'historique. Un appel en erreur n'est pas compté.
+
+### Estimation du coût (`src/impact.ts`)
+
+`estimateImpact(usageSummary())` convertit les tokens de chaque modèle en énergie, carbone et argent, avec les hypothèses de `config.costs` :
+
+- énergie par token (J) = 2 × paramètres actifs × 10⁹ ÷ (`hardware.flopsPerJoule` × `hardware.utilization`) × `hardware.pue` ;
+- émissions (g CO₂e) = énergie (kWh) × `carbonIntensity` ; coût de l'électricité = énergie (kWh) × `electricityPrice` ;
+- coût équivalent API = tokens d'entrée × `inputPricePerM` + tokens de sortie × `outputPricePerM` (par million) ; un modèle absent de `costs.models` prend les valeurs de `costs.fallback`.
+
+Le résultat alimente la section « Coût du traitement » du rapport, l'item de configuration (`curation:data`, avec les tokens) et l'historique.
 
 ### Historique des exécutions (`src/workflow/history.ts`)
 
@@ -261,6 +272,7 @@ erDiagram
         dcterms_description json "configuration"
         curation_status statut "running, success, failed"
         curation_data tokens "consommation (JSON)"
+        medias documents "relecture, graphe, rapport, désaccords"
     }
     DOCUMENT }o--|{ COLLECTION : "dcterms:isPartOf"
     ANNOTATION }o--|| DOCUMENT : "oa:hasTarget"
@@ -290,6 +302,7 @@ La configuration par défaut est dans `src/config.ts` (`defaultWorkflowConfig`).
 | `proposal.plan`, `authors`, `maxKeywords`, `ignoredTags`, `maxCitations`, `citationStyle` | PropAPP |
 | `proposal.expectationsFile`, `proposalFile`, `bibtexFile` | noms des fichiers produits |
 | `cleaning.batchSize` | taille des lots de nettoyage sémantique |
+| `costs.*` | estimation du coût : devise, prix de l'électricité, intensité carbone, matériel (rendement, utilisation, PUE), paramètres actifs et tarifs de référence par modèle |
 | `omeka.*` | vocabulaires, classes et propriétés |
 
 ## 10. API de l'interface

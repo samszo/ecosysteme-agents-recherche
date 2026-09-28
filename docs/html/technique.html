@@ -73,7 +73,7 @@
     UI -- lit --&gt; FS</pre>
 <ul>
 <li><strong>Interface</strong> (<code>src/ui/server.ts</code>) : serveur <code>node:http</code> sans dépendance, qui gère <code>.env</code> et <code>workflow.config.json</code>, lance le workflow dans un <strong>processus enfant</strong> (la configuration et les connexions sont ainsi relues à chaque exécution), diffuse le journal en <strong>Server-Sent Events</strong> et sert les résultats.</li>
-<li><strong>Workflow</strong> (<code>src/index.ts</code>) : enregistre la configuration dans Omeka S, exécute le workflow Mastra, produit la visualisation du graphe, le rapport de traitement, et importe les documents de synthèse.</li>
+<li><strong>Workflow</strong> (<code>src/index.ts</code>) : enregistre la configuration dans Omeka S, exécute le workflow Mastra, produit la visualisation du graphe, le rapport de traitement, et importe les documents de fin d&#39;analyse dans l&#39;item de configuration de l&#39;exécution.</li>
 <li><strong>Répertoire de données</strong> : le répertoire courant. En local c&#39;est la racine du projet ; dans Docker c&#39;est le volume <code>/data</code>, le code étant dans <code>/app</code>.</li>
 </ul>
 <h2 id="2-le-workflow"><a class="anchor" href="#2-le-workflow">#</a>2. Le workflow</h2>
@@ -160,6 +160,7 @@
 ├── graphViz.ts              export graphology et page sigma.js
 ├── omekaVerify.ts           audit des derniers items Omeka
 ├── usage.ts                 comptage des tokens consommés par les appels aux modèles
+├── impact.ts                estimation du coût : énergie, carbone, argent
 ├── agents/                  un fichier par agent (index.ts ré-exporte)
 ├── tools/                   un fichier par outil ou utilitaire
 ├── workflow/                une étape par fichier, assemblage, rapport, import
@@ -294,6 +295,14 @@
 </tbody></table>
 <h3 id="comptage-des-tokens-src-usage-ts"><a class="anchor" href="#comptage-des-tokens-src-usage-ts">#</a>Comptage des tokens (<code>src/usage.ts</code>)</h3>
 <p>Chaque appel à un modèle enregistre sa consommation avec <code>recordUsage(source, modèle, usage)</code> : <code>totalUsage</code> pour les agents Mastra (appels d&#39;outils compris), <code>usage</code> pour <code>generateObject</code> du SDK <code>ai</code>. Le workflow tourne dans un seul processus : le compteur est partagé par toutes les étapes, et <code>usageSummary()</code> fournit le détail par traitement et par modèle au rapport de traitement, à l&#39;item de configuration (<code>curation:data</code>, JSON) et à l&#39;historique. Un appel en erreur n&#39;est pas compté.</p>
+<h3 id="estimation-du-cout-src-impact-ts"><a class="anchor" href="#estimation-du-cout-src-impact-ts">#</a>Estimation du coût (<code>src/impact.ts</code>)</h3>
+<p><code>estimateImpact(usageSummary())</code> convertit les tokens de chaque modèle en énergie, carbone et argent, avec les hypothèses de <code>config.costs</code> :</p>
+<ul>
+<li>énergie par token (J) = 2 × paramètres actifs × 10⁹ ÷ (<code>hardware.flopsPerJoule</code> × <code>hardware.utilization</code>) × <code>hardware.pue</code> ;</li>
+<li>émissions (g CO₂e) = énergie (kWh) × <code>carbonIntensity</code> ; coût de l&#39;électricité = énergie (kWh) × <code>electricityPrice</code> ;</li>
+<li>coût équivalent API = tokens d&#39;entrée × <code>inputPricePerM</code> + tokens de sortie × <code>outputPricePerM</code> (par million) ; un modèle absent de <code>costs.models</code> prend les valeurs de <code>costs.fallback</code>.</li>
+</ul>
+<p>Le résultat alimente la section « Coût du traitement » du rapport, l&#39;item de configuration (<code>curation:data</code>, avec les tokens) et l&#39;historique.</p>
 <h3 id="historique-des-executions-src-workflow-history-ts"><a class="anchor" href="#historique-des-executions-src-workflow-history-ts">#</a>Historique des exécutions (<code>src/workflow/history.ts</code>)</h3>
 <p>À la fin de chaque exécution, <code>index.ts</code> ajoute une entrée à <code>workflow.history.json</code> (répertoire de données, 500 entrées au plus ; chemin modifiable par <code>WORKFLOW_HISTORY_FILE</code>) : identifiant, dates, statut, paramètres d&#39;entrée, appel (titre, item), collection, configuration, titre de la proposition, tokens. L&#39;interface fusionne cet historique avec les items de configuration d&#39;Omeka S (<code>GET /api/history</code>) et regroupe les exécutions par appel (lien, fichier ou empreinte du texte).</p>
 <h2 id="4-extraction-des-documents"><a class="anchor" href="#4-extraction-des-documents">#</a>4. Extraction des documents</h2>
@@ -404,6 +413,7 @@
         dcterms_description json &quot;configuration&quot;
         curation_status statut &quot;running, success, failed&quot;
         curation_data tokens &quot;consommation (JSON)&quot;
+        medias documents &quot;relecture, graphe, rapport, désaccords&quot;
     }
     DOCUMENT }o--|{ COLLECTION : &quot;dcterms:isPartOf&quot;
     ANNOTATION }o--|| DOCUMENT : &quot;oa:hasTarget&quot;
@@ -465,6 +475,10 @@
 <tr>
 <td><code>cleaning.batchSize</code></td>
 <td>taille des lots de nettoyage sémantique</td>
+</tr>
+<tr>
+<td><code>costs.*</code></td>
+<td>estimation du coût : devise, prix de l&#39;électricité, intensité carbone, matériel (rendement, utilisation, PUE), paramètres actifs et tarifs de référence par modèle</td>
 </tr>
 <tr>
 <td><code>omeka.*</code></td>
@@ -549,7 +563,7 @@
 </ul>
 
 </main>
-<nav class="toc"><strong>Sur cette page</strong><a class="l2" href="#1-architecture">1. Architecture</a><a class="l2" href="#2-le-workflow">2. Le workflow</a><a class="l2" href="#3-organisation-du-code">3. Organisation du code</a><a class="l3" href="#agents-src-agents">Agents (src/agents/)</a><a class="l3" href="#outils-et-utilitaires-src-tools">Outils et utilitaires (src/tools/)</a><a class="l3" href="#comptage-des-tokens-src-usage-ts">Comptage des tokens (src/usage.ts)</a><a class="l3" href="#historique-des-executions-src-workflow-history-ts">Historique des exécutions (src/workflow/history.ts)</a><a class="l2" href="#4-extraction-des-documents">4. Extraction des documents</a><a class="l2" href="#5-graphe-de-concepts">5. Graphe de concepts</a><a class="l2" href="#6-accord-inter-juges">6. Accord inter-juges</a><a class="l2" href="#7-proposition-d-39-article-propapp">7. Proposition d&#39;article (PropAPP)</a><a class="l2" href="#8-modele-de-donnees-omeka-s">8. Modèle de données Omeka S</a><a class="l2" href="#9-configuration">9. Configuration</a><a class="l2" href="#10-api-de-l-39-interface">10. API de l&#39;interface</a><a class="l2" href="#11-etendre-le-projet">11. Étendre le projet</a><a class="l2" href="#12-documentation-et-conteneur">12. Documentation et conteneur</a><a class="l2" href="#13-limites-connues">13. Limites connues</a></nav>
+<nav class="toc"><strong>Sur cette page</strong><a class="l2" href="#1-architecture">1. Architecture</a><a class="l2" href="#2-le-workflow">2. Le workflow</a><a class="l2" href="#3-organisation-du-code">3. Organisation du code</a><a class="l3" href="#agents-src-agents">Agents (src/agents/)</a><a class="l3" href="#outils-et-utilitaires-src-tools">Outils et utilitaires (src/tools/)</a><a class="l3" href="#comptage-des-tokens-src-usage-ts">Comptage des tokens (src/usage.ts)</a><a class="l3" href="#estimation-du-cout-src-impact-ts">Estimation du coût (src/impact.ts)</a><a class="l3" href="#historique-des-executions-src-workflow-history-ts">Historique des exécutions (src/workflow/history.ts)</a><a class="l2" href="#4-extraction-des-documents">4. Extraction des documents</a><a class="l2" href="#5-graphe-de-concepts">5. Graphe de concepts</a><a class="l2" href="#6-accord-inter-juges">6. Accord inter-juges</a><a class="l2" href="#7-proposition-d-39-article-propapp">7. Proposition d&#39;article (PropAPP)</a><a class="l2" href="#8-modele-de-donnees-omeka-s">8. Modèle de données Omeka S</a><a class="l2" href="#9-configuration">9. Configuration</a><a class="l2" href="#10-api-de-l-39-interface">10. API de l&#39;interface</a><a class="l2" href="#11-etendre-le-projet">11. Étendre le projet</a><a class="l2" href="#12-documentation-et-conteneur">12. Documentation et conteneur</a><a class="l2" href="#13-limites-connues">13. Limites connues</a></nav>
 </div>
 <script type="module">
 import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";

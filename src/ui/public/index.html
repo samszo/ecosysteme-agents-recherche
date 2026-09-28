@@ -191,6 +191,7 @@ const SECTIONS = [
   { title: "Zotero et marqueurs", lead: "Les marqueurs Zotero deviennent des concepts.", paths: ["zotero", "tagCategory"] },
   { title: "Positionnement par couleur", lead: "Chaque couleur d'annotation indique un positionnement du chercheur et oriente le prompt d'extraction.", paths: ["annotationPositions", "annotationColorTolerance"] },
   { title: "Accord inter-juges (kappa)", lead: "Codes de la grille d'annotation ajoutés comme marqueurs Zotero par les juges.", paths: ["kappa"] },
+  { title: "Coût du traitement", lead: "Hypothèses de l'estimation du coût en énergie, carbone et argent présentée dans le rapport de traitement. Énergie par token ≈ 2 × paramètres actifs ÷ (rendement GPU × utilisation) × PUE ; le coût équivalent API applique des tarifs de référence du marché.", paths: ["costs"] },
   { title: "Omeka S (avancé)", lead: "Vocabulaires et propriétés utilisés.", paths: ["omeka"], advanced: true },
 ];
 const LABELS = {
@@ -218,6 +219,16 @@ const LABELS = {
   "kappa.unitSimilarity": ["Similarité de phrase (0-1)", "Recouvrement des mots pour rapprocher les surlignages de juges différents."],
   "kappa.targetKappa": ["Kappa requis", "Seuil de validation du corpus."],
   "kappa.csvPath": ["Fichier CSV des désaccords", ""],
+  "costs.currency": ["Devise", ""],
+  "costs.electricityPrice": ["Prix de l'électricité (par kWh)", ""],
+  "costs.carbonIntensity": ["Intensité carbone (gCO₂e/kWh)", "Mix électrique du lieu d'hébergement des modèles (France ≈ 30 en cycle de vie)."],
+  "costs.hardware.flopsPerJoule": ["Rendement GPU (opérations/joule)", "H100 ≈ 1,4e12 en bf16."],
+  "costs.hardware.utilization": ["Taux d'utilisation du GPU (0-1)", "Part effective de la puissance en inférence."],
+  "costs.hardware.pue": ["PUE du centre de données", "Surconsommation liée au refroidissement et à l'infrastructure."],
+  "costs.models": ["Modèles", "Paramètres actifs (milliards) et tarifs de référence (par million de tokens)."],
+  "costs.fallback.activeParamsB": ["Modèle inconnu : paramètres actifs (milliards)", ""],
+  "costs.fallback.inputPricePerM": ["Modèle inconnu : prix entrée (par M tokens)", ""],
+  "costs.fallback.outputPricePerM": ["Modèle inconnu : prix sortie (par M tokens)", ""],
   "omeka.vocabs": ["Vocabulaires chargés", "Un préfixe par ligne."],
   "omeka.conceptClass": ["Classe des concepts", ""],
   "omeka.configClass": ["Classe des configurations d'exécution", ""],
@@ -228,7 +239,8 @@ const LABELS = {
   "omeka.codeTerm": ["Code de la grille", ""],
   "omeka.authorTerm": ["Juge", ""],
 };
-const COLUMN_LABELS = { color: "Couleur", name: "Nom", position: "Positionnement", instruction: "Consigne pour le modèle" };
+const COLUMN_LABELS = { color: "Couleur", name: "Nom", position: "Positionnement", instruction: "Consigne pour le modèle",
+  model: "Modèle", activeParamsB: "Paramètres actifs (Md)", inputPricePerM: "Prix entrée / M tokens", outputPricePerM: "Prix sortie / M tokens" };
 
 // ==========================================
 // État et utilitaires
@@ -333,13 +345,15 @@ function objectTable(path, rows) {
           ? el("input", { type: "color", value: row[c] ?? "#000000", oninput: e => row[c] = e.target.value })
           : c === "instruction"
             ? el("textarea", { rows: 2, value: row[c] ?? "", oninput: e => row[c] = e.target.value, style: "min-height:52px" })
-            : el("input", { value: row[c] ?? "", oninput: e => row[c] = e.target.value }))),
+            : typeof rows.find(r => r[c] !== undefined)?.[c] === "number"
+              ? el("input", { type: "number", step: "any", value: row[c] ?? 0, oninput: e => row[c] = Number(e.target.value) })
+              : el("input", { value: row[c] ?? "", oninput: e => row[c] = e.target.value }))),
         el("td", {}, el("button", { className: "link", textContent: "Supprimer", onclick: () => { get(config, path).splice(i, 1); draw(); } }))));
     });
     wrap.replaceChildren(
       el("table", { className: "edit" },
         el("thead", {}, el("tr", {}, cols.map(c => el("th", { textContent: COLUMN_LABELS[c] ?? c })), el("th"))), tbody),
-      el("button", { className: "link", textContent: "+ Ajouter une ligne", onclick: () => { get(config, path).push(Object.fromEntries(cols.map(c => [c, c === "color" ? "#888888" : ""]))); draw(); } }));
+      el("button", { className: "link", textContent: "+ Ajouter une ligne", onclick: () => { get(config, path).push(Object.fromEntries(cols.map(c => [c, c === "color" ? "#888888" : typeof rows.find(r => r[c] !== undefined)?.[c] === "number" ? 0 : ""]))); draw(); } }));
   };
   draw();
   return wrap;
@@ -583,6 +597,13 @@ function parseCsvLine(line) {
 let zoteroCollections = [];
 const collectionName = key => { const c = zoteroCollections.find(c => c.key === key); return c ? `${c.name} (${key})` : key; };
 const fmtTokens = t => t?.total ? `${t.total.toLocaleString("fr-FR")} tokens` : "—";
+const fmtImpact = i => {
+  if (!i) return "";
+  const e = i.energyWh >= 1000 ? `${(i.energyWh / 1000).toLocaleString("fr-FR", { maximumFractionDigits: 2 })} kWh` : `${i.energyWh.toLocaleString("fr-FR", { maximumFractionDigits: i.energyWh < 1 ? 3 : 1 })} Wh`;
+  const c = `${i.co2g.toLocaleString("fr-FR", { maximumFractionDigits: i.co2g < 1 ? 3 : 1 })} g CO₂e`;
+  const m = `${i.apiCost.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: i.apiCost < 0.01 ? 4 : 2 })} ${i.currency ?? "€"}`;
+  return `${e} · ${c} · ${m}`;
+};
 const fmtDuration = r => {
   if (!r.endedAt || !r.startedAt) return "—";
   const s = Math.round((new Date(r.endedAt) - new Date(r.startedAt)) / 1000);
@@ -612,13 +633,14 @@ async function loadHistory() {
       : el("span", { textContent: "texte saisi" });
 
     const runsTable = el("table", { className: "edit" },
-      el("thead", {}, el("tr", {}, ["Date", "Collection", "Statut", "Durée", "Tokens", "Proposition", ""].map(h => el("th", { textContent: h })))),
+      el("thead", {}, el("tr", {}, ["Date", "Collection", "Statut", "Durée", "Tokens", "Coût estimé", "Proposition", ""].map(h => el("th", { textContent: h })))),
       el("tbody", {}, call.runs.map(r => el("tr", {},
         el("td", { textContent: r.startedAt ? new Date(r.startedAt).toLocaleString("fr-FR") : "—" }),
         el("td", { textContent: collectionName(r.input.zoteroCollection) }),
         el("td", {}, el("span", { className: `badge ${r.status}`, textContent: STATUS_TEXT[r.status] ?? r.status })),
         el("td", { textContent: fmtDuration(r) }),
         el("td", { textContent: fmtTokens(r.tokens) }),
+        el("td", { textContent: fmtImpact(r.impact) || "—", title: "Énergie · émissions · coût équivalent API (estimation)" }),
         el("td", { textContent: r.proposalTitle ?? "—" }),
         el("td", {}, r.configItemId && data.omekaAdmin ? el("a", { href: data.omekaAdmin + r.configItemId, target: "_blank", rel: "noopener", textContent: "configuration" }) : "")
       )))

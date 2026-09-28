@@ -17,6 +17,8 @@ export interface HistoryEntry {
   configItemId: number | null;
   proposalTitle: string | null;
   tokens: { calls: number; input: number; output: number; total: number } | null;
+  // estimation du coût (énergie en Wh, émissions en gCO2e, coûts dans la devise configurée)
+  impact?: { energyWh: number; co2g: number; electricityCost: number; apiCost: number; currency: string } | null;
 }
 
 export async function readHistory(): Promise<HistoryEntry[]> {

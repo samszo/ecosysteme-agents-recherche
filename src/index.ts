@@ -11,6 +11,7 @@ import { importSynthesis, type SynthesisDocument } from "./workflow/importSynthe
 import { buildProcessingReport } from "./workflow/processingReport";
 import { getOmk } from "./tools/omk";
 import { usageSummary } from "./usage";
+import { estimateImpact, fmtEnergy, fmtCo2, fmtMoney } from "./impact";
 import { appendHistory } from "./workflow/history";
 
 async function main() {
@@ -32,9 +33,12 @@ async function main() {
   const endedAt = new Date();
   const usage = usageSummary();
   console.log(`🔢 Tokens consommés : ${usage.totalTokens.toLocaleString("fr-FR")} (${usage.calls} appel(s) aux modèles)`);
+  const impact = estimateImpact(usage);
+  console.log(`⚡ Coût estimé : ${fmtEnergy(impact.energyWh)}, ${fmtCo2(impact.co2g)}, équivalent API ${fmtMoney(impact.apiCost, impact.currency)}`);
+  const impactTotals = { energyWh: impact.energyWh, co2g: impact.co2g, electricityCost: impact.electricityCost, apiCost: impact.apiCost, currency: impact.currency };
 
   if (configItemId) {
-    await updateWorkflowStatus(configItemId, runResult.status, usage).catch(e =>
+    await updateWorkflowStatus(configItemId, runResult.status, usage, impactTotals).catch(e =>
       console.warn("⚠️ Statut du workflow non enregistré dans Omeka S :", (e as Error).message)
     );
   }
@@ -90,12 +94,13 @@ async function main() {
     ],
     omk: await getOmk().catch(() => null),
     usage,
+    impact,
   });
   await fs.writeFile('./rapport_traitement.md', report);
   console.log("📋 Rapport de traitement généré dans './rapport_traitement.md'");
   synthesis.push({ filePath: './rapport_traitement.md', title: "Rapport de traitement" });
 
-  // 5. Import des documents de synthèse et du rapport dans l'item de la collection Zotero
+  // 5. Import des documents de fin d'analyse et du rapport dans l'item de configuration de l'exécution
   await importSynthesis(inputData.zoteroCollection, synthesis, run.runId, configItemId).catch(e =>
     console.warn("⚠️ Documents de synthèse non importés dans Omeka S :", (e as Error).message)
   );
@@ -113,6 +118,7 @@ async function main() {
     configItemId,
     proposalTitle: steps["draft-paper"]?.output?.proposal?.title ?? null,
     tokens: { calls: usage.calls, input: usage.inputTokens, output: usage.outputTokens, total: usage.totalTokens },
+    impact: impactTotals,
   }).catch(e => console.warn("⚠️ Historique non enregistré :", (e as Error).message));
 }
 

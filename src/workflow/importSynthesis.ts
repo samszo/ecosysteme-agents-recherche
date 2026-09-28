@@ -10,11 +10,16 @@ export interface SynthesisDocument {
   type?: string;
 }
 
-// documents de synthèse (relecture, graphe, rapport…) dans l'item de la collection Zotero
+// documents de fin d'analyse (relecture, graphe, rapport, désaccords…) dans l'item « Configuration » de l'exécution ;
+// si la configuration n'a pas pu être enregistrée, repli sur l'item de la collection Zotero
 export async function importSynthesis(zoteroCollection: string, documents: SynthesisDocument[], runId: string, configItemId: number | null) {
+  if (configItemId) {
+    console.log(`\n📤 [OMEKA] Import des documents de fin d'analyse dans la configuration de l'exécution (Item ID ${configItemId})...`);
+    return attachDocuments(configItemId, documents, runId, null);
+  }
   const collectionItemId = await (await getZoteroCollections()).itemId(zoteroCollection);
-  console.log(`\n📤 [OMEKA] Import des documents de synthèse dans la collection (Item ID ${collectionItemId})...`);
-  return attachDocuments(collectionItemId, documents, runId, configItemId);
+  console.warn(`\n⚠️ [OMEKA] Configuration de l'exécution non enregistrée : documents importés dans la collection (Item ID ${collectionItemId})...`);
+  return attachDocuments(collectionItemId, documents, runId, null);
 }
 
 // refus d'Omeka S pour un type ou une extension non autorisés (Admin › Paramètres › Sécurité)

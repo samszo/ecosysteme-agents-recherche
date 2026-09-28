@@ -124,6 +124,26 @@ Consigne : synthèse et perspectives.`,
     bibtexFile: "PropAPP.bib",
   },
 
+  // estimation du coût d'un traitement (énergie, carbone, argent) à partir des tokens consommés
+  // valeurs par défaut indicatives, à ajuster : voir la section « Coût du traitement » du rapport
+  costs: {
+    currency: "€",
+    // prix de l'électricité (€/kWh)
+    electricityPrice: 0.2,
+    // intensité carbone de l'électricité (gCO2e/kWh) : mix français en analyse de cycle de vie, ordre de grandeur
+    carbonIntensity: 32,
+    // matériel d'inférence : rendement GPU (opérations par joule, H100 ≈ 1,4e12 en bf16),
+    // taux d'utilisation effectif en inférence, PUE du centre de données
+    hardware: { flopsPerJoule: 1.4e12, utilization: 0.2, pue: 1.2 },
+    // par modèle : paramètres actifs (milliards), prix de référence du marché (€ par million de tokens)
+    models: [
+      { model: "openai/gpt-oss-120b", activeParamsB: 5.1, inputPricePerM: 0.15, outputPricePerM: 0.6 },
+      { model: "mistralai/Ministral-3-8B-Instruct-2512", activeParamsB: 8, inputPricePerM: 0.1, outputPricePerM: 0.1 },
+    ],
+    // modèle absent de la liste
+    fallback: { activeParamsB: 10, inputPricePerM: 0.5, outputPricePerM: 1.5 },
+  },
+
   // nettoyage du graphe (cleanGraph)
   cleaning: {
     batchSize: 80,

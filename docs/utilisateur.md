@@ -145,10 +145,10 @@ L'onglet **Résultats** affiche les documents produits : markdown mis en forme, 
 | **PropAPP** | proposition d'article : métadonnées (titre, auteurs, mots-clés), texte selon le plan, annexe des citations, références BibTeX | item de l'appel |
 | **AttenduAPP** | analyse des attendus de l'appel : problématique, axes, contraintes formelles, critères, calendrier | item de l'appel |
 | Références BibTeX | `PropAPP.bib`, notices de la collection | item de l'appel |
-| Relecture épistémologique | critique de PropAPP au regard d'AttenduAPP | item de la collection |
-| Graphe de concepts | visualisation interactive sigma.js (les données graphology JSON restent en local) | item de la collection |
-| Désaccords entre juges | CSV des phrases codées, désaccords en tête | item de la collection |
-| Rapport de traitement | étapes, documents traités, graphe, accord inter-juges, appel et proposition, **tokens consommés** | item de la collection |
+| Relecture épistémologique | critique de PropAPP au regard d'AttenduAPP | item de configuration de l'exécution |
+| Graphe de concepts | visualisation interactive sigma.js (les données graphology JSON restent en local) | item de configuration de l'exécution |
+| Désaccords entre juges | CSV des phrases codées, désaccords en tête | item de configuration de l'exécution |
+| Rapport de traitement | étapes, documents traités, graphe, accord inter-juges, appel et proposition, **tokens consommés, coût estimé (énergie, carbone, argent)** | item de configuration de l'exécution |
 
 #### Le graphe de concepts
 
@@ -175,9 +175,17 @@ Le kappa de Fleiss est calculé pour trois juges ou plus, et le kappa de Cohen s
 
 Le rapport de traitement indique le nombre de tokens consommés par les modèles : total, entrée, sortie (et raisonnement), détaillé par traitement (attendus de l'appel, extraction, nettoyage du graphe, rédaction, relecture, bilan kappa) et par modèle. Le total est aussi enregistré dans l'item de configuration de l'exécution (`curation:data`) et affiché dans l'onglet *Appels traités*.
 
+#### Le coût du traitement
+
+Le rapport estime aussi le **coût du traitement** : énergie consommée (Wh), émissions de gaz à effet de serre (g CO₂e), coût de l'électricité et **coût équivalent API** (ce qu'aurait coûté le même volume de tokens aux tarifs du marché ; l'API Albert étant mise à disposition par l'État, ce n'est pas un montant facturé), détaillés par modèle, avec des ordres de grandeur (ampoule LED, recharge de smartphone).
+
+Il s'agit d'une **estimation**, pas d'une mesure : l'énergie par token est déduite de la taille du modèle (paramètres actifs), du rendement des processeurs graphiques, de leur taux d'utilisation et du PUE du centre de données. Toutes ces hypothèses, l'intensité carbone de l'électricité et les tarifs de référence sont modifiables dans **Paramètres › Coût du traitement** et rappelées en bas de la section du rapport. La fabrication du matériel, le réseau et les postes de travail ne sont pas comptés.
+
+L'estimation est aussi enregistrée dans l'item de configuration de l'exécution (`curation:data`) et affichée dans l'onglet *Appels traités*.
+
 ### Appels traités
 
-L'onglet **Appels traités** liste les appels à propositions déjà analysés, avec l'historique de leurs exécutions (date, collection, statut, durée, tokens, titre de la proposition, lien vers la configuration dans Omeka S). Il réunit l'historique local (`workflow.history.json`) et les configurations enregistrées dans Omeka S : les exécutions faites depuis une autre machine ou avant une réinstallation y figurent aussi.
+L'onglet **Appels traités** liste les appels à propositions déjà analysés, avec l'historique de leurs exécutions (date, collection, statut, durée, tokens, coût estimé, titre de la proposition, lien vers la configuration dans Omeka S). Il réunit l'historique local (`workflow.history.json`) et les configurations enregistrées dans Omeka S : les exécutions faites depuis une autre machine ou avant une réinstallation y figurent aussi.
 
 Pour chaque appel :
 
@@ -198,13 +206,13 @@ flowchart TD
     ANN -- curation:tag --> CON
     CON -- dcterms:relation --> CON
     AAP -. médias .-> M1[AttenduAPP, PropAPP, BibTeX]
-    COL -. médias .-> M2[relecture, graphe, rapport, CSV]
+    CFG -. médias .-> M2[relecture, graphe, rapport, CSV]
 ```
 
 - Chaque **document** porte les métadonnées de sa notice Zotero (auteurs, date, revue, DOI…), son texte, ses fichiers et images, et la date de sa dernière extraction (`curation:access`).
 - Chaque **annotation** porte le passage, votre commentaire, la couleur et le positionnement, les marqueurs (liés aux concepts), le code de la grille et son auteur.
 - Un **concept** n'est jamais créé en double : avant de le créer, le workflow cherche un concept de même identifiant ou de même titre.
-- Chaque **exécution** enregistre sa configuration (sans les clés d'API), son statut et les tokens consommés.
+- Chaque **exécution** enregistre sa configuration (sans les clés d'API), son statut, les tokens consommés et, en médias, ses documents de fin d'analyse (relecture, graphe, rapport, désaccords).
 
 ## 4. Questions fréquentes
 

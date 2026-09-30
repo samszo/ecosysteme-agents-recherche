@@ -7,8 +7,9 @@ export const fetchLiteratureStep = createStep({
   execute: async ({ inputData }) => {
     console.log("⚙️ Outil : Connexion Zotero...");
     // On appelle la fonction métier de l'outil directement !
-    const result = await fetchZoteroData.execute({ 
-      data: { collectionId: inputData.zoteroCollection } 
+    // mergeDuplicates : exploZoteroAnno fusionne les exemplaires d'un même document (l'Atelier ne le demande pas)
+    const result = await fetchZoteroData.execute({
+      data: { collectionId: inputData.zoteroCollection, mergeDuplicates: !!inputData.mergeDuplicates }
     });
     
     // On propage le vrai tableau d'articles bruts, pas un résumé LLM

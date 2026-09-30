@@ -77,6 +77,8 @@ export const computeParticipation = new Tool({
       }
       documents.push({
         zoteroKey: a.zoteroKey, title: a.title, omekaItemId: a.omekaItemId ?? null,
+        // autres exemplaires fusionnés dans ce document (doublons de la collection)
+        duplicates: a.duplicates ?? [],
         annotations: docAnnotations, notes: docNotes,
         collaborators: [...docPeople].sort((x, y) => y[1] - x[1]).map(([name, n]) => ({ name, count: n })),
       });
@@ -106,6 +108,8 @@ export const computeParticipation = new Tool({
         documents: articles.length,
         annotatedDocuments: documents.filter(d => d.annotations + d.notes > 0).length,
         offGrid: offGridTotal,
+        // exemplaires en double fusionnés (non comptés comme documents)
+        mergedDuplicates: articles.reduce((n: number, a: any) => n + (a.duplicates?.length ?? 0), 0),
       },
       grid: grid.positions,
       positions: grid.positions.map(p => ({ position: p.position, color: p.color, count: positionTotals[p.position] ?? 0 })),

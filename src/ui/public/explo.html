@@ -152,6 +152,7 @@
       <div class="grid">
         <div class="field"><label for="a-sim">Similarité de passage (0-1)</label><input id="a-sim" type="number" step="0.05" min="0" max="1"><span class="help">Recouvrement des mots pour considérer que deux surlignages portent sur le même passage.</span></div>
         <div class="field"><label for="a-unassigned">Annotations sans auteur</label><input id="a-unassigned"></div>
+        <div class="field"><label style="display:flex;gap:8px;align-items:center"><input id="a-dupes" type="checkbox" style="width:auto"> Fusionner les documents en double</label><span class="help">Même fichier, DOI, URL, ou titre et année : un seul document dans Omeka S, annotations de tous les exemplaires cumulées.</span></div>
         <div class="field"><label for="a-kappa">Passages communs minimum pour le kappa</label><input id="a-kappa" type="number" step="1" min="2"><span class="help">En dessous, l'accord n'est pas calculé : il ne serait pas interprétable.</span></div>
         <div class="field"><label for="t-count">Nombre de thèmes de discussion</label><input id="t-count" type="number" step="1" min="1"></div>
         <div class="field"><label for="t-max">Passages transmis à l'agent</label><input id="t-max" type="number" step="10" min="10"></div>
@@ -258,6 +259,7 @@ function renderSettings() {
   $("#a-sim").value = config.analysis.unitSimilarity;
   $("#a-unassigned").value = config.analysis.unassignedLabel;
   $("#a-kappa").value = config.analysis.minPassagesForKappa;
+  $("#a-dupes").checked = config.analysis.mergeDuplicates !== false;
   $("#t-count").value = config.themes.count;
   $("#t-max").value = config.themes.maxPassages;
   $("#config-file").textContent = `Modifications enregistrées dans ${settings.configFile}`;
@@ -271,25 +273,55 @@ bind("#grid-tolerance", v => config.grid.tolerance = v, true);
 bind("#a-sim", v => config.analysis.unitSimilarity = v, true);
 bind("#a-unassigned", v => config.analysis.unassignedLabel = v);
 bind("#a-kappa", v => config.analysis.minPassagesForKappa = v, true);
+$("#a-dupes").onchange = e => { config.analysis.mergeDuplicates = e.target.checked; };
 bind("#t-count", v => config.themes.count = v, true);
 bind("#t-max", v => config.themes.maxPassages = v, true);
 $("#collection").onchange = e => { config.input.zoteroCollection = e.target.value; refreshGuide(); };
 
+// bibliothèque saisie dans le formulaire (groupe, utilisateur, nouvelle clé éventuelle), même non enregistrée
+const zoteroForm = () => ({
+  userId: $("#env-ZOTERO_USER_ID")?.value ?? undefined,
+  groupId: $("#env-ZOTERO_GROUP_ID")?.value ?? undefined,
+  apiKey: $("#env-ZOTERO_API_KEY")?.value || undefined,
+});
+let collectionsRequest = 0;
+// collection choisie dans chaque bibliothèque pendant la session (retour à une bibliothèque = retour à son choix)
+const choiceByLibrary = new Map();
+let currentLibrary = null;
 async function loadCollections() {
-  const sel = $("#collection"), help = $("#collection-help"), current = config.input.zoteroCollection;
+  const sel = $("#collection"), help = $("#collection-help");
+  const request = ++collectionsRequest;
+  help.textContent = "Chargement des collections…";
   try {
-    collections = await api("/api/zotero/collections");
+    const res = await api("/api/zotero/collections", { method: "POST", body: zoteroForm() });
+    // une saisie plus récente a relancé le chargement : on ignore cette réponse
+    if (request !== collectionsRequest) return;
+    collections = res.collections;
+    if (currentLibrary && currentLibrary !== res.library) choiceByLibrary.set(currentLibrary, config.input.zoteroCollection);
+    currentLibrary = res.library;
+    // choix précédent dans cette bibliothèque, sinon collection enregistrée si elle en fait partie
     const byParent = new Map();
     for (const c of collections) { const k = c.parent ?? ""; if (!byParent.has(k)) byParent.set(k, []); byParent.get(k).push(c); }
     const opts = [];
     const walk = (p, d) => (byParent.get(p) ?? []).sort((a, b) => a.name.localeCompare(b.name)).forEach(c => { opts.push(el("option", { value: c.key, textContent: `${"— ".repeat(d)}${c.name} (${c.key}${c.items != null ? `, ${c.items} élément(s)` : ""})` })); walk(c.key, d + 1); });
     walk("", 0);
-    if (!collections.some(c => c.key === current)) opts.unshift(el("option", { value: current, textContent: `${current} (introuvable)` }));
+    const remembered = choiceByLibrary.get(res.library);
+    if (remembered && collections.some(c => c.key === remembered)) config.input.zoteroCollection = remembered;
+    // collection absente de cette bibliothèque : première collection dans l'ordre affiché
+    if (opts.length && !collections.some(c => c.key === config.input.zoteroCollection)) {
+      const previous = config.input.zoteroCollection;
+      config.input.zoteroCollection = opts[0].value;
+      if (previous) toast(`Collection ${previous} absente de cette bibliothèque : « ${collections.find(c => c.key === opts[0].value)?.name} » sélectionnée`);
+    }
+    const current = config.input.zoteroCollection;
     sel.replaceChildren(...opts); sel.value = current;
-    help.textContent = `${collections.length} collection(s) dans la bibliothèque Zotero.`;
+    help.textContent = `${collections.length} collection(s) dans la bibliothèque ${res.library}.`;
   } catch (e) {
+    if (request !== collectionsRequest) return;
+    const current = config.input.zoteroCollection;
+    collections = [];
     sel.replaceChildren(el("option", { value: current, textContent: current })); sel.value = current;
-    help.textContent = `Collections indisponibles (${e.message}) : vérifier les connexions dans l'Atelier d'articles.`;
+    help.textContent = `Collections indisponibles (${e.message}) : vérifier l'identifiant du groupe, de l'utilisateur et la clé Zotero ci-dessus.`;
   }
   refreshGuide();
 }
@@ -324,10 +356,22 @@ function renderEnv() {
 }
 const envValues = () => Object.fromEntries(settings.env.map(f => [f.key, { value: $(`#env-${f.key}`).value }]));
 
+// changement de bibliothèque Zotero (groupe, utilisateur, clé) : la liste des collections suit la saisie
+let zoteroTimer = null;
+function watchZoteroFields() {
+  for (const key of ["ZOTERO_GROUP_ID", "ZOTERO_USER_ID", "ZOTERO_API_KEY"]) {
+    const input = $(`#env-${key}`);
+    if (!input) continue;
+    input.addEventListener("input", () => { clearTimeout(zoteroTimer); zoteroTimer = setTimeout(loadCollections, 700); });
+    input.addEventListener("change", () => { clearTimeout(zoteroTimer); loadCollections(); });
+  }
+}
+
 async function loadSettings() {
   settings = await api("/api/settings");
   config = structuredClone(settings.config);
   renderEnv();
+  watchZoteroFields();
   renderSettings();
   loadCollections();
 }
@@ -335,7 +379,7 @@ async function save(silent = false) {
   await api("/api/settings", { method: "POST", body: { env: envValues(), config } });
   // les secrets saisis ne sont pas réaffichés
   const fresh = await api("/api/settings");
-  settings.env = fresh.env; renderEnv();
+  settings.env = fresh.env; renderEnv(); watchZoteroFields();
   if (!silent) toast(`Paramètres enregistrés (${fresh.envFile}, ${fresh.configFile})`);
 }
 $("#btn-save").onclick = () => save().catch(e => toast("Erreur : " + e.message));
@@ -413,7 +457,7 @@ function renderParticipation(p) {
   const box = $("#participation"); box.className = "";
   const t = p.totals, grid = p.grid;
   const tiles = el("div", { className: "tiles" },
-    [[t.collaborators, "collaborateurs"], [t.annotations, "surlignages"], [t.notes, "notes"], [`${t.annotatedDocuments}/${t.documents}`, "documents annotés"], [t.offGrid, "couleurs hors grille"]]
+    [[t.collaborators, "collaborateurs"], [t.annotations, "surlignages"], [t.notes, "notes"], [`${t.annotatedDocuments}/${t.documents}`, "documents annotés"], [t.offGrid, "couleurs hors grille"], ...(t.mergedDuplicates ? [[t.mergedDuplicates, "doublons fusionnés"]] : [])]
       .map(([v, l]) => el("div", { className: "tile" }, el("div", { className: "v", textContent: v }), el("div", { className: "l", textContent: l }))));
 
   const legend = el("div", { className: "legend" }, grid.map(g => el("span", {}, el("i", { className: "sw", style: `background:${g.color}` }), g.position)),
@@ -440,7 +484,7 @@ function renderParticipation(p) {
       el("div", { className: "table-wrap" }, el("table", { className: "data" },
         el("thead", {}, el("tr", {}, ["Document", "Surlignages", "Notes", "Collaborateurs"].map(h => el("th", { textContent: h })))),
         el("tbody", {}, p.documents.map(d => el("tr", {},
-          el("td", { textContent: d.title }), el("td", { className: "num", textContent: d.annotations }), el("td", { className: "num", textContent: d.notes }),
+          el("td", {}, d.title, d.duplicates?.length ? el("span", { className: "chip", style: "margin-left:6px", title: `Exemplaires fusionnés : ${[d.zoteroKey, ...d.duplicates.map(x => x.zoteroKey)].join(", ")}`, textContent: `${d.duplicates.length + 1} exemplaires fusionnés` }) : null), el("td", { className: "num", textContent: d.annotations }), el("td", { className: "num", textContent: d.notes }),
           el("td", {}, d.collaborators.length ? d.collaborators.map(x => el("span", { className: "chip", textContent: `${x.name} · ${x.count}` })) : el("span", { className: "muted", textContent: "aucune annotation" }))))))));
 }
 

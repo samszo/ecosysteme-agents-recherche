@@ -48,6 +48,19 @@ export function buildExploReport(ctx: {
     );
     const silent = p.documents.filter((d: any) => !d.annotations && !d.notes);
     if (silent.length) push(`Documents sans annotation : ${silent.map((d: any) => cell(d.title)).join(" ; ")}.`, "");
+    const withDuplicates = p.documents.filter((d: any) => d.duplicates?.length);
+    if (withDuplicates.length) {
+      push(
+        "### Documents en double fusionnés",
+        "",
+        `${t.mergedDuplicates} exemplaire(s) en double ont été fusionnés : chaque document n'est enregistré qu'une fois dans Omeka S et cumule les annotations, notes et marqueurs de tous ses exemplaires.`,
+        "",
+        "| Document | Exemplaires | Annotations reprises des doublons |",
+        "|---|---|---|",
+        ...withDuplicates.map((d: any) => `| ${cell(d.title)} | ${d.duplicates.length + 1} (\`${[d.zoteroKey, ...d.duplicates.map((x: any) => x.zoteroKey)].join("`, `")}\`) | ${d.duplicates.reduce((n: number, x: any) => n + x.annotations, 0)} |`),
+        ""
+      );
+    }
   }
 
   if (c?.passages) {

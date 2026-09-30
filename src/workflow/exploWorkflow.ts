@@ -10,7 +10,7 @@ import { exploConfig } from "../config/explo";
 // en parallèle, puis thèmes de discussion
 export const exploWorkflow = createWorkflow({
   id: exploConfig.workflowId,
-  inputSchema: z.object({ zoteroCollection: z.string() }),
+  inputSchema: z.object({ zoteroCollection: z.string(), mergeDuplicates: z.boolean().optional() }),
 } as any)
   .then(fetchLiteratureStep)
   .parallel([participationStep, collaborationStep])

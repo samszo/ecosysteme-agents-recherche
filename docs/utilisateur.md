@@ -215,7 +215,7 @@ flowchart LR
 - **Collection** : la collection Zotero annotée, idéalement dans une **bibliothèque de groupe** pour que chaque annotation garde son auteur. Les connexions sont celles de l'Atelier d'articles.
 - **Grille de couleurs** : pour chaque couleur de surlignage de Zotero, une signification (idée clé, accord, désaccord, définition, méthode, question, exemple, contexte par défaut) et une consigne « quand l'utiliser ». La grille se modifie librement (couleurs, libellés, ajout ou suppression).
 - **Guide d'annotation** : produit à partir de la grille, avec les consignes d'annotation (bibliothèque de groupe, commentaires, notes, marqueurs). Il se copie ou se télécharge pour être envoyé aux collaborateurs, et il est enregistré dans Omeka S à chaque analyse.
-- **Analyse** : similarité à partir de laquelle deux surlignages portent sur le même passage, nombre minimum de passages communs pour calculer un kappa, nombre de thèmes de discussion.
+- **Analyse** : similarité à partir de laquelle deux surlignages portent sur le même passage, nombre minimum de passages communs pour calculer un kappa, nombre de thèmes de discussion, et **fusion des documents en double** (activée par défaut) : quand plusieurs membres du groupe ont ajouté le même document à la collection (même fichier, même DOI, même URL, ou même titre et même année), il n'est enregistré qu'une fois dans Omeka S et cumule les surlignages, notes et marqueurs de tous ses exemplaires. L'onglet Participation signale ces documents (« N exemplaires fusionnés ») et le rapport les liste.
 
 **Enregistrer et analyser** lance le workflow ; il peut être relancé à tout moment pendant l'annotation : les nouvelles annotations de Zotero sont prises en compte.
 

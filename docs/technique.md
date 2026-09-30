@@ -370,6 +370,7 @@ flowchart TD
 | Élément | Rôle | Réutilise |
 |---|---|---|
 | `fetch-literature` | collection, annotations (auteur, couleur, date), notes, Omeka | étape et outil de l'Atelier d'articles |
+| `groupDuplicates` (`src/lib/zotero/duplicates.ts`) | doublons de la collection (option `analysis.mergeDuplicates`, transmise par `fetch-literature` à `fetchZoteroData`) | clés d'identité `md5`, DOI (aussi dans `extra`), URL normalisée, titre normalisé + année (titres d'au moins 15 caractères) ; regroupement union-find ; exemplaire principal : fichier plutôt que lien, PDF, puis le plus ancien. Seul le principal est extrait et enregistré dans Omeka (`dcterms:identifier` = toutes les clés Zotero) ; annotations du lecteur, notes, annotations incrustées dans les PDF et marqueurs des doublons lui sont ajoutés (dédoublonnés sur passage, note, auteur, code) ; `articles[].duplicates` décrit les exemplaires fusionnés |
 | `computeParticipation` | par collaborateur, document, couleur de la grille, semaine | `positionForColor` avec la grille de l'exploration |
 | `analyzeCollaboration` | passages communs, paires, convergences et divergences, kappa, réseau | `words` / `jaccard`, `fleissKappa` / `cohenKappa`, `interpretKappa` |
 | `discussionAgent` | thèmes de discussion (modèle analytique) | `formatAnnotations` (grille en paramètre), comptage des tokens |

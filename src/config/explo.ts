@@ -38,6 +38,9 @@ export const defaultExploConfig = {
     unitSimilarity: 0.6,
     // nom donné aux annotations sans auteur (bibliothèque personnelle, PDF annotés hors Zotero)
     unassignedLabel: "(non attribué)",
+    // documents en double dans la collection (même fichier, DOI, URL, ou titre et année) : un seul document dans
+    // Omeka S, dont les annotations, notes et marqueurs cumulent ceux de tous les exemplaires
+    mergeDuplicates: true,
     // nombre minimum de passages annotés en commun pour calculer un kappa interprétable
     minPassagesForKappa: 5,
   },

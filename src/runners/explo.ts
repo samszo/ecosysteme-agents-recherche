@@ -16,7 +16,7 @@ import { Zotero } from "../lib/zotero/zotero";
 
 async function main() {
   console.log("🚀 exploZoteroAnno : exploration de l'annotation collective...");
-  const input = { zoteroCollection: exploConfig.input.zoteroCollection };
+  const input = { zoteroCollection: exploConfig.input.zoteroCollection, mergeDuplicates: exploConfig.analysis.mergeDuplicates };
   const outDir = path.resolve(process.cwd(), exploConfig.outputDir);
   await fs.mkdir(outDir, { recursive: true });
   const out = (name: string) => path.join(outDir, name);

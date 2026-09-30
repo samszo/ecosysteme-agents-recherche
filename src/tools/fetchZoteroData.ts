@@ -9,6 +9,8 @@ import { Zotero, tagNames } from "../lib/zotero/zotero";
 import { zoteroMetadata } from "../lib/zotero/zoteroToOmeka";
 import { splitCodes } from "../lib/analysis/codebook";
 import { getZoteroCollections } from "../lib/omeka/zoteroCollections";
+import { groupDuplicates } from "../lib/zotero/duplicates";
+import { extractPdf } from "../lib/extraction/pdfExtract";
 import { workflowConfig } from "../config";
 
 const { accessTerm } = workflowConfig.omeka;
@@ -27,6 +29,8 @@ export interface ZoteroArticle {
   omekaItemId?: number;
   // date de la dernière extraction sémantique (curation:access), null si elle reste à faire
   accessed: string | null;
+  // autres exemplaires du même document dans la collection (fusionnés : annotations, notes et marqueurs cumulés)
+  duplicates?: { zoteroKey: string; parentKey: string | null; title: string; annotations: number }[];
 }
 
 // fusionne des listes d'annotations (fichier, lecteur Zotero, notes Zotero) sans doublon
@@ -42,9 +46,11 @@ export const fetchZoteroData = new Tool({
   description: "Récupère les pièces jointes (PDF, pages web, DOCX, ODT, EPUB, texte, images, liens…) d'une collection Zotero ou depuis le cache Omeka S. Enregistre chaque pièce jointe dans Omeka avec les métadonnées de son item Zotero, extrait le texte, les annotations (surlignages, notes) et les images, et uploade le fichier et les images.",
   schema: z.object({
     collectionId: z.string(),
+    // documents en double (même fichier, DOI, URL ou titre) : un seul item Omeka, annotations cumulées
+    mergeDuplicates: z.boolean().optional(),
   }),
   execute: async ({ data }) => {
-    const { collectionId } = data;
+    const { collectionId, mergeDuplicates = false } = data as { collectionId: string; mergeDuplicates?: boolean };
     const zUserId = process.env.ZOTERO_USER_ID;
     const zApiKey = process.env.ZOTERO_API_KEY;
     if (!zUserId || !zApiKey) {
@@ -65,6 +71,20 @@ export const fetchZoteroData = new Tool({
 
     const extractedArticles: ZoteroArticle[] = [];
 
+    // regroupement des exemplaires d'un même document (sinon : un groupe par pièce jointe)
+    const parentOf = (att: any) => (att.data.parentItem ? byKey.get(att.data.parentItem) ?? null : null);
+    const groups = mergeDuplicates
+      ? groupDuplicates(attachments, parentOf)
+      : attachments.map(a => ({ primary: a, duplicates: [] as any[], reasons: [] as string[] }));
+    const merged = groups.filter(g => g.duplicates.length);
+    if (merged.length) {
+      console.log(`🔁 Doublons : ${merged.reduce((n, g) => n + g.duplicates.length, 0)} exemplaire(s) en double fusionné(s) dans ${merged.length} document(s)`);
+      for (const g of merged) {
+        const title = parentOf(g.primary)?.data?.title || g.primary.data.title;
+        console.log(`   🔁 « ${title} » : ${g.duplicates.length + 1} exemplaires (${g.reasons.join(", ")})`);
+      }
+    }
+
     // notes Zotero par notice parente (une notice peut avoir plusieurs pièces jointes)
     const notesByParent = new Map<string, Promise<PdfAnnotation[]>>();
     const parentNotes = (key: string) => {
@@ -77,7 +97,8 @@ export const fetchZoteroData = new Tool({
       return notesByParent.get(key)!;
     };
 
-    for (const attachment of attachments) {
+    for (const group of groups) {
+      const attachment = group.primary;
       const zoteroKey = attachment.key;
       const contentType: string = attachment.data.contentType || "";
       const zoteroFileName: string = attachment.data.filename || attachment.data.title || zoteroKey;
@@ -105,15 +126,55 @@ export const fetchZoteroData = new Tool({
       }
       const metadata = zoteroMetadata(omk, attachment, parent, zUserId, collectionItemIds);
 
+      // ==========================================
+      // Autres exemplaires du document : annotations du lecteur Zotero, notes, annotations intégrées aux PDF, marqueurs
+      // ==========================================
+      const duplicateKeys: string[] = group.duplicates.map((d: any) => d.key);
+      const duplicateAnnotations: PdfAnnotation[] = [];
+      const duplicateTags: string[] = [];
+      const duplicatesInfo: NonNullable<ZoteroArticle["duplicates"]> = [];
+      for (const dup of group.duplicates) {
+        const dupParent = parentOf(dup);
+        const found: PdfAnnotation[] = [];
+        found.push(...(await zotero.annotations(dup.key).catch(() => [])));
+        if (dupParent) found.push(...(await parentNotes(dupParent.key)));
+        // PDF annoté hors de Zotero : annotations intégrées au fichier
+        if (dup.data.contentType === "application/pdf" && dup.data.linkMode !== "linked_url") {
+          try {
+            found.push(...(await extractPdf(await zotero.file(dup.key), { images: false })).annotations);
+          } catch (e) {
+            console.warn(`   ⚠️ Fichier du doublon ${dup.key} illisible :`, (e as Error).message);
+          }
+        }
+        duplicateAnnotations.push(...found);
+        duplicateTags.push(...tagNames(dupParent?.data), ...tagNames(dup.data), ...found.flatMap(n => n.tags ?? []));
+        duplicatesInfo.push({ zoteroKey: dup.key, parentKey: dupParent?.key ?? null, title: dupParent?.data?.title || dup.data.title, annotations: found.length });
+      }
+      if (duplicateKeys.length) {
+        // toutes les clés Zotero du document : un passage ultérieur retrouve le même item Omeka quel que soit l'exemplaire
+        metadata["dcterms:identifier"] = [zoteroKey, ...duplicateKeys];
+        console.log(`🔁 [ZOTERO] ${duplicateAnnotations.length} annotation(s) ou note(s) des ${duplicateKeys.length} autre(s) exemplaire(s) cumulée(s)`);
+      }
+
       // notes de la notice → annotations ; marqueurs de la notice, de la pièce jointe et des notes → concepts
       const notes = parentKey ? await parentNotes(parentKey) : [];
       // les codes de la grille d'annotation (ACC-S, DES-F…) ne sont pas des concepts
-      const tags = splitCodes([...new Set([...tagNames(parent?.data), ...tagNames(attachment.data), ...notes.flatMap(n => n.tags ?? [])])]).tags;
+      const tags = splitCodes([...new Set([...tagNames(parent?.data), ...tagNames(attachment.data), ...notes.flatMap(n => n.tags ?? []), ...duplicateTags])]).tags;
       if (notes.length || tags.length) console.log(`🗒️ [ZOTERO] ${notes.length} note(s), ${tags.length} marqueur(s) : ${tags.join(", ")}`);
 
       // 1. Vérification dans le cache Omeka S
       try {
-        const existingOmekaItems = await omk.searchItemsByProp("dcterms:identifier", zoteroKey);
+        // l'item peut avoir été enregistré sous la clé de n'importe quel exemplaire
+        let existingOmekaItems: any[] = [];
+        for (const key of [zoteroKey, ...duplicateKeys]) {
+          const found = await omk.searchItemsByProp("dcterms:identifier", key);
+          if (!found?.length) continue;
+          if (!existingOmekaItems.length) existingOmekaItems = found;
+          else if (found[0]["o:id"] !== existingOmekaItems[0]["o:id"]) {
+            // item créé avant la fusion des doublons : signalé, jamais supprimé
+            console.warn(`   ⚠️ [OMEKA] L'exemplaire ${key} a son propre item #${found[0]["o:id"]} (antérieur à la fusion) ; le document est rattaché à l'item #${existingOmekaItems[0]["o:id"]}.`);
+          }
+        }
 
         if (existingOmekaItems && existingOmekaItems.length > 0) {
           console.log(`♻️ [CACHE OMEKA] Article et Media déjà présents : ${title}`);
@@ -124,7 +185,7 @@ export const fetchZoteroData = new Tool({
           // notes ajoutées dans Zotero depuis le dernier passage
           // notes et annotations du lecteur Zotero ajoutées depuis le dernier passage (annotation collective en cours)
           const readerAnnotations = await zotero.annotations(zoteroKey).catch(() => []);
-          const newNotes = mergeAnnotations(cachedAnnotations, [...notes, ...readerAnnotations]).filter(n => !cachedAnnotations.includes(n));
+          const newNotes = mergeAnnotations(cachedAnnotations, [...notes, ...readerAnnotations, ...duplicateAnnotations]).filter(n => !cachedAnnotations.includes(n));
           if (newNotes.length) {
             console.log(`🗒️ [ZOTERO] ${newNotes.length} nouvelle(s) annotation(s) ou note(s) pour ${title}`);
             await saveAnnotations(omk, cachedItem["o:id"], newNotes, title);
@@ -139,7 +200,7 @@ export const fetchZoteroData = new Tool({
             console.warn(`⚠️ [OMEKA] Mise à jour des métadonnées impossible pour ${title} :`, (e as Error).message);
           }
 
-          extractedArticles.push({ zoteroKey, parentKey: parentKey ?? null, title, format: contentType, text: cachedText, annotations: cachedAnnotations, tags, images: [], omekaItemId: cachedItem["o:id"], accessed });
+          extractedArticles.push({ zoteroKey, parentKey: parentKey ?? null, title, format: contentType, text: cachedText, annotations: cachedAnnotations, tags, images: [], omekaItemId: cachedItem["o:id"], accessed, ...(duplicatesInfo.length ? { duplicates: duplicatesInfo } : {}) });
           continue;
         }
       } catch (e) {
@@ -165,7 +226,7 @@ export const fetchZoteroData = new Tool({
         console.log(`🔗 [ZOTERO] Lien sans fichier : ${title}`);
       }
       const extractedText = extracted?.text ?? "";
-      annotations = mergeAnnotations(annotations, notes);
+      annotations = mergeAnnotations(mergeAnnotations(annotations, notes), duplicateAnnotations);
 
       try {
         // 3. Création de l'Item dans Omeka S avec les métadonnées Zotero
@@ -177,7 +238,7 @@ export const fetchZoteroData = new Tool({
         const omekaItemId = createdItem["o:id"];
 
         const images: ZoteroArticle["images"] = (extracted?.images ?? []).map(({ page, width, height }) => ({ page, width, height }));
-        extractedArticles.push({ zoteroKey, parentKey: parentKey ?? null, title, format: extracted?.format ?? "link", text: extractedText, annotations, tags, images, omekaItemId, accessed: null });
+        extractedArticles.push({ zoteroKey, parentKey: parentKey ?? null, title, format: extracted?.format ?? "link", text: extractedText, annotations, tags, images, omekaItemId, accessed: null, ...(duplicatesInfo.length ? { duplicates: duplicatesInfo } : {}) });
 
         // 3b. Création des annotations (oa:Annotation) qui ciblent l'item
         await saveAnnotations(omk, omekaItemId, annotations, title);

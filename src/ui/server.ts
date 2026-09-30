@@ -460,6 +460,27 @@ const routes: Record<string, (req: http.IncomingMessage, res: http.ServerRespons
     }
   },
 
+  // collections d'une bibliothèque en cours de saisie (valeurs du formulaire non encore enregistrées) :
+  // identifiant utilisateur, groupe, et clé si une nouvelle clé a été tapée ; sinon valeurs enregistrées
+  "POST /api/zotero/collections": async (req, res) => {
+    const env = readEnv();
+    const body = await readBody(req);
+    const userId = String(body.userId ?? env.ZOTERO_USER_ID ?? "").trim();
+    const groupId = String(body.groupId ?? env.ZOTERO_GROUP_ID ?? "").trim();
+    const apiKey = String(body.apiKey || env.ZOTERO_API_KEY || "").trim();
+    const library = groupId ? `du groupe ${groupId}` : userId ? `personnelle (utilisateur ${userId})` : "";
+    try {
+      if (!apiKey || !(userId || groupId)) throw new Error("clé ou identifiant Zotero manquant");
+      const zotero = new Zotero(userId, apiKey, groupId || undefined);
+      const collections = (await zotero.collections()).map((c: any) => ({
+        key: c.key, name: c.data.name, parent: c.data.parentCollection || null, items: c.meta?.numItems ?? null,
+      }));
+      sendJson(res, 200, { collections, library });
+    } catch (e) {
+      sendJson(res, 502, { error: (e as Error).message, library });
+    }
+  },
+
   "GET /api/albert/models": async (_req, res) => {
     const env = readEnv();
     try {

@@ -21,6 +21,8 @@ flowchart LR
     A & P & G & K --> O[(Omeka S)]
 ```
 
+Une seconde application, **exploZoteroAnno** (son propre serveur : http://127.0.0.1:7273), accompagne l'**annotation collective** d'une collection Zotero : grille de couleurs commune et guide d'annotation, participation des collaborateurs, convergences et divergences de lecture, thèmes de discussion, le tout enregistré dans Omeka S.
+
 ## Démarrage rapide
 
 **Avec Docker**
@@ -35,7 +37,8 @@ docker compose up -d --build
 ```bash
 npm ci
 cp .env.example .env                         # renseigner les clés
-npm run ui
+npm run ui          # Atelier d'articles : http://127.0.0.1:7272
+npm run ui:explo    # exploZoteroAnno : http://127.0.0.1:7273
 ```
 
 Puis ouvrir http://127.0.0.1:7272, tester les connexions, choisir la collection Zotero et l'appel à propositions, et lancer le traitement.

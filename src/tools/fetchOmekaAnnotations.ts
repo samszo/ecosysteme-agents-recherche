@@ -1,8 +1,8 @@
 import { Tool } from "@mastra/core/tools";
 import { z } from "zod";
-import { getOmk } from "./omk";
-import { loadAnnotations } from "./oaAnnotations";
-import { normalizeId } from "./cleanGraph";
+import { getOmk } from "../lib/omeka/omk";
+import { loadAnnotations } from "../lib/omeka/oaAnnotations";
+import { normalizeId } from "../lib/analysis/cleanGraph";
 import { workflowConfig } from "../config";
 
 const { unitSimilarity } = workflowConfig.kappa;
@@ -28,8 +28,8 @@ export const CodedAnnotationSchema = z.object({
 export type CodedAnnotation = z.infer<typeof CodedAnnotationSchema>;
 
 // mots d'une phrase, pour rapprocher les surlignages d'une même phrase par des juges différents
-const words = (s: string) => new Set(normalizeId(s).split("_").filter(w => w.length > 1));
-function jaccard(a: Set<string>, b: Set<string>) {
+export const words = (s: string) => new Set(normalizeId(s).split("_").filter(w => w.length > 1));
+export function jaccard(a: Set<string>, b: Set<string>) {
   let inter = 0;
   for (const w of a) if (b.has(w)) inter++;
   return inter / (a.size + b.size - inter || 1);

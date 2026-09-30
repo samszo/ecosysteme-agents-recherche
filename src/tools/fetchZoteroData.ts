@@ -1,14 +1,14 @@
 import { Tool } from "@mastra/core/tools";
 import { z } from "zod";
 import path from "path";
-import { getOmk } from "./omk";
-import type { PdfAnnotation } from "./pdfExtract";
-import { extractAttachment } from "./attachmentExtract";
-import { saveAnnotations, loadAnnotations } from "./oaAnnotations";
-import { Zotero, tagNames } from "./zotero";
-import { zoteroMetadata } from "./zoteroToOmeka";
-import { splitCodes } from "./codebook";
-import { getZoteroCollections } from "./zoteroCollections";
+import { getOmk } from "../lib/omeka/omk";
+import type { PdfAnnotation } from "../lib/extraction/pdfExtract";
+import { extractAttachment } from "../lib/extraction/attachmentExtract";
+import { saveAnnotations, loadAnnotations } from "../lib/omeka/oaAnnotations";
+import { Zotero, tagNames } from "../lib/zotero/zotero";
+import { zoteroMetadata } from "../lib/zotero/zoteroToOmeka";
+import { splitCodes } from "../lib/analysis/codebook";
+import { getZoteroCollections } from "../lib/omeka/zoteroCollections";
 import { workflowConfig } from "../config";
 
 const { accessTerm } = workflowConfig.omeka;
@@ -122,9 +122,11 @@ export const fetchZoteroData = new Tool({
           const cachedAnnotations = await loadAnnotations(omk, cachedItem["o:id"]);
 
           // notes ajoutées dans Zotero depuis le dernier passage
-          const newNotes = mergeAnnotations(cachedAnnotations, notes).filter(n => !cachedAnnotations.includes(n));
+          // notes et annotations du lecteur Zotero ajoutées depuis le dernier passage (annotation collective en cours)
+          const readerAnnotations = await zotero.annotations(zoteroKey).catch(() => []);
+          const newNotes = mergeAnnotations(cachedAnnotations, [...notes, ...readerAnnotations]).filter(n => !cachedAnnotations.includes(n));
           if (newNotes.length) {
-            console.log(`🗒️ [ZOTERO] ${newNotes.length} nouvelle(s) note(s) pour ${title}`);
+            console.log(`🗒️ [ZOTERO] ${newNotes.length} nouvelle(s) annotation(s) ou note(s) pour ${title}`);
             await saveAnnotations(omk, cachedItem["o:id"], newNotes, title);
             cachedAnnotations.push(...newNotes);
           }

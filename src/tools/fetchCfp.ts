@@ -3,8 +3,8 @@ import { z } from "zod";
 import crypto from "crypto";
 import path from "path";
 import fs from "fs/promises";
-import { getOmk } from "./omk";
-import { extractAttachment, decodeEntities } from "./attachmentExtract";
+import { getOmk } from "../lib/omeka/omk";
+import { extractAttachment, decodeEntities } from "../lib/extraction/attachmentExtract";
 import { workflowConfig } from "../config";
 
 export const CFP_TYPE = "Appel à propositions";

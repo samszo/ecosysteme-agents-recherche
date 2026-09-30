@@ -150,9 +150,25 @@
 <tr>
 <td><code>PORT</code></td>
 <td>non</td>
-<td>Port de l&#39;interface (7272 par défaut)</td>
+<td>Port de l&#39;Atelier d&#39;articles (7272 par défaut)</td>
+</tr>
+<tr>
+<td><code>EXPLO_PORT</code></td>
+<td>non</td>
+<td>Port d&#39;exploZoteroAnno (7273 par défaut)</td>
+</tr>
+<tr>
+<td><code>HOST</code>, <code>EXPLO_HOST</code></td>
+<td>non</td>
+<td>Adresse d&#39;écoute de chaque serveur (<code>127.0.0.1</code> par défaut)</td>
+</tr>
+<tr>
+<td><code>PAPER_URL</code>, <code>EXPLO_URL</code></td>
+<td>non</td>
+<td>Adresses publiques des deux applications, pour les liens entre elles (derrière un proxy)</td>
 </tr>
 </tbody></table>
+<p>Chaque application a <strong>son propre serveur</strong>, avec son port, sa configuration et son traitement en cours : les deux peuvent traiter en même temps. exploZoteroAnno lit <code>.env</code>, <strong>surchargé par <code>.env.explo</code></strong> (nom modifiable par <code>EXPLO_ENV_FILE</code>) : on peut ainsi lui donner d&#39;autres connexions (par exemple une autre bibliothèque de groupe Zotero ou une autre instance Omeka S). Son onglet <em>Grille › Connexions</em> n&#39;écrit dans <code>.env.explo</code> que les valeurs qui diffèrent de <code>.env</code> ; les autres restent « héritées ».</p>
 <blockquote>
 <p>Le fichier <code>.env</code> contient des secrets : il est exclu de git (<code>.gitignore</code>) et de l&#39;image Docker (<code>.dockerignore</code>).</p>
 </blockquote>
@@ -161,7 +177,8 @@
 cd ecosysteme-agents-recherche
 npm ci
 cp .env.example .env    # puis renseigner les valeurs
-npm run ui              # interface : http://127.0.0.1:7272</code></pre>
+npm run ui              # Atelier d'articles : http://127.0.0.1:7272
+npm run ui:explo        # exploZoteroAnno (autre terminal) : http://127.0.0.1:7273</code></pre>
 <p>Commandes disponibles :</p>
 <table>
 <thead>
@@ -172,18 +189,26 @@ npm run ui              # interface : http://127.0.0.1:7272</code></pre>
 </thead>
 <tbody><tr>
 <td><code>npm run ui</code></td>
-<td>Interface web : paramètres, lancement, suivi, résultats</td>
+<td>Serveur de l&#39;Atelier d&#39;articles (port <code>PORT</code>, 7272) : paramètres, lancement, suivi, résultats</td>
+</tr>
+<tr>
+<td><code>npm run ui:explo</code></td>
+<td>Serveur d&#39;exploZoteroAnno (port <code>EXPLO_PORT</code>, 7273)</td>
 </tr>
 <tr>
 <td><code>npm start</code></td>
 <td>Lance le workflow en ligne de commande avec la configuration enregistrée</td>
 </tr>
 <tr>
+<td><code>npm run explo</code></td>
+<td>Lance le workflow exploZoteroAnno (annotation collective) en ligne de commande</td>
+</tr>
+<tr>
 <td><code>npm run docs</code></td>
 <td>Régénère la documentation HTML (<code>docs/html/</code>) à partir des fichiers markdown</td>
 </tr>
 </tbody></table>
-<p>En local, les fichiers produits (AttenduAPP, PropAPP, rapport, graphe…) sont écrits à la racine du projet.</p>
+<p>Les fichiers produits sont écrits dans <code>resultats/atelier/</code> (AttenduAPP, PropAPP, rapport, relecture, graphe, désaccords) et <code>resultats/explo/</code> (exploZoteroAnno) : à la racine du projet en local, dans <code>data/resultats/</code> avec Docker.</p>
 <h2 id="4-installation-docker"><a class="anchor" href="#4-installation-docker">#</a>4. Installation Docker</h2>
 <p>L&#39;image contient le code dans <code>/app</code> ; les <strong>données</strong> (<code>.env</code>, <code>workflow.config.json</code>, résultats, fichiers d&#39;appels importés) sont dans le volume <code>/data</code>, monté depuis le dossier <code>data/</code> du projet.</p>
 <pre class="mermaid">flowchart LR
@@ -227,11 +252,11 @@ docker compose build --no-cache              # reconstruire après une mise à j
 </tr>
 </thead>
 <tbody><tr>
-<td><code>omk_academic-paper-factory.zip</code></td>
+<td><code>install/omk_academic-paper-factory.zip</code></td>
 <td>application <strong>Omeka S 4.2.1</strong> avec les modules Annotate, Common, CustomVocab, EasyAdmin et Log</td>
 </tr>
 <tr>
-<td><code>omk_academic-paper-factory.sql</code></td>
+<td><code>install/omk_academic-paper-factory.sql</code></td>
 <td>base de données (MariaDB / MySQL, utf8mb4) : vocabulaires <code>dcterms</code>, <code>dctype</code>, <code>bibo</code>, <code>foaf</code>, <code>jdc</code>, <code>skos</code>, <code>curation</code>, <code>oa</code>, <code>rdf</code> ; types de fichiers autorisés (<code>md</code>, <code>csv</code>, <code>bib</code>, <code>html</code>, <code>json</code>, <code>txt</code>…) ; aucun contenu, aucune session ni journal</td>
 </tr>
 </tbody></table>
@@ -276,9 +301,9 @@ docker compose build --no-cache              # reconstruire après une mise à j
 <pre><code class="language-bash">sudo mysql -e &quot;CREATE DATABASE omeka CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 CREATE USER 'omeka'@'localhost' IDENTIFIED BY 'un-mot-de-passe-solide';
 GRANT ALL PRIVILEGES ON omeka.* TO 'omeka'@'localhost'; FLUSH PRIVILEGES;&quot;</code></pre>
-<pre><code class="language-bash">mysql -u omeka -p omeka &lt; omk_academic-paper-factory.sql</code></pre>
+<pre><code class="language-bash">mysql -u omeka -p omeka &lt; install/omk_academic-paper-factory.sql</code></pre>
 <p><strong>2. Application</strong> : décompresser l&#39;archive dans le dossier servi par le serveur web.</p>
-<pre><code class="language-bash">unzip -q omk_academic-paper-factory.zip -d /var/www/</code></pre>
+<pre><code class="language-bash">unzip -q install/omk_academic-paper-factory.zip -d /var/www/</code></pre>
 <p><strong>3. Connexion à la base</strong> : remplacer <strong>tout</strong> le contenu de <code>config/database.ini</code> (le fichier livré contient les paramètres de la machine où l&#39;archive a été préparée).</p>
 <pre><code class="language-ini">user     = &quot;omeka&quot;
 password = &quot;un-mot-de-passe-solide&quot;
@@ -428,7 +453,7 @@ ufw enable</code></pre>
 <pre><code class="language-bash">mariadb-secure-installation</code></pre>
 <p>Créer ensuite la base et importer le dump comme indiqué dans <em>Démarrer avec l&#39;instance Omeka S préparée</em> (étape 1).</p>
 <h3 id="8-5-omeka-s"><a class="anchor" href="#8-5-omeka-s">#</a>8.5 Omeka S</h3>
-<pre><code class="language-bash">unzip -q omk_academic-paper-factory.zip -d /var/www/
+<pre><code class="language-bash">unzip -q install/omk_academic-paper-factory.zip -d /var/www/
 mv /var/www/omk_academic-paper-factory /var/www/omeka
 nano /var/www/omeka/config/database.ini          # voir l'étape 3 ci-dessus
 chown -R root:www-data /var/www/omeka
@@ -471,7 +496,8 @@ cd /opt/ecosysteme-agents-recherche
 mkdir -p data &amp;&amp; cp .env.example data/.env &amp;&amp; chmod 600 data/.env
 nano data/.env        # OMKS_API_URL=https://omeka.example.org/api et la nouvelle clé d'API
 docker compose up -d --build</code></pre>
-<p>Sans Docker : installer Node.js 22 (paquets NodeSource), puis <code>npm ci</code> dans <code>/opt/ecosysteme-agents-recherche</code> et créer un service systemd (<code>/etc/systemd/system/workflow-ui.service</code>) :</p>
+<p>Le fichier <code>docker-compose.yml</code> démarre <strong>deux services</strong> à partir de la même image : <code>workflow</code> (Atelier d&#39;articles, port 7272) et <code>explo</code> (exploZoteroAnno, port 7273), qui partagent le dossier <code>data/</code> (connexions propres à exploZoteroAnno dans <code>data/.env.explo</code>).</p>
+<p>Sans Docker : installer Node.js 22 (paquets NodeSource), puis <code>npm ci</code> dans <code>/opt/ecosysteme-agents-recherche</code> et créer un service systemd par application, par exemple <code>/etc/systemd/system/workflow-ui.service</code> :</p>
 <pre><code class="language-ini">[Unit]
 Description=Interface du workflow academic-paper-factory
 After=network-online.target
@@ -485,14 +511,18 @@ Environment=HOST=127.0.0.1 PORT=7272
 
 [Install]
 WantedBy=multi-user.target</code></pre>
+<p>et <code>/etc/systemd/system/workflow-explo.service</code>, identique sauf :</p>
+<pre><code class="language-ini">Description=Interface exploZoteroAnno
+ExecStart=/opt/ecosysteme-agents-recherche/node_modules/.bin/tsx src/ui/server.ts explo
+Environment=HOST=127.0.0.1 EXPLO_PORT=7273</code></pre>
 <pre><code class="language-bash">useradd --system --home /opt/ecosysteme-agents-recherche workflow
 chown -R workflow:workflow /opt/ecosysteme-agents-recherche
-systemctl daemon-reload &amp;&amp; systemctl enable --now workflow-ui</code></pre>
+systemctl daemon-reload &amp;&amp; systemctl enable --now workflow-ui workflow-explo</code></pre>
 <h3 id="8-9-acces-a-l-39-interface"><a class="anchor" href="#8-9-acces-a-l-39-interface">#</a>8.9 Accès à l&#39;interface</h3>
-<p>L&#39;interface manipule les clés d&#39;API : elle n&#39;écoute que sur <code>127.0.0.1</code> et <strong>ne doit jamais être exposée sans authentification</strong>. Deux possibilités :</p>
+<p>Les interfaces manipulent les clés d&#39;API : elles n&#39;écoutent que sur <code>127.0.0.1</code> et <strong>ne doivent jamais être exposées sans authentification</strong>. Deux possibilités (pour exploZoteroAnno, remplacer 7272 par 7273) :</p>
 <p><strong>Tunnel SSH</strong> (le plus simple, rien à exposer) :</p>
-<pre><code class="language-bash">ssh -L 7272:127.0.0.1:7272 utilisateur@serveur</code></pre>
-<p>puis ouvrir <a href="http://127.0.0.1:7272" target="_blank" rel="noopener">http://127.0.0.1:7272</a> sur le poste local.</p>
+<pre><code class="language-bash">ssh -L 7272:127.0.0.1:7272 -L 7273:127.0.0.1:7273 utilisateur@serveur</code></pre>
+<p>puis ouvrir <a href="http://127.0.0.1:7272" target="_blank" rel="noopener">http://127.0.0.1:7272</a> et <a href="http://127.0.0.1:7273" target="_blank" rel="noopener">http://127.0.0.1:7273</a> sur le poste local.</p>
 <p><strong>Proxy Apache avec authentification</strong>, sur un sous-domaine en HTTPS :</p>
 <pre><code class="language-bash">htpasswd -c /etc/apache2/.htpasswd-workflow chercheur</code></pre>
 <p>Fichier <code>/etc/apache2/sites-available/workflow.conf</code> :</p>
@@ -515,6 +545,7 @@ systemctl daemon-reload &amp;&amp; systemctl enable --now workflow-ui</code></pr
 &lt;/VirtualHost&gt;</code></pre>
 <pre><code class="language-bash">a2ensite workflow &amp;&amp; systemctl reload apache2
 certbot --apache -d workflow.example.org --redirect</code></pre>
+<p>Pour exploZoteroAnno, créer de la même façon un hôte virtuel <code>explo.example.org</code> (même authentification) qui renvoie vers <code>http://127.0.0.1:7273</code>, puis indiquer les adresses publiques dans <code>.env</code> pour les liens entre les applications : <code>PAPER_URL=https://workflow.example.org</code> et <code>EXPLO_URL=https://explo.example.org</code>.</p>
 <h3 id="8-10-sauvegardes-et-mises-a-jour"><a class="anchor" href="#8-10-sauvegardes-et-mises-a-jour">#</a>8.10 Sauvegardes et mises à jour</h3>
 <ul>
 <li><p><strong>Base Omeka S</strong> : sauvegarde quotidienne, par exemple dans <code>/etc/cron.daily/omeka-backup</code> :</p>
@@ -526,7 +557,7 @@ find /var/backups -name &quot;omeka-*.sql.gz&quot; -mtime +30 -delete</code></pr
 </li>
 <li><p><strong>Système</strong> : <code>apt update &amp;&amp; apt upgrade</code> régulièrement (ou le paquet <code>unattended-upgrades</code>).</p>
 </li>
-<li><p><strong>Workflow</strong> : <code>git pull</code> puis <code>docker compose up -d --build</code> (ou <code>npm ci</code> puis <code>systemctl restart workflow-ui</code>).</p>
+<li><p><strong>Workflow</strong> : <code>git pull</code> puis <code>docker compose up -d --build</code> (ou <code>npm ci</code> puis <code>systemctl restart workflow-ui workflow-explo</code>).</p>
 </li>
 </ul>
 <h2 id="9-depannage"><a class="anchor" href="#9-depannage">#</a>9. Dépannage</h2>

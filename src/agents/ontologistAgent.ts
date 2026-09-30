@@ -1,5 +1,5 @@
 import { Agent } from "@mastra/core/agent";
-import { ALBERT_MODEL_ANALYTICS } from "../models";
+import { ALBERT_MODEL_ANALYTICS } from "../config/models";
 import { exportToOpenKnowledge } from "../tools/exportToOpenKnowledge";
 
 export const ontologistAgent = new Agent({

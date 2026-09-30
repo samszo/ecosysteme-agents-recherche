@@ -1,17 +1,9 @@
 {
   "version": "0.0.1",
   "configurations": [
-    {
-      "name": "ui",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "ui"],
-      "port": 7272
-    },
-    {
-      "name": "ui-7273",
-      "runtimeExecutable": "env",
-      "runtimeArgs": ["PORT=7273", "npm", "run", "ui"],
-      "port": 7273
-    }
+    { "name": "ui", "runtimeExecutable": "npm", "runtimeArgs": ["run", "ui"], "port": 7272 },
+    { "name": "ui-explo", "runtimeExecutable": "npm", "runtimeArgs": ["run", "ui:explo"], "port": 7273 },
+    { "name": "ui-test", "runtimeExecutable": "env", "runtimeArgs": ["PORT=7274", "EXPLO_PORT=7275", "EXPLO_URL=http://127.0.0.1:7275", "PAPER_URL=http://127.0.0.1:7274", "npm", "run", "ui"], "port": 7274 },
+    { "name": "ui-explo-test", "runtimeExecutable": "env", "runtimeArgs": ["PORT=7274", "EXPLO_PORT=7275", "EXPLO_URL=http://127.0.0.1:7275", "PAPER_URL=http://127.0.0.1:7274", "npm", "run", "ui:explo"], "port": 7275 }
   ]
 }

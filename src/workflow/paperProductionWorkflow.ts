@@ -1,13 +1,13 @@
 import { createWorkflow } from "@mastra/core/workflows";
 import { z } from "zod";
 import { workflowConfig } from "../config";
-import { analyzeCfpStep } from "./analyzeCfpStep";
-import { fetchLiteratureStep } from "./fetchLiteratureStep";
-import { buildWikiStep } from "./buildWikiStep";
-import { kappaAnalysisStep } from "./kappaAnalysisStep";
-import { normalizeOkfStep } from "./normalizeOkfStep";
-import { draftPaperStep } from "./draftPaperStep";
-import { reviewPaperStep } from "./reviewPaperStep";
+import { analyzeCfpStep } from "./steps/paper/analyzeCfpStep";
+import { fetchLiteratureStep } from "./steps/common/fetchLiteratureStep";
+import { buildWikiStep } from "./steps/paper/buildWikiStep";
+import { kappaAnalysisStep } from "./steps/paper/kappaAnalysisStep";
+import { normalizeOkfStep } from "./steps/paper/normalizeOkfStep";
+import { draftPaperStep } from "./steps/paper/draftPaperStep";
+import { reviewPaperStep } from "./steps/paper/reviewPaperStep";
 
 // Assemblage
 export const paperProductionWorkflow = createWorkflow({

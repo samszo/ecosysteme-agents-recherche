@@ -48,7 +48,12 @@ Le fichier `.env` contient les accès aux services. Un modèle est fourni dans `
 | `OMKS_API_URL` | oui | URL de l'API Omeka S, par ex. `https://mon-omeka.fr/api` |
 | `OMKS_KEY_IDENTITY` | oui | Identité de la clé d'API Omeka S |
 | `OMKS_KEY_CREDENTIAL` | oui | Secret de la clé d'API Omeka S |
-| `PORT` | non | Port de l'interface (7272 par défaut) |
+| `PORT` | non | Port de l'Atelier d'articles (7272 par défaut) |
+| `EXPLO_PORT` | non | Port d'exploZoteroAnno (7273 par défaut) |
+| `HOST`, `EXPLO_HOST` | non | Adresse d'écoute de chaque serveur (`127.0.0.1` par défaut) |
+| `PAPER_URL`, `EXPLO_URL` | non | Adresses publiques des deux applications, pour les liens entre elles (derrière un proxy) |
+
+Chaque application a **son propre serveur**, avec son port, sa configuration et son traitement en cours : les deux peuvent traiter en même temps. exploZoteroAnno lit `.env`, **surchargé par `.env.explo`** (nom modifiable par `EXPLO_ENV_FILE`) : on peut ainsi lui donner d'autres connexions (par exemple une autre bibliothèque de groupe Zotero ou une autre instance Omeka S). Son onglet *Grille › Connexions* n'écrit dans `.env.explo` que les valeurs qui diffèrent de `.env` ; les autres restent « héritées ».
 
 > Le fichier `.env` contient des secrets : il est exclu de git (`.gitignore`) et de l'image Docker (`.dockerignore`).
 
@@ -59,18 +64,21 @@ git clone https://github.com/samszo/ecosysteme-agents-recherche.git
 cd ecosysteme-agents-recherche
 npm ci
 cp .env.example .env    # puis renseigner les valeurs
-npm run ui              # interface : http://127.0.0.1:7272
+npm run ui              # Atelier d'articles : http://127.0.0.1:7272
+npm run ui:explo        # exploZoteroAnno (autre terminal) : http://127.0.0.1:7273
 ```
 
 Commandes disponibles :
 
 | Commande | Rôle |
 |---|---|
-| `npm run ui` | Interface web : paramètres, lancement, suivi, résultats |
+| `npm run ui` | Serveur de l'Atelier d'articles (port `PORT`, 7272) : paramètres, lancement, suivi, résultats |
+| `npm run ui:explo` | Serveur d'exploZoteroAnno (port `EXPLO_PORT`, 7273) |
 | `npm start` | Lance le workflow en ligne de commande avec la configuration enregistrée |
+| `npm run explo` | Lance le workflow exploZoteroAnno (annotation collective) en ligne de commande |
 | `npm run docs` | Régénère la documentation HTML (`docs/html/`) à partir des fichiers markdown |
 
-En local, les fichiers produits (AttenduAPP, PropAPP, rapport, graphe…) sont écrits à la racine du projet.
+Les fichiers produits sont écrits dans `resultats/atelier/` (AttenduAPP, PropAPP, rapport, relecture, graphe, désaccords) et `resultats/explo/` (exploZoteroAnno) : à la racine du projet en local, dans `data/resultats/` avec Docker.
 
 ## 4. Installation Docker
 
@@ -127,8 +135,8 @@ Deux fichiers permettent de démarrer avec une instance Omeka S déjà configur�
 
 | Fichier | Contenu |
 |---|---|
-| `omk_academic-paper-factory.zip` | application **Omeka S 4.2.1** avec les modules Annotate, Common, CustomVocab, EasyAdmin et Log |
-| `omk_academic-paper-factory.sql` | base de données (MariaDB / MySQL, utf8mb4) : vocabulaires `dcterms`, `dctype`, `bibo`, `foaf`, `jdc`, `skos`, `curation`, `oa`, `rdf` ; types de fichiers autorisés (`md`, `csv`, `bib`, `html`, `json`, `txt`…) ; aucun contenu, aucune session ni journal |
+| `install/omk_academic-paper-factory.zip` | application **Omeka S 4.2.1** avec les modules Annotate, Common, CustomVocab, EasyAdmin et Log |
+| `install/omk_academic-paper-factory.sql` | base de données (MariaDB / MySQL, utf8mb4) : vocabulaires `dcterms`, `dctype`, `bibo`, `foaf`, `jdc`, `skos`, `curation`, `oa`, `rdf` ; types de fichiers autorisés (`md`, `csv`, `bib`, `html`, `json`, `txt`…) ; aucun contenu, aucune session ni journal |
 
 La base contient un **compte d'administration de démarrage**, à supprimer après la première connexion :
 
@@ -162,13 +170,13 @@ GRANT ALL PRIVILEGES ON omeka.* TO 'omeka'@'localhost'; FLUSH PRIVILEGES;"
 ```
 
 ```bash
-mysql -u omeka -p omeka < omk_academic-paper-factory.sql
+mysql -u omeka -p omeka < install/omk_academic-paper-factory.sql
 ```
 
 **2. Application** : décompresser l'archive dans le dossier servi par le serveur web.
 
 ```bash
-unzip -q omk_academic-paper-factory.zip -d /var/www/
+unzip -q install/omk_academic-paper-factory.zip -d /var/www/
 ```
 
 **3. Connexion à la base** : remplacer **tout** le contenu de `config/database.ini` (le fichier livré contient les paramètres de la machine où l'archive a été préparée).
@@ -310,7 +318,7 @@ Créer ensuite la base et importer le dump comme indiqué dans *Démarrer avec l
 ### 8.5 Omeka S
 
 ```bash
-unzip -q omk_academic-paper-factory.zip -d /var/www/
+unzip -q install/omk_academic-paper-factory.zip -d /var/www/
 mv /var/www/omk_academic-paper-factory /var/www/omeka
 nano /var/www/omeka/config/database.ini          # voir l'étape 3 ci-dessus
 chown -R root:www-data /var/www/omeka
@@ -382,7 +390,9 @@ nano data/.env        # OMKS_API_URL=https://omeka.example.org/api et la nouvell
 docker compose up -d --build
 ```
 
-Sans Docker : installer Node.js 22 (paquets NodeSource), puis `npm ci` dans `/opt/ecosysteme-agents-recherche` et créer un service systemd (`/etc/systemd/system/workflow-ui.service`) :
+Le fichier `docker-compose.yml` démarre **deux services** à partir de la même image : `workflow` (Atelier d'articles, port 7272) et `explo` (exploZoteroAnno, port 7273), qui partagent le dossier `data/` (connexions propres à exploZoteroAnno dans `data/.env.explo`).
+
+Sans Docker : installer Node.js 22 (paquets NodeSource), puis `npm ci` dans `/opt/ecosysteme-agents-recherche` et créer un service systemd par application, par exemple `/etc/systemd/system/workflow-ui.service` :
 
 ```ini
 [Unit]
@@ -400,23 +410,31 @@ Environment=HOST=127.0.0.1 PORT=7272
 WantedBy=multi-user.target
 ```
 
+et `/etc/systemd/system/workflow-explo.service`, identique sauf :
+
+```ini
+Description=Interface exploZoteroAnno
+ExecStart=/opt/ecosysteme-agents-recherche/node_modules/.bin/tsx src/ui/server.ts explo
+Environment=HOST=127.0.0.1 EXPLO_PORT=7273
+```
+
 ```bash
 useradd --system --home /opt/ecosysteme-agents-recherche workflow
 chown -R workflow:workflow /opt/ecosysteme-agents-recherche
-systemctl daemon-reload && systemctl enable --now workflow-ui
+systemctl daemon-reload && systemctl enable --now workflow-ui workflow-explo
 ```
 
 ### 8.9 Accès à l'interface
 
-L'interface manipule les clés d'API : elle n'écoute que sur `127.0.0.1` et **ne doit jamais être exposée sans authentification**. Deux possibilités :
+Les interfaces manipulent les clés d'API : elles n'écoutent que sur `127.0.0.1` et **ne doivent jamais être exposées sans authentification**. Deux possibilités (pour exploZoteroAnno, remplacer 7272 par 7273) :
 
 **Tunnel SSH** (le plus simple, rien à exposer) :
 
 ```bash
-ssh -L 7272:127.0.0.1:7272 utilisateur@serveur
+ssh -L 7272:127.0.0.1:7272 -L 7273:127.0.0.1:7273 utilisateur@serveur
 ```
 
-puis ouvrir http://127.0.0.1:7272 sur le poste local.
+puis ouvrir http://127.0.0.1:7272 et http://127.0.0.1:7273 sur le poste local.
 
 **Proxy Apache avec authentification**, sur un sous-domaine en HTTPS :
 
@@ -451,6 +469,8 @@ a2ensite workflow && systemctl reload apache2
 certbot --apache -d workflow.example.org --redirect
 ```
 
+Pour exploZoteroAnno, créer de la même façon un hôte virtuel `explo.example.org` (même authentification) qui renvoie vers `http://127.0.0.1:7273`, puis indiquer les adresses publiques dans `.env` pour les liens entre les applications : `PAPER_URL=https://workflow.example.org` et `EXPLO_URL=https://explo.example.org`.
+
 ### 8.10 Sauvegardes et mises à jour
 
 - **Base Omeka S** : sauvegarde quotidienne, par exemple dans `/etc/cron.daily/omeka-backup` :
@@ -463,7 +483,7 @@ certbot --apache -d workflow.example.org --redirect
 
 - **Fichiers** : sauvegarder `/var/www/omeka/files` et le dossier `data/` du workflow (`.env`, `workflow.config.json`, `workflow.history.json`, résultats).
 - **Système** : `apt update && apt upgrade` régulièrement (ou le paquet `unattended-upgrades`).
-- **Workflow** : `git pull` puis `docker compose up -d --build` (ou `npm ci` puis `systemctl restart workflow-ui`).
+- **Workflow** : `git pull` puis `docker compose up -d --build` (ou `npm ci` puis `systemctl restart workflow-ui workflow-explo`).
 
 ## 9. Dépannage
 

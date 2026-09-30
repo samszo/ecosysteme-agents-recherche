@@ -1,19 +1,35 @@
-# Lancement : docker compose up -d   puis   http://127.0.0.1:7272
+# Deux applications, deux serveurs (même image) :
+#   Atelier d'articles : http://127.0.0.1:7272   exploZoteroAnno : http://127.0.0.1:7273
+# Lancement : docker compose up -d
+x-common: &common
+  build: .
+  image: ecosysteme-agents-recherche:latest
+  restart: unless-stopped
+  # données persistantes : .env (+ .env.explo), workflow.config.json, explo.config.json et résultats
+  volumes:
+    - ./data:/data
+  # accès à un Omeka S installé sur la machine hôte : OMKS_API_URL=http://localhost/... est redirigé automatiquement
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+
 services:
   workflow:
-    build: .
-    image: ecosysteme-agents-recherche:latest
+    <<: *common
     container_name: ecosysteme-agents-recherche
-    restart: unless-stopped
     environment:
+      WORKFLOW_APP: paper
       HOST: 0.0.0.0
       PORT: 7272
-    # interface publiée uniquement sur la machine hôte : elle manipule des clés d'API
+    # interfaces publiées uniquement sur la machine hôte : elles manipulent des clés d'API
     ports:
       - "127.0.0.1:7272:7272"
-    # données persistantes : .env, workflow.config.json et résultats (à créer avant le premier lancement)
-    volumes:
-      - ./data:/data
-    # accès à un Omeka S installé sur la machine hôte : OMKS_API_URL=http://host.docker.internal/...
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+
+  explo:
+    <<: *common
+    container_name: ecosysteme-agents-recherche-explo
+    environment:
+      WORKFLOW_APP: explo
+      HOST: 0.0.0.0
+      EXPLO_PORT: 7273
+    ports:
+      - "127.0.0.1:7273:7273"

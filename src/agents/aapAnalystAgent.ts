@@ -1,5 +1,5 @@
 import { Agent } from "@mastra/core/agent";
-import { ALBERT_MODEL_ANALYTICS } from "../models";
+import { ALBERT_MODEL_ANALYTICS } from "../config/models";
 
 // Analyse des attendus d'un appel à propositions (AttenduAPP, en markdown)
 export const aapAnalystAgent = new Agent({

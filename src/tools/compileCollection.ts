@@ -1,8 +1,8 @@
 import { Tool } from "@mastra/core/tools";
 import { z } from "zod";
-import { Zotero } from "./zotero";
-import { normalizeId } from "./cleanGraph";
-import { positionForColor } from "./annotationPositions";
+import { Zotero } from "../lib/zotero/zotero";
+import { normalizeId } from "../lib/analysis/cleanGraph";
+import { positionForColor } from "../lib/analysis/annotationPositions";
 import { workflowConfig } from "../config";
 
 const { maxKeywords, ignoredTags, citationStyle, authors: extraAuthors } = workflowConfig.proposal;

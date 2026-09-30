@@ -194,7 +194,57 @@ Pour chaque appel :
 
 Seuls les documents nouveaux ou modifiés sont retraités : ceux dont l'extraction est déjà faite sont relus dans Omeka S. Un appel importé depuis un fichier local ne peut être rejoué que si le fichier est toujours présent dans `aap/`.
 
-## 3. Ce qui est enregistré dans Omeka S
+## 3. exploZoteroAnno : animer une annotation collective
+
+**exploZoteroAnno** est une seconde application, avec son propre serveur : http://127.0.0.1:7273 (lien dans l'en-tête de l'Atelier d'articles). Elle a ses propres connexions (onglet Grille, héritées de celles de l'Atelier sauf modification) et peut analyser pendant qu'un traitement de l'Atelier est en cours. Elle accompagne un groupe qui annote ensemble une collection Zotero : elle fixe une grille de couleurs commune, mesure la participation de chacun, analyse les convergences et divergences de lecture, et propose des thèmes pour une séance de discussion. Tout est enregistré dans Omeka S.
+
+```mermaid
+flowchart LR
+    G[Définir la grille<br/>de couleurs] --> P[Partager le guide<br/>d'annotation]
+    P --> A["Annotation collective<br/>dans Zotero (groupe)"]
+    A --> R[Analyser]
+    R --> V1[Participation]
+    R --> V2[Collaborations]
+    R --> V3[Thèmes de discussion]
+    V3 --> S[Séance de discussion]
+    S --> A
+```
+
+### Paramétrer la grille (onglet Grille)
+
+- **Collection** : la collection Zotero annotée, idéalement dans une **bibliothèque de groupe** pour que chaque annotation garde son auteur. Les connexions sont celles de l'Atelier d'articles.
+- **Grille de couleurs** : pour chaque couleur de surlignage de Zotero, une signification (idée clé, accord, désaccord, définition, méthode, question, exemple, contexte par défaut) et une consigne « quand l'utiliser ». La grille se modifie librement (couleurs, libellés, ajout ou suppression).
+- **Guide d'annotation** : produit à partir de la grille, avec les consignes d'annotation (bibliothèque de groupe, commentaires, notes, marqueurs). Il se copie ou se télécharge pour être envoyé aux collaborateurs, et il est enregistré dans Omeka S à chaque analyse.
+- **Analyse** : similarité à partir de laquelle deux surlignages portent sur le même passage, nombre minimum de passages communs pour calculer un kappa, nombre de thèmes de discussion.
+
+**Enregistrer et analyser** lance le workflow ; il peut être relancé à tout moment pendant l'annotation : les nouvelles annotations de Zotero sont prises en compte.
+
+### Visualiser la participation (onglet Participation)
+
+- chiffres clés : collaborateurs, surlignages, notes, documents annotés, couleurs hors grille ;
+- une barre par collaborateur, découpée selon la signification des couleurs (et les notes) ;
+- la chronologie des annotations par semaine et par collaborateur ;
+- le détail par personne (commentaires, mots surlignés, documents, part de l'effort, jours actifs, première et dernière annotation) ;
+- la couverture de la collection : qui a annoté quel document, et les documents encore sans annotation.
+
+### Analyser les collaborations (onglet Collaborations)
+
+- **passages en commun** : deux surlignages d'un même document sont rapprochés quand leurs mots se recouvrent suffisamment ;
+- **convergence** (même signification) et **divergence** (significations différentes) de lecture sur ces passages ;
+- **matrice** des passages en commun et de l'accord pour chaque paire de collaborateurs ;
+- **kappa** d'accord sur la signification des couleurs, calculé à partir d'un nombre minimum de passages communs ;
+- les **passages aux lectures divergentes**, avec la lecture et le commentaire de chacun ;
+- le **réseau** collaborateurs–documents (sigma.js), où les liens entre collaborateurs indiquent leurs passages communs et leur accord.
+
+### Générer des thèmes de discussion (onglet Thèmes)
+
+Un agent propose des thèmes pour une séance collective à partir des passages divergents et convergents, des commentaires, des notes et des marqueurs : pour chaque thème, une question ouverte, la raison du choix, les passages à relire (avec les personnes concernées) et une piste d'animation. Il veille à impliquer aussi les participants les moins actifs.
+
+### Rapport et enregistrement (onglet Rapport)
+
+Le rapport reprend participation, collaborations et thèmes, ainsi que les tokens consommés et le coût estimé. Chaque analyse crée dans Omeka S un item « Configuration explo-zotero-anno » (classe `dcterms:MethodOfInstruction`) avec la grille et les paramètres, son statut, sa consommation et, en médias : guide d'annotation, rapport, thèmes, réseau, données de participation et de collaborations. Les documents et annotations de la collection sont enregistrés comme dans l'Atelier d'articles (`oa:Annotation` avec auteur, couleur, date).
+
+## 4. Ce qui est enregistré dans Omeka S
 
 ```mermaid
 flowchart TD
@@ -214,7 +264,7 @@ flowchart TD
 - Un **concept** n'est jamais créé en double : avant de le créer, le workflow cherche un concept de même identifiant ou de même titre.
 - Chaque **exécution** enregistre sa configuration (sans les clés d'API), son statut, les tokens consommés et, en médias, ses documents de fin d'analyse (relecture, graphe, rapport, désaccords).
 
-## 4. Questions fréquentes
+## 5. Questions fréquentes
 
 **Puis-je modifier le plan de la proposition ?** Oui, dans *Paramètres › Proposition d'article › Plan de la proposition*. Les titres et leur ordre sont respectés par le rédacteur.
 

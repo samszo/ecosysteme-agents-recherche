@@ -3,8 +3,8 @@ import { z } from "zod";
 import fs from "fs";
 import path from "path";
 import { CodedAnnotationSchema, type CodedAnnotation } from "./fetchOmekaAnnotations";
-import { codeLabel } from "./codebook";
-import { workflowConfig } from "../config";
+import { codeLabel } from "../lib/analysis/codebook";
+import { workflowConfig, outputPath } from "../config";
 
 const { targetKappa, csvPath: defaultCsvPath } = workflowConfig.kappa;
 
@@ -117,7 +117,8 @@ export const calculateFleissKappa = new Tool({
     }).sort((a, b) => Number(b.conflict) - Number(a.conflict));
     const conflicts = rows.filter(r => r.conflict).length;
 
-    const absolutePath = path.resolve(process.cwd(), csvPath);
+    // chemin relatif : dans le dossier des résultats de l'Atelier (outputDir)
+    const absolutePath = outputPath(csvPath);
     fs.mkdirSync(path.dirname(absolutePath), { recursive: true });
     fs.writeFileSync(
       absolutePath,

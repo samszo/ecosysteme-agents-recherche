@@ -1,14 +1,14 @@
 import { Tool } from "@mastra/core/tools";
 import { z } from "zod";
 import { generateObject } from "ai";
-import { ALBERT_MODEL_FAST } from "../models";
-import { chunkText } from "./chunkText";
-import { cleanGraph, normalizeId, type GraphNode } from "./cleanGraph";
-import { loadConceptGraph } from "./conceptStore";
-import { getOmk } from "./omk";
+import { ALBERT_MODEL_FAST } from "../config/models";
+import { chunkText } from "../lib/extraction/chunkText";
+import { cleanGraph, normalizeId, type GraphNode } from "../lib/analysis/cleanGraph";
+import { loadConceptGraph } from "../lib/omeka/conceptStore";
+import { getOmk } from "../lib/omeka/omk";
 import { workflowConfig } from "../config";
-import { positionForColor } from "./annotationPositions";
-import { recordUsage } from "../usage";
+import { positionForColor, type ColorGrid } from "../lib/analysis/annotationPositions";
+import { recordUsage } from "../lib/metrics/usage";
 
 const { chunkSize, chunkOverlap, maxAnnotationChars } = workflowConfig.extraction;
 
@@ -67,10 +67,10 @@ function formatAnnotation(a: Annotation): string {
 
 // Mise en forme des annotations du chercheur pour le prompt, regroupées par positionnement
 // (déduit de la couleur, cf. config.annotationPositions) et tronquées pour tenir dans le contexte
-export function formatAnnotations(annotations: Annotation[], maxChars = maxAnnotationChars): string {
+export function formatAnnotations(annotations: Annotation[], maxChars = maxAnnotationChars, grid?: ColorGrid): string {
   const groups = new Map<string, { title: string; instruction: string; lines: string[] }>();
   for (const a of annotations) {
-    const pos = positionForColor(a.color?.hex);
+    const pos = positionForColor(a.color?.hex, grid);
     const key = pos?.position ?? "";
     if (!groups.has(key)) {
       groups.set(key, pos
@@ -81,7 +81,7 @@ export function formatAnnotations(annotations: Annotation[], maxChars = maxAnnot
   }
 
   // les groupes positionnés d'abord, dans l'ordre de la table de configuration
-  const order = workflowConfig.annotationPositions.map(p => p.position as string);
+  const order = (grid?.positions ?? workflowConfig.annotationPositions).map(p => p.position as string);
   const sorted = [...groups.entries()].sort(([a], [b]) => (a ? order.indexOf(a) : order.length) - (b ? order.indexOf(b) : order.length));
 
   let out = "";

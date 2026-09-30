@@ -339,7 +339,47 @@ Consigne : mobiliser les concepts du graphe et les références de la collection
 <li><strong>Charger dans les paramètres</strong> reprend l&#39;appel et la collection dans l&#39;onglet Paramètres, pour les ajuster avant de lancer.</li>
 </ul>
 <p>Seuls les documents nouveaux ou modifiés sont retraités : ceux dont l&#39;extraction est déjà faite sont relus dans Omeka S. Un appel importé depuis un fichier local ne peut être rejoué que si le fichier est toujours présent dans <code>aap/</code>.</p>
-<h2 id="3-ce-qui-est-enregistre-dans-omeka-s"><a class="anchor" href="#3-ce-qui-est-enregistre-dans-omeka-s">#</a>3. Ce qui est enregistré dans Omeka S</h2>
+<h2 id="3-explozoteroanno-animer-une-annotation-collective"><a class="anchor" href="#3-explozoteroanno-animer-une-annotation-collective">#</a>3. exploZoteroAnno : animer une annotation collective</h2>
+<p><strong>exploZoteroAnno</strong> est une seconde application, avec son propre serveur : <a href="http://127.0.0.1:7273" target="_blank" rel="noopener">http://127.0.0.1:7273</a> (lien dans l&#39;en-tête de l&#39;Atelier d&#39;articles). Elle a ses propres connexions (onglet Grille, héritées de celles de l&#39;Atelier sauf modification) et peut analyser pendant qu&#39;un traitement de l&#39;Atelier est en cours. Elle accompagne un groupe qui annote ensemble une collection Zotero : elle fixe une grille de couleurs commune, mesure la participation de chacun, analyse les convergences et divergences de lecture, et propose des thèmes pour une séance de discussion. Tout est enregistré dans Omeka S.</p>
+<pre class="mermaid">flowchart LR
+    G[Définir la grille&lt;br/&gt;de couleurs] --&gt; P[Partager le guide&lt;br/&gt;d'annotation]
+    P --&gt; A[&quot;Annotation collective&lt;br/&gt;dans Zotero (groupe)&quot;]
+    A --&gt; R[Analyser]
+    R --&gt; V1[Participation]
+    R --&gt; V2[Collaborations]
+    R --&gt; V3[Thèmes de discussion]
+    V3 --&gt; S[Séance de discussion]
+    S --&gt; A</pre>
+<h3 id="parametrer-la-grille-onglet-grille"><a class="anchor" href="#parametrer-la-grille-onglet-grille">#</a>Paramétrer la grille (onglet Grille)</h3>
+<ul>
+<li><strong>Collection</strong> : la collection Zotero annotée, idéalement dans une <strong>bibliothèque de groupe</strong> pour que chaque annotation garde son auteur. Les connexions sont celles de l&#39;Atelier d&#39;articles.</li>
+<li><strong>Grille de couleurs</strong> : pour chaque couleur de surlignage de Zotero, une signification (idée clé, accord, désaccord, définition, méthode, question, exemple, contexte par défaut) et une consigne « quand l&#39;utiliser ». La grille se modifie librement (couleurs, libellés, ajout ou suppression).</li>
+<li><strong>Guide d&#39;annotation</strong> : produit à partir de la grille, avec les consignes d&#39;annotation (bibliothèque de groupe, commentaires, notes, marqueurs). Il se copie ou se télécharge pour être envoyé aux collaborateurs, et il est enregistré dans Omeka S à chaque analyse.</li>
+<li><strong>Analyse</strong> : similarité à partir de laquelle deux surlignages portent sur le même passage, nombre minimum de passages communs pour calculer un kappa, nombre de thèmes de discussion.</li>
+</ul>
+<p><strong>Enregistrer et analyser</strong> lance le workflow ; il peut être relancé à tout moment pendant l&#39;annotation : les nouvelles annotations de Zotero sont prises en compte.</p>
+<h3 id="visualiser-la-participation-onglet-participation"><a class="anchor" href="#visualiser-la-participation-onglet-participation">#</a>Visualiser la participation (onglet Participation)</h3>
+<ul>
+<li>chiffres clés : collaborateurs, surlignages, notes, documents annotés, couleurs hors grille ;</li>
+<li>une barre par collaborateur, découpée selon la signification des couleurs (et les notes) ;</li>
+<li>la chronologie des annotations par semaine et par collaborateur ;</li>
+<li>le détail par personne (commentaires, mots surlignés, documents, part de l&#39;effort, jours actifs, première et dernière annotation) ;</li>
+<li>la couverture de la collection : qui a annoté quel document, et les documents encore sans annotation.</li>
+</ul>
+<h3 id="analyser-les-collaborations-onglet-collaborations"><a class="anchor" href="#analyser-les-collaborations-onglet-collaborations">#</a>Analyser les collaborations (onglet Collaborations)</h3>
+<ul>
+<li><strong>passages en commun</strong> : deux surlignages d&#39;un même document sont rapprochés quand leurs mots se recouvrent suffisamment ;</li>
+<li><strong>convergence</strong> (même signification) et <strong>divergence</strong> (significations différentes) de lecture sur ces passages ;</li>
+<li><strong>matrice</strong> des passages en commun et de l&#39;accord pour chaque paire de collaborateurs ;</li>
+<li><strong>kappa</strong> d&#39;accord sur la signification des couleurs, calculé à partir d&#39;un nombre minimum de passages communs ;</li>
+<li>les <strong>passages aux lectures divergentes</strong>, avec la lecture et le commentaire de chacun ;</li>
+<li>le <strong>réseau</strong> collaborateurs–documents (sigma.js), où les liens entre collaborateurs indiquent leurs passages communs et leur accord.</li>
+</ul>
+<h3 id="generer-des-themes-de-discussion-onglet-themes"><a class="anchor" href="#generer-des-themes-de-discussion-onglet-themes">#</a>Générer des thèmes de discussion (onglet Thèmes)</h3>
+<p>Un agent propose des thèmes pour une séance collective à partir des passages divergents et convergents, des commentaires, des notes et des marqueurs : pour chaque thème, une question ouverte, la raison du choix, les passages à relire (avec les personnes concernées) et une piste d&#39;animation. Il veille à impliquer aussi les participants les moins actifs.</p>
+<h3 id="rapport-et-enregistrement-onglet-rapport"><a class="anchor" href="#rapport-et-enregistrement-onglet-rapport">#</a>Rapport et enregistrement (onglet Rapport)</h3>
+<p>Le rapport reprend participation, collaborations et thèmes, ainsi que les tokens consommés et le coût estimé. Chaque analyse crée dans Omeka S un item « Configuration explo-zotero-anno » (classe <code>dcterms:MethodOfInstruction</code>) avec la grille et les paramètres, son statut, sa consommation et, en médias : guide d&#39;annotation, rapport, thèmes, réseau, données de participation et de collaborations. Les documents et annotations de la collection sont enregistrés comme dans l&#39;Atelier d&#39;articles (<code>oa:Annotation</code> avec auteur, couleur, date).</p>
+<h2 id="4-ce-qui-est-enregistre-dans-omeka-s"><a class="anchor" href="#4-ce-qui-est-enregistre-dans-omeka-s">#</a>4. Ce qui est enregistré dans Omeka S</h2>
 <pre class="mermaid">flowchart TD
     COL[Collection Zotero&lt;br/&gt;bibo:Collection] --- CFG[Configuration d'exécution&lt;br/&gt;dcterms:MethodOfInstruction]
     AAP[Appel à propositions&lt;br/&gt;bibo:CallForPapers] -- dcterms:relation --&gt; COL
@@ -356,14 +396,14 @@ Consigne : mobiliser les concepts du graphe et les références de la collection
 <li>Un <strong>concept</strong> n&#39;est jamais créé en double : avant de le créer, le workflow cherche un concept de même identifiant ou de même titre.</li>
 <li>Chaque <strong>exécution</strong> enregistre sa configuration (sans les clés d&#39;API), son statut, les tokens consommés et, en médias, ses documents de fin d&#39;analyse (relecture, graphe, rapport, désaccords).</li>
 </ul>
-<h2 id="4-questions-frequentes"><a class="anchor" href="#4-questions-frequentes">#</a>4. Questions fréquentes</h2>
+<h2 id="5-questions-frequentes"><a class="anchor" href="#5-questions-frequentes">#</a>5. Questions fréquentes</h2>
 <p><strong>Puis-je modifier le plan de la proposition ?</strong> Oui, dans <em>Paramètres › Proposition d&#39;article › Plan de la proposition</em>. Les titres et leur ordre sont respectés par le rédacteur.</p>
 <p><strong>Pourquoi un document n&#39;est-il pas retraité ?</strong> Son extraction est déjà faite (<code>curation:access</code>). Pour la relancer, vider cette propriété sur l&#39;item du document dans Omeka S.</p>
 <p><strong>Une nouvelle note Zotero est-elle prise en compte ?</strong> Oui : elle est ajoutée aux annotations du document dans Omeka S, et ses marqueurs deviennent des concepts, sans relancer l&#39;extraction du document.</p>
 <p><strong>Le rédacteur peut-il inventer des références ?</strong> Il ne reçoit que les clés BibTeX de la collection et doit citer uniquement celles-ci (syntaxe Pandoc <code>[@clé, p. 12]</code>) ; la relecture épistémologique vérifie l&#39;usage des références.</p>
 
 </main>
-<nav class="toc"><strong>Sur cette page</strong><a class="l2" href="#1-preparer-le-corpus-dans-zotero">1. Préparer le corpus dans Zotero</a><a class="l3" href="#la-collection">La collection</a><a class="l3" href="#surligner-avec-une-couleur-qui-indique-votre-positionnement">Surligner avec une couleur qui indique votre positionnement</a><a class="l3" href="#notes-et-marqueurs">Notes et marqueurs</a><a class="l3" href="#coder-les-phrases-pour-l-39-accord-inter-juges">Coder les phrases pour l&#39;accord inter-juges</a><a class="l2" href="#2-utiliser-l-39-interface">2. Utiliser l&#39;interface</a><a class="l3" href="#parametres">Paramètres</a><a class="l3" href="#execution">Exécution</a><a class="l3" href="#resultats">Résultats</a><a class="l3" href="#appels-traites">Appels traités</a><a class="l2" href="#3-ce-qui-est-enregistre-dans-omeka-s">3. Ce qui est enregistré dans Omeka S</a><a class="l2" href="#4-questions-frequentes">4. Questions fréquentes</a></nav>
+<nav class="toc"><strong>Sur cette page</strong><a class="l2" href="#1-preparer-le-corpus-dans-zotero">1. Préparer le corpus dans Zotero</a><a class="l3" href="#la-collection">La collection</a><a class="l3" href="#surligner-avec-une-couleur-qui-indique-votre-positionnement">Surligner avec une couleur qui indique votre positionnement</a><a class="l3" href="#notes-et-marqueurs">Notes et marqueurs</a><a class="l3" href="#coder-les-phrases-pour-l-39-accord-inter-juges">Coder les phrases pour l&#39;accord inter-juges</a><a class="l2" href="#2-utiliser-l-39-interface">2. Utiliser l&#39;interface</a><a class="l3" href="#parametres">Paramètres</a><a class="l3" href="#execution">Exécution</a><a class="l3" href="#resultats">Résultats</a><a class="l3" href="#appels-traites">Appels traités</a><a class="l2" href="#3-explozoteroanno-animer-une-annotation-collective">3. exploZoteroAnno : animer une annotation collective</a><a class="l3" href="#parametrer-la-grille-onglet-grille">Paramétrer la grille (onglet Grille)</a><a class="l3" href="#visualiser-la-participation-onglet-participation">Visualiser la participation (onglet Participation)</a><a class="l3" href="#analyser-les-collaborations-onglet-collaborations">Analyser les collaborations (onglet Collaborations)</a><a class="l3" href="#generer-des-themes-de-discussion-onglet-themes">Générer des thèmes de discussion (onglet Thèmes)</a><a class="l3" href="#rapport-et-enregistrement-onglet-rapport">Rapport et enregistrement (onglet Rapport)</a><a class="l2" href="#4-ce-qui-est-enregistre-dans-omeka-s">4. Ce qui est enregistré dans Omeka S</a><a class="l2" href="#5-questions-frequentes">5. Questions fréquentes</a></nav>
 </div>
 <script type="module">
 import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";

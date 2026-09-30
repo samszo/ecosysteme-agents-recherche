@@ -1,5 +1,5 @@
 import { Agent } from "@mastra/core/agent";
-import { ALBERT_MODEL_FAST } from "../models";
+import { ALBERT_MODEL_FAST } from "../config/models";
 import { fetchZoteroData } from "../tools/fetchZoteroData";
 
 export const librarianAgent = new Agent({

@@ -1,5 +1,5 @@
 import { Agent } from "@mastra/core/agent";
-import { ALBERT_MODEL_ANALYTICS } from "../models";
+import { ALBERT_MODEL_ANALYTICS } from "../config/models";
 
 // Rédaction de la proposition d'article (PropAPP) selon un plan paramétrable
 export const writerAgent = new Agent({

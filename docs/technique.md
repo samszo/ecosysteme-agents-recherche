@@ -10,10 +10,10 @@ flowchart LR
         NAV[Navigateur]
     end
     subgraph Serveur["Serveur Node.js (src/ui/server.ts)"]
-        UI[API HTTP + page<br/>src/ui/public/index.html]
+        UI[API HTTP + page<br/>src/ui/public/paper.html]
         CFG[(.env<br/>workflow.config.json)]
     end
-    subgraph Traitement["Processus enfant (src/index.ts)"]
+    subgraph Traitement["Processus enfant (src/runners/)"]
         WF[Workflow Mastra<br/>paperProductionWorkflow]
         AG[Agents]
         TL[Outils]
@@ -31,7 +31,7 @@ flowchart LR
 ```
 
 - **Interface** (`src/ui/server.ts`) : serveur `node:http` sans dépendance, qui gère `.env` et `workflow.config.json`, lance le workflow dans un **processus enfant** (la configuration et les connexions sont ainsi relues à chaque exécution), diffuse le journal en **Server-Sent Events** et sert les résultats.
-- **Workflow** (`src/index.ts`) : enregistre la configuration dans Omeka S, exécute le workflow Mastra, produit la visualisation du graphe, le rapport de traitement, et importe les documents de fin d'analyse dans l'item de configuration de l'exécution.
+- **Lanceurs** (`src/runners/paper.ts`, `src/runners/explo.ts`) : enregistre la configuration dans Omeka S, exécute le workflow Mastra, produit la visualisation du graphe, le rapport de traitement, et importe les documents de fin d'analyse dans l'item de configuration de l'exécution.
 - **Répertoire de données** : le répertoire courant. En local c'est la racine du projet ; dans Docker c'est le volume `/data`, le code étant dans `/app`.
 
 ## 2. Le workflow
@@ -54,7 +54,7 @@ flowchart TD
     S7 --> OUT([relecture, graphe sigma.js,<br/>rapport de traitement])
 ```
 
-Défini dans `src/workflow/paperProductionWorkflow.ts`. Règles de passage des données dans Mastra :
+Défini dans `src/workflow/paperProductionWorkflow.ts`, étapes dans `src/workflow/steps/`. Règles de passage des données dans Mastra :
 
 - après un `.parallel([...])`, l'étape suivante reçoit `{ "<id étape>": sortie, ... }` ;
 - après un `.then(...)`, elle reçoit directement la sortie de l'étape précédente ;
@@ -76,19 +76,36 @@ Les outils sont appelés **directement** par les étapes (`outil.execute({ data 
 
 ```
 src/
-├── index.ts                 point d'entrée du workflow (npm start)
-├── config.ts                configuration par défaut (defaultWorkflowConfig) + surcharges
-├── configStore.ts           fusion / différences avec workflow.config.json
-├── models.ts                modèles Albert (analytique, rapide)
-├── graphViz.ts              export graphology et page sigma.js
-├── omekaVerify.ts           audit des derniers items Omeka
-├── usage.ts                 comptage des tokens consommés par les appels aux modèles
-├── impact.ts                estimation du coût : énergie, carbone, argent
-├── agents/                  un fichier par agent (index.ts ré-exporte)
-├── tools/                   un fichier par outil ou utilitaire
-├── workflow/                une étape par fichier, assemblage, rapport, import
-└── ui/                      serveur de l'interface et page web
+├── agents/                   agents Mastra, un fichier par agent (index.ts ré-exporte)
+├── config/
+│   ├── index.ts              configuration de l'Atelier (defaultWorkflowConfig, workflowConfig, outputPath)
+│   ├── explo.ts              configuration d'exploZoteroAnno (defaultExploConfig, exploConfig, exploGrid)
+│   ├── models.ts             modèles Albert (analytique, rapide)
+│   └── store.ts              fusion avec workflow.config.json / explo.config.json
+├── lib/                      fonctions et clients utilisés par les outils et les étapes (hors outils Mastra)
+│   ├── analysis/             cleanGraph, annotationPositions (grille de couleurs), codebook (grille kappa)
+│   ├── extraction/           pdfExtract, attachmentExtract, zip, chunkText
+│   ├── metrics/              usage (tokens), impact (énergie, carbone, argent)
+│   ├── omeka/                omk (client), oaAnnotations, conceptIndex, conceptStore, zoteroCollections, verify
+│   ├── visualization/        graphViz (graphology, sigma.js)
+│   └── zotero/               zotero (client), zoteroToOmeka (correspondance des métadonnées)
+├── tools/                    outils Mastra uniquement (index.ts ré-exporte)
+├── workflow/
+│   ├── paperProductionWorkflow.ts   assemblage de l'Atelier d'articles
+│   ├── exploWorkflow.ts             assemblage d'exploZoteroAnno
+│   ├── steps/
+│   │   ├── common/           fetchLiteratureStep (partagée)
+│   │   ├── paper/            analyzeCfp, buildWiki, kappaAnalysis, normalizeOkf, draftPaper, reviewPaper
+│   │   └── explo/            participation, collaboration, themes
+│   ├── reports/              paperReport, exploReport, annotationGuide
+│   └── runs/                 saveWorkflowConfig (item Omeka), importSynthesis (médias), history (historique local)
+├── runners/                  lanceurs : paper.ts (npm start), explo.ts (npm run explo)
+└── ui/
+    ├── server.ts             serveur d'une application (npm run ui / npm run ui:explo)
+    └── public/               paper.html, explo.html
 ```
+
+Hors de `src/` : `docs/` (documentation, `grille_annotation.md`), `scripts/build-docs.ts`, `docker/entrypoint.sh`, `install/` (instance Omeka S préparée, distribuée à part). Les fichiers produits vont dans `resultats/atelier/` et `resultats/explo/` (réglages `outputDir`), dans le répertoire de données : la racine du projet en local, le volume `data/` avec Docker.
 
 ### Agents (`src/agents/`)
 
@@ -100,7 +117,9 @@ src/
 | `kappaAnalystAgent` | analytique | bilan de l'accord inter-juges et recommandations de recalibrage |
 | `librarianAgent`, `wikiArchitectAgent`, `ontologistAgent` | rapide / analytique | agents outillés disponibles pour un usage conversationnel |
 
-### Outils et utilitaires (`src/tools/`)
+### Outils (`src/tools/`) et bibliothèques (`src/lib/`)
+
+Les **outils** (`fetchCfp`, `fetchZoteroData`, `buildLLMWiki`, `exportToOpenKnowledge`, `compileCollection`, `fetchOmekaAnnotations`, `calculateFleissKappa`, `computeParticipation`, `analyzeCollaboration`) sont des outils Mastra : appelables par les agents, ils sont exécutés directement par les étapes. Les autres modules sont des bibliothèques de `src/lib/`.
 
 | Module | Rôle |
 |---|---|
@@ -126,11 +145,11 @@ src/
 | `compileCollection` | références BibTeX, citations, mots-clés, auteurs pour PropAPP |
 | `chunkText` | découpage des textes en extraits avec chevauchement |
 
-### Comptage des tokens (`src/usage.ts`)
+### Comptage des tokens (`src/lib/metrics/usage.ts`)
 
 Chaque appel à un modèle enregistre sa consommation avec `recordUsage(source, modèle, usage)` : `totalUsage` pour les agents Mastra (appels d'outils compris), `usage` pour `generateObject` du SDK `ai`. Le workflow tourne dans un seul processus : le compteur est partagé par toutes les étapes, et `usageSummary()` fournit le détail par traitement et par modèle au rapport de traitement, à l'item de configuration (`curation:data`, JSON) et à l'historique. Un appel en erreur n'est pas compté.
 
-### Estimation du coût (`src/impact.ts`)
+### Estimation du coût (`src/lib/metrics/impact.ts`)
 
 `estimateImpact(usageSummary())` convertit les tokens de chaque modèle en énergie, carbone et argent, avec les hypothèses de `config.costs` :
 
@@ -140,9 +159,9 @@ Chaque appel à un modèle enregistre sa consommation avec `recordUsage(source, 
 
 Le résultat alimente la section « Coût du traitement » du rapport, l'item de configuration (`curation:data`, avec les tokens) et l'historique.
 
-### Historique des exécutions (`src/workflow/history.ts`)
+### Historique des exécutions (`src/workflow/runs/history.ts`)
 
-À la fin de chaque exécution, `index.ts` ajoute une entrée à `workflow.history.json` (répertoire de données, 500 entrées au plus ; chemin modifiable par `WORKFLOW_HISTORY_FILE`) : identifiant, dates, statut, paramètres d'entrée, appel (titre, item), collection, configuration, titre de la proposition, tokens. L'interface fusionne cet historique avec les items de configuration d'Omeka S (`GET /api/history`) et regroupe les exécutions par appel (lien, fichier ou empreinte du texte).
+À la fin de chaque exécution, `src/runners/paper.ts` ajoute une entrée à `workflow.history.json` (répertoire de données, 500 entrées au plus ; chemin modifiable par `WORKFLOW_HISTORY_FILE`) : identifiant, dates, statut, paramètres d'entrée, appel (titre, item), collection, configuration, titre de la proposition, tokens. L'interface fusionne cet historique avec les items de configuration d'Omeka S (`GET /api/history`) et regroupe les exécutions par appel (lien, fichier ou empreinte du texte).
 
 ## 4. Extraction des documents
 
@@ -287,7 +306,7 @@ Les termes utilisés sont paramétrables dans `config.omeka` (`accessTerm`, `sub
 
 ## 9. Configuration
 
-La configuration par défaut est dans `src/config.ts` (`defaultWorkflowConfig`). Les modifications faites dans l'interface sont enregistrées dans `workflow.config.json` (seules les différences) et fusionnées au chargement (`configStore.ts`). Les chemins `kappa.codes`, `annotationPositions`, `omeka.vocabs` et `steps` sont remplacés en bloc, les autres objets sont fusionnés clé par clé. Le fichier est désigné par `WORKFLOW_CONFIG_FILE` s'il est défini.
+La configuration par défaut est dans `src/config/index.ts` (`defaultWorkflowConfig`). Les modifications faites dans l'interface sont enregistrées dans `workflow.config.json` (seules les différences) et fusionnées au chargement (`configStore.ts`). Les chemins `kappa.codes`, `annotationPositions`, `omeka.vocabs` et `steps` sont remplacés en bloc, les autres objets sont fusionnés clé par clé. Le fichier est désigné par `WORKFLOW_CONFIG_FILE` s'il est défini.
 
 | Clé | Rôle |
 |---|---|
@@ -328,18 +347,65 @@ Le serveur écoute sur `127.0.0.1` (variable `HOST` pour le conteneur) et le por
 
 **Ajouter un outil** : créer `src/tools/monOutil.ts` sur le modèle des outils existants (`new Tool({ name, description, schema, execute: async ({ data }) => … })`, schéma zod typé avec `z.infer`), puis l'exporter dans `src/tools/index.ts`.
 
-**Ajouter une étape** : créer `src/workflow/monEtape.ts` avec `createStep({ id, execute })`, l'insérer dans `paperProductionWorkflow.ts`, ajouter son identifiant à `config.steps` et son libellé dans `processingReport.ts`.
+**Ajouter une étape** : créer `src/workflow/steps/paper/monEtape.ts` (ou `explo/`, `common/`) avec `createStep({ id, execute })`, l'insérer dans `paperProductionWorkflow.ts`, ajouter son identifiant à `config.steps` et son libellé dans `processingReport.ts`.
 
-**Ajouter un paramètre** : l'ajouter à `defaultWorkflowConfig` ; il apparaît automatiquement dans l'interface (ajouter un libellé dans `LABELS`, et la section dans `SECTIONS`, de `index.html`).
+**Ajouter un paramètre** : l'ajouter à `defaultWorkflowConfig` ; il apparaît automatiquement dans l'interface (ajouter un libellé dans `LABELS`, et la section dans `SECTIONS`, de `paper.html`).
 
-## 12. Documentation et conteneur
+## 12. Workflow exploZoteroAnno
+
+Second workflow (`src/workflow/exploWorkflow.ts`, étapes dans `src/workflow/steps/explo/`), consacré à l'annotation collective d'une collection Zotero. Il a sa propre configuration (`defaultExploConfig` dans `src/config/explo.ts`, surcharges dans `explo.config.json`), sa page (`src/ui/public/explo.html`) et **son propre serveur** (voir *Un serveur par application*).
+
+```mermaid
+flowchart TD
+    IN([zoteroCollection]) --> F[fetch-literature<br/>réutilisée : fetchZoteroData<br/>documents et oa:Annotation dans Omeka]
+    F --> PAR
+    subgraph PAR[parallèle]
+        P[participation<br/>computeParticipation]
+        C[collaboration<br/>analyzeCollaboration]
+    end
+    PAR --> T[themes<br/>discussionAgent + formatAnnotations]
+    T --> OUT([rapport, thèmes, réseau sigma.js,<br/>données JSON, guide → Omeka])
+```
+
+| Élément | Rôle | Réutilise |
+|---|---|---|
+| `fetch-literature` | collection, annotations (auteur, couleur, date), notes, Omeka | étape et outil de l'Atelier d'articles |
+| `computeParticipation` | par collaborateur, document, couleur de la grille, semaine | `positionForColor` avec la grille de l'exploration |
+| `analyzeCollaboration` | passages communs, paires, convergences et divergences, kappa, réseau | `words` / `jaccard`, `fleissKappa` / `cohenKappa`, `interpretKappa` |
+| `discussionAgent` | thèmes de discussion (modèle analytique) | `formatAnnotations` (grille en paramètre), comptage des tokens |
+| `src/runners/explo.ts` | lancement (`npm run explo`), fichiers, Omeka, coût | `saveWorkflowConfig`, `updateWorkflowStatus`, `attachDocuments`, `generateGraphHtml`, `usageReport`, `estimateImpact` |
+| `src/workflow/reports/annotationGuide.ts` | guide d'annotation à partir de la grille | — |
+
+Fichiers produits dans `resultats/explo/` (réglage `outputDir`) : `guide_annotation.md`, `participation.json`, `collaborations.json`, `reseau_collaborations.html`, `themes_discussion.md`, `rapport_explo.md`.
+
+Pour permettre ce suivi, deux évolutions profitent aux deux workflows : la date des annotations et des notes Zotero est conservée (`dcterms:created` sur l'`oa:Annotation`), et les nouvelles annotations du lecteur Zotero sont synchronisées pour les documents déjà présents dans Omeka S. Les briques communes acceptent désormais un paramètre : grille de couleurs (`positionForColor`, `formatAnnotations`), fichier de configuration (`readConfigOverride`, `writeConfigOverride`), fichier d'historique (`appendHistory`), workflow décrit (`saveWorkflowConfig`).
+
+API propre au serveur exploZoteroAnno : `GET` et `POST /api/explo/settings`, `POST /api/explo/guide`, `GET /api/explo/results`, `GET /api/explo/file?name=`.
+
+### Un serveur par application
+
+`src/ui/server.ts` sert **une** application, choisie en argument (`tsx src/ui/server.ts explo`) ou par `WORKFLOW_APP` (`paper` par défaut). Chaque serveur a son paramétrage :
+
+| | Atelier d'articles (`paper`) | exploZoteroAnno (`explo`) |
+|---|---|---|
+| Lancement | `npm run ui` | `npm run ui:explo` |
+| Port / adresse d'écoute | `PORT` (7272) / `HOST` | `EXPLO_PORT` (7273) / `EXPLO_HOST` (ou `HOST`) |
+| Connexions | `.env` | `.env` surchargé par `.env.explo` (`EXPLO_ENV_FILE`) |
+| Configuration | `workflow.config.json` | `explo.config.json` |
+| Workflow lancé | `src/runners/paper.ts` | `src/runners/explo.ts` |
+| Page | `paper.html` | `explo.html` |
+
+Chaque serveur a son propre traitement en cours (les deux applications peuvent traiter simultanément) et son propre flux de journal. Routes communes : `/api/settings` (connexions et configuration de l'application du serveur ; un secret vide est conservé, une valeur identique à la valeur héritée n'est pas recopiée dans `.env.explo`), `/api/check`, `/api/zotero/collections`, `/api/albert/models`, `/api/run*`, `/docs/`, et `GET /api/apps` (adresses des deux applications, `PAPER_URL` / `EXPLO_URL` ou port local, pour les liens entre elles). Les routes propres à l'autre application répondent 404 ; l'ancienne adresse `/explo` de l'Atelier redirige vers le serveur d'exploZoteroAnno.
+
+## 13. Documentation et conteneur
 
 - `npm run docs` convertit `docs/*.md` en `docs/html/*.html` (script `scripts/build-docs.ts`, bibliothèque **marked** ; les diagrammes **Mermaid** sont rendus dans le navigateur).
-- `Dockerfile` : image `node:22-bookworm-slim`, code dans `/app`, données dans le volume `/data`, commandes `workflow-ui` (défaut) et `workflow`.
+- `Dockerfile` : image `node:22-bookworm-slim`, code dans `/app`, données dans le volume `/data`, commandes `workflow-ui` (serveur de l'application `WORKFLOW_APP`), `workflow` et `workflow-explo` (lignes de commande).
+- `docker-compose.yml` : deux services à partir de la même image, `workflow` (Atelier, 7272) et `explo` (exploZoteroAnno, 7273), publiés sur `127.0.0.1` et partageant `./data`.
 - `docker/entrypoint.sh` : le conteneur démarre en root, rétablit si besoin la propriété de `/data` pour l'utilisateur `node` (uid 1000), puis exécute la commande sous `node` avec `setpriv`. Les commandes `workflow` et `workflow-ui` lancées par `docker compose exec` (en root) passent aussi par ce point d'entrée.
 - `docker-compose.yml` : port publié sur `127.0.0.1:7272`, volume `./data:/data`, `host.docker.internal` pour un Omeka S local.
 
-## 13. Limites connues
+## 14. Limites connues
 
 - `tsc --noEmit` signale des erreurs de typage liées à la configuration TypeScript (CommonJS avec `verbatimModuleSyntax`) et aux types Mastra (étapes sans schéma) ; l'exécution par tsx n'est pas affectée.
 - La reconstruction des passages surlignés d'un PDF est une approximation proportionnelle à la largeur des blocs de texte.

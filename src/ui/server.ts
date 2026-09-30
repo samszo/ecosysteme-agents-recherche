@@ -1,24 +1,65 @@
-// Interface client du workflow : paramètres (.env + configuration), lancement, suivi et résultats
-// Lancement : npm run ui (http://127.0.0.1:PORT)
+// Serveur d'une application cliente : paramètres (.env + configuration), lancement, suivi et résultats
+// Un serveur par application, chacun avec son port, ses connexions, sa configuration et son traitement en cours :
+//   npm run ui          → Atelier d'articles (academic-paper-factory), http://127.0.0.1:PORT (7272)
+//   npm run ui:explo    → exploZoteroAnno, http://127.0.0.1:EXPLO_PORT (7273)
 import http from "http";
 import fs from "fs";
 import path from "path";
 import { spawn, type ChildProcess } from "child_process";
 import dotenv from "dotenv";
 import { defaultWorkflowConfig } from "../config";
-import { mergeConfig, readConfigOverride, writeConfigOverride, CONFIG_FILE } from "../configStore";
-import { Zotero } from "../tools/zotero";
-import { Omk } from "../tools/omk";
+import { defaultExploConfig, EXPLO_CONFIG_FILE } from "../config/explo";
+import { buildGuide } from "../workflow/reports/annotationGuide";
+import { mergeConfig, readConfigOverride, writeConfigOverride, CONFIG_FILE } from "../config/store";
+import { Zotero } from "../lib/zotero/zotero";
+import { Omk } from "../lib/omeka/omk";
 import crypto from "crypto";
-import { readHistory, type HistoryEntry } from "../workflow/history";
+import { readHistory, type HistoryEntry } from "../workflow/runs/history";
 
 // ROOT : répertoire de données (.env, workflow.config.json, résultats) = répertoire courant
 // APP_DIR : code du projet (identique à ROOT en local, distinct dans le conteneur Docker)
 const ROOT = process.cwd();
 const APP_DIR = path.resolve(__dirname, "..", "..");
-const ENV_FILE = path.join(ROOT, ".env");
 const PUBLIC_DIR = path.join(__dirname, "public");
 const TSX = path.join(APP_DIR, "node_modules", ".bin", "tsx");
+
+// ==========================================
+// Applications et paramétrage propre à chaque serveur
+// ==========================================
+const EXPLO_ENV_FILE = process.env.EXPLO_ENV_FILE || ".env.explo";
+const APPS = {
+  paper: {
+    label: "Atelier d'articles (academic-paper-factory)",
+    script: path.join(APP_DIR, "src", "runners", "paper.ts"),
+    page: "paper.html",
+    // fichiers de connexion : le dernier reçoit les modifications, les précédents fournissent les valeurs héritées
+    envFiles: [".env"],
+    portKey: "PORT", hostKey: "HOST", defaultPort: 7272,
+    // adresse publique de cette application (liens depuis l'autre application)
+    urlKey: "PAPER_URL",
+  },
+  explo: {
+    label: "exploZoteroAnno",
+    script: path.join(APP_DIR, "src", "runners", "explo.ts"),
+    page: "explo.html",
+    // .env.explo surcharge .env : connexions propres à l'annotation collective (autre groupe Zotero, autre Omeka…)
+    envFiles: [".env", EXPLO_ENV_FILE],
+    portKey: "EXPLO_PORT", hostKey: "EXPLO_HOST", defaultPort: 7273,
+    urlKey: "EXPLO_URL",
+  },
+} as const;
+type AppName = keyof typeof APPS;
+
+const APP_ARG = process.argv[2] || process.env.WORKFLOW_APP || "paper";
+if (!(APP_ARG in APPS)) {
+  console.error(`Application inconnue : ${APP_ARG} (attendu : ${Object.keys(APPS).join(", ")})`);
+  process.exit(1);
+}
+const APP = APP_ARG as AppName;
+const APP_DEF = APPS[APP];
+const OTHER: AppName = APP === "paper" ? "explo" : "paper";
+const ENV_PATHS = APP_DEF.envFiles.map(f => path.join(ROOT, f));
+const ENV_FILE = ENV_PATHS[ENV_PATHS.length - 1]!;
 
 // variables d'environnement gérées par l'interface
 const ENV_FIELDS = [
@@ -29,7 +70,8 @@ const ENV_FIELDS = [
   { key: "OMKS_API_URL", label: "URL de l'API Omeka S", group: "Omeka S", help: "Ex. https://mon-omeka.fr/api" },
   { key: "OMKS_KEY_IDENTITY", label: "Identité de la clé Omeka S", group: "Omeka S", help: "Clé API d'un utilisateur Omeka S (Utilisateur > Clés API)." },
   { key: "OMKS_KEY_CREDENTIAL", label: "Secret de la clé Omeka S", secret: true, group: "Omeka S" },
-  { key: "PORT", label: "Port de l'interface", group: "Interface", help: "Pris en compte au prochain lancement de npm run ui." },
+  { key: APP_DEF.portKey, label: "Port de cette interface", group: "Interface", help: `Pris en compte au prochain lancement du serveur (${APP_DEF.defaultPort} par défaut).` },
+  { key: APPS[OTHER].urlKey, label: `Adresse de l'application ${APPS[OTHER].label}`, group: "Interface", help: `Pour le lien entre les deux applications (par défaut http://127.0.0.1:${APPS[OTHER].defaultPort}).` },
 ];
 const SECRET_KEYS = new Set(ENV_FIELDS.filter(f => f.secret).map(f => f.key));
 
@@ -37,12 +79,23 @@ const SECRET_KEYS = new Set(ENV_FIELDS.filter(f => f.secret).map(f => f.key));
 // .env et configuration
 // ==========================================
 
-function readEnv(): Record<string, string> {
-  return fs.existsSync(ENV_FILE) ? dotenv.parse(fs.readFileSync(ENV_FILE)) : {};
-}
+const parseEnv = (file: string): Record<string, string> => (fs.existsSync(file) ? dotenv.parse(fs.readFileSync(file)) : {});
 
-// met à jour les clés du .env en conservant les commentaires et les autres variables
-function writeEnv(values: Record<string, string>) {
+// connexions de ce serveur : fichiers fusionnés dans l'ordre (le dernier l'emporte)
+function readEnv(): Record<string, string> {
+  return Object.assign({}, ...ENV_PATHS.map(parseEnv));
+}
+// valeurs héritées des fichiers précédents (exploZoteroAnno : .env)
+const inheritedEnv = (): Record<string, string> => Object.assign({}, ...ENV_PATHS.slice(0, -1).map(parseEnv));
+
+// met à jour le fichier de connexion de ce serveur en conservant les commentaires et les autres variables ;
+// une valeur identique à la valeur héritée n'est pas recopiée (elle suit alors les modifications du fichier commun)
+function writeEnv(input: Record<string, string>) {
+  const base = inheritedEnv();
+  const own = parseEnv(ENV_FILE);
+  const values = Object.fromEntries(Object.entries(input).filter(([k, v]) => k in own || (base[k] ?? "") !== v));
+  // rien de propre à écrire : on ne crée pas de fichier vide
+  if (!Object.keys(values).length && !fs.existsSync(ENV_FILE)) return;
   const lines = fs.existsSync(ENV_FILE) ? fs.readFileSync(ENV_FILE, "utf-8").split("\n") : [];
   const done = new Set<string>();
   const format = (v: string) => (/[\s#"'=]/.test(v) ? JSON.stringify(v) : v);
@@ -59,6 +112,21 @@ function writeEnv(values: Record<string, string>) {
 }
 
 const currentConfig = () => mergeConfig(defaultWorkflowConfig, readConfigOverride());
+const currentExploConfig = () => mergeConfig(defaultExploConfig, readConfigOverride(EXPLO_CONFIG_FILE));
+
+// configuration propre à l'application de ce serveur
+const APP_CONFIG = APP === "paper"
+  ? { current: currentConfig, defaults: defaultWorkflowConfig as any, file: CONFIG_FILE }
+  : { current: currentExploConfig, defaults: defaultExploConfig as any, file: EXPLO_CONFIG_FILE };
+
+// adresses des deux applications (liens entre elles) : adresse publique si définie, sinon port local
+function appUrls() {
+  const env = Object.assign({}, parseEnv(path.join(ROOT, ".env")), parseEnv(path.join(ROOT, EXPLO_ENV_FILE)));
+  return Object.fromEntries((Object.keys(APPS) as AppName[]).map(a => {
+    const d = APPS[a];
+    return [a, { label: d.label, url: env[d.urlKey] || process.env[d.urlKey] || `http://127.0.0.1:${env[d.portKey] || d.defaultPort}` }];
+  }));
+}
 
 // ==========================================
 // Exécution du workflow (processus enfant : configuration et connexions relues à chaque lancement)
@@ -66,6 +134,7 @@ const currentConfig = () => mergeConfig(defaultWorkflowConfig, readConfigOverrid
 
 interface Run {
   id: number;
+  app: AppName;
   status: "running" | "success" | "failed" | "stopped";
   startedAt: number;
   endedAt?: number;
@@ -83,13 +152,13 @@ function broadcast(event: string, data: unknown) {
 }
 
 function runState() {
-  return run && { id: run.id, status: run.status, startedAt: run.startedAt, endedAt: run.endedAt, lines: run.logs.length };
+  return run && { id: run.id, app: run.app, label: APPS[run.app].label, status: run.status, startedAt: run.startedAt, endedAt: run.endedAt, lines: run.logs.length };
 }
 
-function startRun(): Run {
-  const r: Run = { id: ++runCounter, status: "running", startedAt: Date.now(), logs: [] };
+function startRun(app: AppName = APP): Run {
+  const r: Run = { id: ++runCounter, app, status: "running", startedAt: Date.now(), logs: [] };
   run = r;
-  const child = spawn(TSX, [path.join(APP_DIR, "src", "index.ts")], {
+  const child = spawn(TSX, [APPS[app].script], {
     cwd: ROOT,
     env: { ...process.env, ...readEnv(), FORCE_COLOR: "0", NO_COLOR: "1" },
   });
@@ -262,6 +331,25 @@ async function history() {
   return { calls: [...calls.values()], omekaAdmin, omekaError: omeka.error ?? null };
 }
 
+// fichiers produits par exploZoteroAnno (dossier outputDir)
+function exploResultFiles() {
+  const dir = path.join(ROOT, currentExploConfig().outputDir);
+  const known = [
+    { name: "rapport_explo.md", title: "Rapport" },
+    { name: "themes_discussion.md", title: "Thèmes de discussion" },
+    { name: "reseau_collaborations.html", title: "Réseau des collaborations" },
+    { name: "guide_annotation.md", title: "Guide d'annotation" },
+    { name: "participation.json", title: "Participation (données)" },
+    { name: "collaborations.json", title: "Collaborations (données)" },
+  ];
+  return known
+    .map(f => {
+      const full = path.join(dir, f.name);
+      return fs.existsSync(full) ? { ...f, size: fs.statSync(full).size, mtime: fs.statSync(full).mtimeMs } : null;
+    })
+    .filter(Boolean);
+}
+
 // ==========================================
 // Résultats
 // ==========================================
@@ -279,7 +367,7 @@ function resultFiles() {
   ];
   return files
     .map(f => {
-      const full = path.resolve(ROOT, f.name);
+      const full = path.resolve(ROOT, config.outputDir, f.name);
       return fs.existsSync(full) ? { ...f, size: fs.statSync(full).size, mtime: fs.statSync(full).mtimeMs } : null;
     })
     .filter(Boolean);
@@ -306,16 +394,22 @@ async function readBody(req: http.IncomingMessage): Promise<any> {
 const routes: Record<string, (req: http.IncomingMessage, res: http.ServerResponse, url: URL) => Promise<void> | void> = {
   "GET /": (_req, res) => {
     res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
-    res.end(fs.readFileSync(path.join(PUBLIC_DIR, "index.html")));
+    res.end(fs.readFileSync(path.join(PUBLIC_DIR, APP_DEF.page)));
   },
+
+  // application de ce serveur et adresses des deux applications
+  "GET /api/apps": (_req, res) => sendJson(res, 200, { current: APP, apps: appUrls() }),
 
   "GET /api/settings": (_req, res) => {
     const env = readEnv();
+    const own = parseEnv(ENV_FILE);
     sendJson(res, 200, {
-      env: ENV_FIELDS.map(f => ({ ...f, value: f.secret ? "" : env[f.key] ?? "", isSet: !!env[f.key] })),
-      config: currentConfig(),
-      defaults: defaultWorkflowConfig,
-      configFile: path.relative(ROOT, CONFIG_FILE),
+      // inherited : valeur reprise du fichier commun (.env) et non définie dans le fichier de ce serveur
+      env: ENV_FIELDS.map(f => ({ ...f, value: f.secret ? "" : env[f.key] ?? "", isSet: !!env[f.key], inherited: ENV_PATHS.length > 1 && !(f.key in own) && !!env[f.key] })),
+      envFile: path.relative(ROOT, ENV_FILE),
+      config: APP_CONFIG.current(),
+      defaults: APP_CONFIG.defaults,
+      configFile: path.relative(ROOT, APP_CONFIG.file),
     });
   },
 
@@ -330,7 +424,7 @@ const routes: Record<string, (req: http.IncomingMessage, res: http.ServerRespons
       values[f.key] = String(v.value ?? "").trim();
     }
     writeEnv(values);
-    const saved = config ? writeConfigOverride(defaultWorkflowConfig, config) : undefined;
+    const saved = config ? writeConfigOverride(APP_CONFIG.defaults, config, APP_CONFIG.file) : undefined;
     sendJson(res, 200, { ok: true, override: saved });
   },
 
@@ -378,10 +472,49 @@ const routes: Record<string, (req: http.IncomingMessage, res: http.ServerRespons
     }
   },
 
-  "POST /api/run": (_req, res) => {
+  "POST /api/run": (_req, res, url) => {
+    const app = url.searchParams.get("app") ?? APP;
+    if (app !== APP) return sendJson(res, 400, { error: `Ce serveur lance ${APP_DEF.label} ; ${APPS[app as AppName]?.label ?? app} a son propre serveur.` });
     if (run?.status === "running") return sendJson(res, 409, { error: "Un traitement est déjà en cours." });
     startRun();
     sendJson(res, 200, runState());
+  },
+
+  // ==========================================
+  // Application exploZoteroAnno
+  // ==========================================
+  // ancienne adresse de l'application (servie par le serveur de l'Atelier) : renvoi vers le serveur dédié
+  "GET /explo": (_req, res) => {
+    res.writeHead(302, { Location: APP === "explo" ? "/" : appUrls().explo!.url });
+    res.end();
+  },
+
+  "GET /api/explo/settings": (_req, res) => {
+    sendJson(res, 200, { config: currentExploConfig(), defaults: defaultExploConfig, configFile: path.relative(ROOT, EXPLO_CONFIG_FILE) });
+  },
+
+  "POST /api/explo/settings": async (req, res) => {
+    const { config } = await readBody(req);
+    sendJson(res, 200, { ok: true, override: writeConfigOverride(defaultExploConfig, config, EXPLO_CONFIG_FILE) });
+  },
+
+  // guide d'annotation à partir de la grille (enregistrée ou en cours d'édition)
+  "POST /api/explo/guide": async (req, res) => {
+    const { config, collectionName } = await readBody(req);
+    res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" });
+    res.end(buildGuide(mergeConfig(defaultExploConfig, config ?? {}), collectionName));
+  },
+
+  "GET /api/explo/results": (_req, res) => sendJson(res, 200, exploResultFiles()),
+
+  "GET /api/explo/file": (_req, res, url) => {
+    const name = url.searchParams.get("name") ?? "";
+    const file = exploResultFiles().find((f: any) => f.name === name);
+    if (!file) return sendJson(res, 404, { error: "Fichier inconnu" });
+    const raw = url.searchParams.get("raw") === "1" && name.endsWith(".html");
+    const type = name.endsWith(".json") ? "application/json" : raw ? "text/html" : "text/plain";
+    res.writeHead(200, { "Content-Type": `${type}; charset=utf-8` });
+    res.end(fs.readFileSync(path.join(ROOT, currentExploConfig().outputDir, name)));
   },
 
   "POST /api/run/stop": (_req, res) => {
@@ -414,8 +547,15 @@ const routes: Record<string, (req: http.IncomingMessage, res: http.ServerRespons
     // raw=1 : page HTML servie telle quelle (ouverture du graphe en plein écran)
     const raw = url.searchParams.get("raw") === "1" && name.endsWith(".html");
     res.writeHead(200, { "Content-Type": `${raw ? "text/html" : "text/plain"}; charset=utf-8` });
-    res.end(fs.readFileSync(path.resolve(ROOT, name)));
+    res.end(fs.readFileSync(path.resolve(ROOT, currentConfig().outputDir, name)));
   },
+};
+
+// routes propres à une application (les autres sont communes aux deux serveurs)
+const APP_ONLY: Record<string, AppName> = {
+  "POST /api/cfp-file": "paper", "GET /api/results": "paper", "GET /api/history": "paper", "GET /api/file": "paper",
+  "GET /api/explo/settings": "explo", "POST /api/explo/settings": "explo", "POST /api/explo/guide": "explo",
+  "GET /api/explo/results": "explo", "GET /api/explo/file": "explo",
 };
 
 // documentation HTML générée par npm run docs (docs/html)
@@ -434,8 +574,9 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === "/docs") { res.writeHead(302, { Location: "/docs/" }); return res.end(); }
     return serveDocs(res, url.pathname);
   }
-  const handler = routes[`${req.method} ${url.pathname}`];
-  if (!handler) return sendJson(res, 404, { error: "Introuvable" });
+  const key = `${req.method} ${url.pathname}`;
+  const handler = routes[key];
+  if (!handler || (APP_ONLY[key] && APP_ONLY[key] !== APP)) return sendJson(res, 404, { error: "Introuvable" });
   try {
     await handler(req, res, url);
   } catch (e) {
@@ -443,10 +584,10 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-const port = Number(process.env.PORT || readEnv().PORT) || 7272;
+const port = Number(process.env[APP_DEF.portKey] || readEnv()[APP_DEF.portKey]) || APP_DEF.defaultPort;
 // écoute locale par défaut : l'interface manipule des clés d'API
 // (dans le conteneur Docker, HOST=0.0.0.0 et le port n'est publié que sur 127.0.0.1 de l'hôte)
-const host = process.env.HOST || "127.0.0.1";
+const host = process.env[APP_DEF.hostKey] || process.env.HOST || "127.0.0.1";
 server.listen(port, host, () => {
-  console.log(`🖥️  Interface du workflow : http://${host === "0.0.0.0" ? "127.0.0.1" : host}:${port}`);
+  console.log(`🖥️  ${APP_DEF.label} : http://${host === "0.0.0.0" ? "127.0.0.1" : host}:${port} (connexions : ${APP_DEF.envFiles.join(" + ")})`);
 });

@@ -1,6 +1,13 @@
+# dépendances et secrets
 node_modules
 .env
-generated/
+.env.explo
+# données et résultats (volume Docker, lancements locaux)
 data/
 aap/
+resultats/
+workflow.config.json
+explo.config.json
+workflow.history.json
+# système
 .DS_Store

@@ -1,8 +1,8 @@
 import { Tool } from "@mastra/core/tools";
 import { z } from "zod";
-import { getOmk } from "./omk";
+import { getOmk } from "../lib/omeka/omk";
 import { workflowConfig } from "../config";
-import { getConceptIndex } from "./conceptIndex";
+import { getConceptIndex } from "../lib/omeka/conceptIndex";
 
 const { accessTerm, subjectTerm, relationTerm } = workflowConfig.omeka;
 

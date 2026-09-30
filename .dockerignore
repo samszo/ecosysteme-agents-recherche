@@ -1,18 +1,17 @@
 # dépendances et secrets : jamais dans l'image
 node_modules
 .env
+.env.*
+!.env.example
+# données, résultats et réglages locaux
 data
-# résultats et fichiers de travail
-generated
 aap
-*.md
-!README.md
-!grille_annotation.md
-!docs/**/*.md
-*.bib
-visualisation_graphe.*
+resultats
 workflow.config.json
+explo.config.json
 workflow.history.json
+# instance Omeka S préparée (distribuée à part)
+install
 # outils
 .git
 .vscode
@@ -20,5 +19,3 @@ workflow.history.json
 .kilo
 .DS_Store
 **/.DS_Store
-# instance Omeka S préparée (distribuée à part)
-omk_academic-paper-factory.*

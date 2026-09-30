@@ -1,33 +1,76 @@
 {
-    // Utilisez IntelliSense pour en savoir plus sur les attributs possibles.
-    // Pointez pour afficher la description des attributs existants.
-    // Pour plus d'informations, visitez : https://go.microsoft.com/fwlink/?linkid=830387
+    // Débogage avec tsx : points d'arrêt directement dans les fichiers .ts
+    // Ports décalés (7282, 7283) pour ne pas entrer en conflit avec les conteneurs Docker (7272, 7273)
     "version": "0.2.0",
     "configurations": [
         {
-            // Lance src/index.ts avec tsx directement sous le débogueur Node (points d'arrêt dans les .ts)
-            "name": "Debug ecosysteme-agents-recherche (tsx)",
+            // Workflow de l'Atelier d'articles, sans interface (équivalent de npm start)
+            "name": "Workflow : Atelier d'articles",
             "type": "node",
             "request": "launch",
-            "program": "${workspaceFolder}/src/index.ts",
+            "program": "${workspaceFolder}/src/runners/paper.ts",
             "runtimeExecutable": "${workspaceFolder}/node_modules/.bin/tsx",
             "cwd": "${workspaceFolder}",
             "console": "integratedTerminal",
             "internalConsoleOptions": "neverOpen",
             "sourceMaps": true,
-            // n'utilise que les source maps du projet (évite de lier les points d'arrêt aux fichiers de node_modules)
-            "resolveSourceMapLocations": [
-                "${workspaceFolder}/**",
-                "!**/node_modules/**"
-            ],
-            "skipFiles": [
-                "<node_internals>/**",
-                "${workspaceFolder}/node_modules/**"
-            ]
+            "resolveSourceMapLocations": ["${workspaceFolder}/**", "!**/node_modules/**"],
+            "skipFiles": ["<node_internals>/**", "${workspaceFolder}/node_modules/**"]
         },
         {
-            // Débogue le fichier .ts actuellement ouvert dans l'éditeur (pratique pour tester un outil isolément)
-            "name": "Debug fichier courant (tsx)",
+            // Workflow exploZoteroAnno, sans interface (équivalent de npm run explo)
+            "name": "Workflow : exploZoteroAnno",
+            "type": "node",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/runners/explo.ts",
+            "runtimeExecutable": "${workspaceFolder}/node_modules/.bin/tsx",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "internalConsoleOptions": "neverOpen",
+            "sourceMaps": true,
+            "resolveSourceMapLocations": ["${workspaceFolder}/**", "!**/node_modules/**"],
+            "skipFiles": ["<node_internals>/**", "${workspaceFolder}/node_modules/**"]
+        },
+        {
+            // Interface de l'Atelier : les points d'arrêt du serveur ET du workflow lancé depuis l'interface
+            // (processus enfant, suivi grâce à autoAttachChildProcesses)
+            "name": "Interface : Atelier d'articles (7282)",
+            "type": "node",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/ui/server.ts",
+            "args": ["paper"],
+            "runtimeExecutable": "${workspaceFolder}/node_modules/.bin/tsx",
+            "cwd": "${workspaceFolder}",
+            "env": { "PORT": "7282", "EXPLO_PORT": "7283", "PAPER_URL": "http://127.0.0.1:7282", "EXPLO_URL": "http://127.0.0.1:7283" },
+            "autoAttachChildProcesses": true,
+            "console": "integratedTerminal",
+            "internalConsoleOptions": "neverOpen",
+            "sourceMaps": true,
+            "resolveSourceMapLocations": ["${workspaceFolder}/**", "!**/node_modules/**"],
+            "skipFiles": ["<node_internals>/**", "${workspaceFolder}/node_modules/**"],
+            "serverReadyAction": { "action": "openExternally", "pattern": "http://127\\.0\\.0\\.1:(\\d+)", "uriFormat": "http://127.0.0.1:%s" }
+        },
+        {
+            // Interface exploZoteroAnno : serveur et workflow lancé depuis l'interface
+            "name": "Interface : exploZoteroAnno (7283)",
+            "type": "node",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/ui/server.ts",
+            "args": ["explo"],
+            "runtimeExecutable": "${workspaceFolder}/node_modules/.bin/tsx",
+            "cwd": "${workspaceFolder}",
+            "env": { "PORT": "7282", "EXPLO_PORT": "7283", "PAPER_URL": "http://127.0.0.1:7282", "EXPLO_URL": "http://127.0.0.1:7283" },
+            "autoAttachChildProcesses": true,
+            "console": "integratedTerminal",
+            "internalConsoleOptions": "neverOpen",
+            "sourceMaps": true,
+            "resolveSourceMapLocations": ["${workspaceFolder}/**", "!**/node_modules/**"],
+            "skipFiles": ["<node_internals>/**", "${workspaceFolder}/node_modules/**"],
+            "serverReadyAction": { "action": "openExternally", "pattern": "http://127\\.0\\.0\\.1:(\\d+)", "uriFormat": "http://127.0.0.1:%s" }
+        },
+        {
+            // Fichier .ts ouvert dans l'éditeur (pratique pour tester un outil ou une bibliothèque isolément)
+            "name": "Fichier courant (tsx)",
             "type": "node",
             "request": "launch",
             "program": "${file}",
@@ -36,20 +79,16 @@
             "console": "integratedTerminal",
             "internalConsoleOptions": "neverOpen",
             "sourceMaps": true,
-            "resolveSourceMapLocations": [
-                "${workspaceFolder}/**",
-                "!**/node_modules/**"
-            ],
-            "skipFiles": [
-                "<node_internals>/**",
-                "${workspaceFolder}/node_modules/**"
-            ]
-        },
+            "resolveSourceMapLocations": ["${workspaceFolder}/**", "!**/node_modules/**"],
+            "skipFiles": ["<node_internals>/**", "${workspaceFolder}/node_modules/**"]
+        }
+    ],
+    "compounds": [
         {
-            "command": "npm run start",
-            "name": "Run ecosysteme-agents-recherche",
-            "request": "launch",
-            "type": "node-terminal"
+            // les deux interfaces en même temps (liens entre elles fonctionnels)
+            "name": "Interfaces : Atelier + exploZoteroAnno",
+            "configurations": ["Interface : Atelier d'articles (7282)", "Interface : exploZoteroAnno (7283)"],
+            "stopAll": true
         }
     ]
 }

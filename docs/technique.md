@@ -1,6 +1,15 @@
 # Documentation technique
 
-Écosystème d'agents IA pour la production d'articles scientifiques (Laboratoire Paragraphe, Université Paris 8). Le projet est écrit en **TypeScript**, exécuté par **tsx** sous **Node.js 22+**, et orchestré par un workflow **Mastra**. Les modèles de langage sont ceux de l'**API Albert** (compatible OpenAI), les sources viennent de **Zotero** et les résultats sont archivés dans **Omeka S**.
+Écosystème d'agents IA pour la production d'articles scientifiques (Laboratoire Paragraphe, Université Paris 8). Le projet est écrit en **TypeScript**, exécuté par **tsx** sous **Node.js 22+**, et orchestré par des workflows **Mastra**. Les modèles de langage sont ceux de l'**API Albert** (compatible OpenAI), les sources viennent de **Zotero** et les résultats sont archivés dans **Omeka S**.
+
+Deux applications partagent ce socle, chacune avec son workflow, son lanceur, sa page et son serveur :
+
+| Application | Workflow | Lanceur | Page | Serveur | Section |
+|---|---|---|---|---|---|
+| Atelier d'articles | `paperProductionWorkflow` (`src/workflow/paperProductionWorkflow.ts`) | `src/runners/paper.ts` | `paper.html` | `PORT` 7272 | 2 |
+| exploZoteroAnno | `exploWorkflow` (`src/workflow/exploWorkflow.ts`) | `src/runners/explo.ts` | `explo.html` | `EXPLO_PORT` 7273 | 12 |
+
+Elles partagent l'étape `fetch-literature` (lecture de la collection Zotero et enregistrement dans Omeka S), les bibliothèques de `src/lib/`, le comptage des tokens et l'estimation du coût, l'enregistrement des configurations d'exécution et le serveur `src/ui/server.ts`.
 
 ## 1. Architecture
 
@@ -9,32 +18,44 @@ flowchart LR
     subgraph Client
         NAV[Navigateur]
     end
-    subgraph Serveur["Serveur Node.js (src/ui/server.ts)"]
-        UI[API HTTP + page<br/>src/ui/public/paper.html]
-        CFG[(.env<br/>workflow.config.json)]
+    subgraph S1["Serveur paper : src/ui/server.ts (7272)"]
+        UI1[API HTTP + paper.html]
+        CFG1[(.env<br/>workflow.config.json)]
     end
-    subgraph Traitement["Processus enfant (src/runners/)"]
-        WF[Workflow Mastra<br/>paperProductionWorkflow]
-        AG[Agents]
-        TL[Outils]
+    subgraph S2["Serveur explo : src/ui/server.ts explo (7273)"]
+        UI2[API HTTP + explo.html]
+        CFG2[(.env + .env.explo<br/>explo.config.json)]
     end
-    NAV -- HTTP / SSE --> UI
-    UI -- lit / écrit --> CFG
-    UI -- spawn tsx --> WF
-    WF --> AG
-    WF --> TL
+    subgraph T1["Processus enfant : runners/paper.ts"]
+        WF1[paperProductionWorkflow]
+    end
+    subgraph T2["Processus enfant : runners/explo.ts"]
+        WF2[exploWorkflow]
+    end
+    AG[Agents]
+    TL[Outils et bibliothèques]
+    NAV -- HTTP / SSE --> UI1
+    NAV -- HTTP / SSE --> UI2
+    UI1 -- lit / écrit --> CFG1
+    UI2 -- lit / écrit --> CFG2
+    UI1 -- spawn tsx --> WF1
+    UI2 -- spawn tsx --> WF2
+    WF1 & WF2 --> AG
+    WF1 & WF2 --> TL
     AG -- chat completions --> ALB[(API Albert)]
     TL -- API web v3 --> ZOT[(Zotero)]
     TL -- API REST --> OMK[(Omeka S)]
-    WF -- fichiers résultats --> FS[(répertoire de données)]
-    UI -- lit --> FS
+    WF1 & WF2 -- fichiers résultats --> FS[(répertoire de données)]
+    UI1 & UI2 -- lit --> FS
 ```
 
-- **Interface** (`src/ui/server.ts`) : serveur `node:http` sans dépendance, qui gère `.env` et `workflow.config.json`, lance le workflow dans un **processus enfant** (la configuration et les connexions sont ainsi relues à chaque exécution), diffuse le journal en **Server-Sent Events** et sert les résultats.
-- **Lanceurs** (`src/runners/paper.ts`, `src/runners/explo.ts`) : enregistre la configuration dans Omeka S, exécute le workflow Mastra, produit la visualisation du graphe, le rapport de traitement, et importe les documents de fin d'analyse dans l'item de configuration de l'exécution.
+- **Interface** (`src/ui/server.ts`) : serveur `node:http` sans dépendance, lancé une fois par application (voir *Un serveur par application*), qui gère les connexions et la configuration de son application, lance son workflow dans un **processus enfant** (la configuration et les connexions sont ainsi relues à chaque exécution), diffuse le journal en **Server-Sent Events** et sert les résultats.
+- **Lanceurs** (`src/runners/paper.ts`, `src/runners/explo.ts`) : enregistrent la configuration dans Omeka S, exécutent le workflow Mastra, produisent les fichiers de résultats (graphe ou réseau sigma.js, rapport de traitement…) et importent les documents de fin d'analyse dans l'item de configuration de l'exécution.
 - **Répertoire de données** : le répertoire courant. En local c'est la racine du projet ; dans Docker c'est le volume `/data`, le code étant dans `/app`.
 
-## 2. Le workflow
+## 2. Le workflow de l'Atelier d'articles
+
+Le workflow exploZoteroAnno est décrit à la section 12.
 
 ```mermaid
 flowchart TD
@@ -88,7 +109,7 @@ src/
 │   ├── metrics/              usage (tokens), impact (énergie, carbone, argent)
 │   ├── omeka/                omk (client), oaAnnotations, conceptIndex, conceptStore, zoteroCollections, verify
 │   ├── visualization/        graphViz (graphology, sigma.js)
-│   └── zotero/               zotero (client), zoteroToOmeka (correspondance des métadonnées)
+│   └── zotero/               zotero (client), zoteroToOmeka (correspondance des métadonnées), duplicates (doublons)
 ├── tools/                    outils Mastra uniquement (index.ts ré-exporte)
 ├── workflow/
 │   ├── paperProductionWorkflow.ts   assemblage de l'Atelier d'articles
@@ -105,7 +126,7 @@ src/
     └── public/               paper.html, explo.html
 ```
 
-Hors de `src/` : `docs/` (documentation, `grille_annotation.md`), `scripts/build-docs.ts`, `docker/entrypoint.sh`, `install/` (instance Omeka S préparée, distribuée à part). Les fichiers produits vont dans `resultats/atelier/` et `resultats/explo/` (réglages `outputDir`), dans le répertoire de données : la racine du projet en local, le volume `data/` avec Docker.
+Hors de `src/` : `docs/` (documentation, `grille_annotation.md`), `scripts/build-docs.ts`, `docker/entrypoint.sh`, `.vscode/launch.json` (configurations de débogage des deux workflows et des deux serveurs), `install/` (instance Omeka S préparée, distribuée à part). Les fichiers produits vont dans `resultats/atelier/` et `resultats/explo/` (réglages `outputDir`), dans le répertoire de données : la racine du projet en local, le volume `data/` avec Docker.
 
 ### Agents (`src/agents/`)
 
@@ -115,6 +136,7 @@ Hors de `src/` : `docs/` (documentation, `grille_annotation.md`), `scripts/build
 | `writerAgent` | analytique | rédaction de PropAPP selon le plan, citations Pandoc |
 | `epistemologistAgent` | analytique | relecture critique de PropAPP au regard d'AttenduAPP |
 | `kappaAnalystAgent` | analytique | bilan de l'accord inter-juges et recommandations de recalibrage |
+| `discussionAgent` | analytique | exploZoteroAnno : thèmes de discussion à partir des passages convergents et divergents |
 | `librarianAgent`, `wikiArchitectAgent`, `ontologistAgent` | rapide / analytique | agents outillés disponibles pour un usage conversationnel |
 
 ### Outils (`src/tools/`) et bibliothèques (`src/lib/`)
@@ -124,7 +146,8 @@ Les **outils** (`fetchCfp`, `fetchZoteroData`, `buildLLMWiki`, `exportToOpenKnow
 | Module | Rôle |
 |---|---|
 | `fetchCfp` | télécharge ou lit l'appel (URL ou fichier local), extrait le texte, crée ou met à jour l'item Omeka de l'appel |
-| `fetchZoteroData` | parcourt la collection, extrait chaque pièce jointe, fusionne annotations et notes, enregistre documents, annotations et médias dans Omeka |
+| `fetchZoteroData` | parcourt la collection, regroupe les doublons (option `mergeDuplicates`), extrait chaque pièce jointe, fusionne annotations et notes, enregistre documents, annotations et médias dans Omeka |
+| `duplicates` | `groupDuplicates` : documents en double d'une collection (fichier, DOI, URL, titre et année), exemplaire principal |
 | `attachmentExtract` | extraction par format : PDF, page web enregistrée (zip), HTML, DOCX, ODT, EPUB, texte, image |
 | `pdfExtract` | PDF.js : texte, surlignages (reconstruction par quadPoints), notes, auteur, images (encodage PNG via zlib) |
 | `zip` | lecteur ZIP minimal (répertoire central + zlib) |
@@ -144,10 +167,12 @@ Les **outils** (`fetchCfp`, `fetchZoteroData`, `buildLLMWiki`, `exportToOpenKnow
 | `calculateFleissKappa` | kappa de Fleiss (nombre de juges variable), kappa de Cohen, CSV des désaccords |
 | `compileCollection` | références BibTeX, citations, mots-clés, auteurs pour PropAPP |
 | `chunkText` | découpage des textes en extraits avec chevauchement |
+| `computeParticipation` | exploZoteroAnno : participation par collaborateur, document, couleur de la grille et semaine |
+| `analyzeCollaboration` | exploZoteroAnno : passages communs, convergences et divergences, kappa, réseau collaborateurs–documents |
 
 ### Comptage des tokens (`src/lib/metrics/usage.ts`)
 
-Chaque appel à un modèle enregistre sa consommation avec `recordUsage(source, modèle, usage)` : `totalUsage` pour les agents Mastra (appels d'outils compris), `usage` pour `generateObject` du SDK `ai`. Le workflow tourne dans un seul processus : le compteur est partagé par toutes les étapes, et `usageSummary()` fournit le détail par traitement et par modèle au rapport de traitement, à l'item de configuration (`curation:data`, JSON) et à l'historique. Un appel en erreur n'est pas compté.
+Chaque appel à un modèle, dans l'un ou l'autre workflow, enregistre sa consommation avec `recordUsage(source, modèle, usage)` : `totalUsage` pour les agents Mastra (appels d'outils compris), `usage` pour `generateObject` du SDK `ai`. Le workflow tourne dans un seul processus : le compteur est partagé par toutes les étapes, et `usageSummary()` fournit le détail par traitement et par modèle au rapport de traitement, à l'item de configuration (`curation:data`, JSON) et à l'historique. Un appel en erreur n'est pas compté.
 
 ### Estimation du coût (`src/lib/metrics/impact.ts`)
 
@@ -161,7 +186,7 @@ Le résultat alimente la section « Coût du traitement » du rapport, l'item de
 
 ### Historique des exécutions (`src/workflow/runs/history.ts`)
 
-À la fin de chaque exécution, `src/runners/paper.ts` ajoute une entrée à `workflow.history.json` (répertoire de données, 500 entrées au plus ; chemin modifiable par `WORKFLOW_HISTORY_FILE`) : identifiant, dates, statut, paramètres d'entrée, appel (titre, item), collection, configuration, titre de la proposition, tokens. L'interface fusionne cet historique avec les items de configuration d'Omeka S (`GET /api/history`) et regroupe les exécutions par appel (lien, fichier ou empreinte du texte).
+À la fin de chaque exécution de l'Atelier d'articles, `src/runners/paper.ts` ajoute une entrée à `workflow.history.json` (répertoire de données, 500 entrées au plus ; chemin modifiable par `WORKFLOW_HISTORY_FILE`) : identifiant, dates, statut, paramètres d'entrée, appel (titre, item), collection, configuration, titre de la proposition, tokens. L'interface fusionne cet historique avec les items de configuration d'Omeka S (`GET /api/history`) et regroupe les exécutions par appel (lien, fichier ou empreinte du texte). exploZoteroAnno ne tient pas d'historique local : ses exécutions sont retrouvées par leurs items de configuration dans Omeka S.
 
 ## 4. Extraction des documents
 
@@ -188,7 +213,7 @@ flowchart TD
     M --> O[Item Omeka : métadonnées de la notice,<br/>texte, oa:Annotation, médias]
 ```
 
-Clé de fusion des annotations : phrase normalisée, commentaire, auteur et code (deux juges peuvent annoter la même phrase). Les codes de la grille présents dans les marqueurs sont séparés des marqueurs ordinaires (`splitCodes`).
+Clé de fusion des annotations : phrase normalisée, commentaire, auteur et code (deux juges peuvent annoter la même phrase). Quand les doublons sont fusionnés (exploZoteroAnno), seul l'exemplaire principal de chaque groupe suit ce parcours ; les annotations du lecteur, les notes, les annotations incrustées dans les PDF et les marqueurs des autres exemplaires sont ajoutés à la fusion (voir section 12). Les codes de la grille présents dans les marqueurs sont séparés des marqueurs ordinaires (`splitCodes`).
 
 ## 5. Graphe de concepts
 
@@ -258,7 +283,7 @@ erDiagram
     }
     DOCUMENT {
         classe bibo_AcademicArticle "ou BookSection, Webpage…"
-        dcterms_identifier cle "clé de la pièce jointe"
+        dcterms_identifier cle "clé de la pièce jointe (et des doublons)"
         dcterms_creator auteurs "métadonnées de la notice"
         dcterms_description texte "texte extrait"
         curation_access date "date d'extraction"
@@ -272,6 +297,7 @@ erDiagram
         curation_category position "positionnement"
         curation_type code "code de la grille"
         dcterms_creator juge "auteur de l'annotation"
+        dcterms_created date "date de l'annotation"
     }
     CONCEPT {
         classe skos_Concept
@@ -288,10 +314,11 @@ erDiagram
     CONFIGURATION {
         classe dcterms_MethodOfInstruction
         dcterms_identifier runId "exécution"
+        dcterms_title titre "Configuration academic-paper-factory ou explo-zotero-anno"
         dcterms_description json "configuration"
         curation_status statut "running, success, failed"
-        curation_data tokens "consommation (JSON)"
-        medias documents "relecture, graphe, rapport, désaccords"
+        curation_data tokens "consommation et coût (JSON)"
+        medias documents "Atelier : relecture, graphe, rapport, désaccords ; explo : guide, rapport, thèmes, réseau, JSON"
     }
     DOCUMENT }o--|{ COLLECTION : "dcterms:isPartOf"
     ANNOTATION }o--|| DOCUMENT : "oa:hasTarget"
@@ -302,11 +329,21 @@ erDiagram
     CONFIGURATION }o--|| COLLECTION : "dcterms:isPartOf"
 ```
 
-Les termes utilisés sont paramétrables dans `config.omeka` (`accessTerm`, `subjectTerm`, `relationTerm`, `codeTerm`, `authorTerm`, `conceptClass`, `configClass`, `cfpClass`).
+Les deux workflows écrivent dans ce même modèle : documents, annotations, concepts et collections sont partagés ; l'appel n'existe que pour l'Atelier ; chaque exécution, de l'une ou l'autre application, crée un item de configuration (identifiant de workflow `academic-paper-factory` ou `explo-zotero-anno`). exploZoteroAnno lit les termes Omeka de la configuration de l'Atelier (`workflowConfig.omeka`). Les termes utilisés sont paramétrables dans `config.omeka` (`accessTerm`, `subjectTerm`, `relationTerm`, `codeTerm`, `authorTerm`, `conceptClass`, `configClass`, `cfpClass`).
 
 ## 9. Configuration
 
-La configuration par défaut est dans `src/config/index.ts` (`defaultWorkflowConfig`). Les modifications faites dans l'interface sont enregistrées dans `workflow.config.json` (seules les différences) et fusionnées au chargement (`configStore.ts`). Les chemins `kappa.codes`, `annotationPositions`, `omeka.vocabs` et `steps` sont remplacés en bloc, les autres objets sont fusionnés clé par clé. Le fichier est désigné par `WORKFLOW_CONFIG_FILE` s'il est défini.
+Chaque application a sa configuration par défaut et son fichier de surcharges :
+
+| | Atelier d'articles | exploZoteroAnno |
+|---|---|---|
+| Défauts | `src/config/index.ts` (`defaultWorkflowConfig`) | `src/config/explo.ts` (`defaultExploConfig`) |
+| Surcharges | `workflow.config.json` (`WORKFLOW_CONFIG_FILE`) | `explo.config.json` (`EXPLO_CONFIG_FILE`) |
+| Configuration effective | `workflowConfig` | `exploConfig` |
+
+Les modifications faites dans l'interface sont enregistrées dans le fichier de surcharges (seules les différences, `writeConfigOverride`) et fusionnées au chargement (`mergeConfig` et `readConfigOverride` de `src/config/store.ts`). Les chemins `kappa.codes`, `annotationPositions`, `omeka.vocabs`, `steps` et `costs.models` sont remplacés en bloc, les autres objets sont fusionnés clé par clé.
+
+**Atelier d'articles** (`defaultWorkflowConfig`) :
 
 | Clé | Rôle |
 |---|---|
@@ -324,32 +361,64 @@ La configuration par défaut est dans `src/config/index.ts` (`defaultWorkflowCon
 | `costs.*` | estimation du coût : devise, prix de l'électricité, intensité carbone, matériel (rendement, utilisation, PUE), paramètres actifs et tarifs de référence par modèle |
 | `omeka.*` | vocabulaires, classes et propriétés |
 
+**exploZoteroAnno** (`defaultExploConfig`) ; les modèles, l'extraction, les coûts et les termes Omeka sont repris de la configuration de l'Atelier :
+
+| Clé | Rôle |
+|---|---|
+| `workflowId` | identifiant du workflow (`explo-zotero-anno`), titre de l'item de configuration |
+| `input.zoteroCollection` | clé de la collection Zotero (par défaut celle de l'Atelier) |
+| `grid.title`, `grid.introduction` | titre et introduction du guide d'annotation |
+| `grid.positions`, `grid.tolerance` | grille de couleurs (couleur, nom, signification, consigne) et distance RVB maximale de rattachement |
+| `analysis.unitSimilarity` | taux de recouvrement des mots (Jaccard) pour que deux surlignages portent sur le même passage |
+| `analysis.unassignedLabel` | nom des annotations sans auteur |
+| `analysis.mergeDuplicates` | fusion des documents en double (`true` par défaut) |
+| `analysis.minPassagesForKappa` | nombre minimum de passages communs pour calculer un kappa |
+| `themes.count`, `themes.maxPassages` | nombre de thèmes, passages transmis à l'agent |
+| `outputDir` | dossier des fichiers produits (`resultats/explo`) |
+
 ## 10. API de l'interface
+
+Routes communes aux deux serveurs (chacune s'applique à l'application du serveur) :
 
 | Méthode et route | Rôle |
 |---|---|
-| `GET /` | page de l'interface |
-| `GET /api/settings` | variables `.env` (secrets masqués), configuration effective et par défaut |
-| `POST /api/settings` | enregistre `.env` (un secret vide est conservé) et `workflow.config.json` |
-| `POST /api/check` | teste Albert, Zotero et Omeka S (vocabulaires) |
-| `GET /api/zotero/collections` | collections de la bibliothèque |
+| `GET /` | page de l'application (`paper.html` ou `explo.html`) |
+| `GET /api/settings` | connexions (secrets masqués, valeurs héritées signalées pour exploZoteroAnno), configuration effective et par défaut |
+| `POST /api/settings` | enregistre les connexions (`.env` ou `.env.explo` ; un secret vide est conservé) et la configuration |
+| `POST /api/check` | teste Albert, Zotero et Omeka S (vocabulaires, clé d'écriture par un `PATCH` sur un item inexistant : 404 = valide, 403 = refusée) |
+| `GET /api/zotero/collections` | collections de la bibliothèque enregistrée |
+| `POST /api/zotero/collections` | collections de la bibliothèque saisie dans le formulaire (`{ userId, groupId, apiKey }`, non encore enregistrée) |
+| `GET /api/apps` | adresses des deux applications (liens entre elles) |
 | `GET /api/albert/models` | modèles disponibles |
-| `POST /api/cfp-file?name=` | importe le fichier de l'appel dans `aap/` |
 | `POST /api/run`, `POST /api/run/stop`, `GET /api/run` | lancer, arrêter, état |
 | `GET /api/run/events` | journal et statut en Server-Sent Events |
-| `GET /api/results`, `GET /api/file?name=` | liste et contenu des résultats (liste blanche) |
-| `GET /api/history` | appels traités : historique local et configurations Omeka S, regroupés par appel |
 | `GET /docs/…` | documentation HTML |
 
-Le serveur écoute sur `127.0.0.1` (variable `HOST` pour le conteneur) et le port `PORT` (7272).
+Routes propres à l'Atelier d'articles :
+
+| Méthode et route | Rôle |
+|---|---|
+| `POST /api/cfp-file?name=` | importe le fichier de l'appel dans `aap/` |
+| `GET /api/results`, `GET /api/file?name=` | liste et contenu des résultats (liste blanche) |
+| `GET /api/history` | appels traités : historique local et configurations Omeka S, regroupés par appel |
+
+Routes propres à exploZoteroAnno : `GET` et `POST /api/explo/settings`, `POST /api/explo/guide` (guide d'annotation à partir de la grille), `GET /api/explo/results`, `GET /api/explo/file?name=`.
+
+Une route de l'autre application répond 404. Chaque serveur écoute sur `127.0.0.1` (`HOST`, ou `EXPLO_HOST` pour exploZoteroAnno ; `0.0.0.0` dans le conteneur) et sur son port : `PORT` (7272) ou `EXPLO_PORT` (7273). Un seul traitement à la fois par serveur (`POST /api/run` répond 409 si un traitement est en cours).
 
 ## 11. Étendre le projet
 
 **Ajouter un outil** : créer `src/tools/monOutil.ts` sur le modèle des outils existants (`new Tool({ name, description, schema, execute: async ({ data }) => … })`, schéma zod typé avec `z.infer`), puis l'exporter dans `src/tools/index.ts`.
 
-**Ajouter une étape** : créer `src/workflow/steps/paper/monEtape.ts` (ou `explo/`, `common/`) avec `createStep({ id, execute })`, l'insérer dans `paperProductionWorkflow.ts`, ajouter son identifiant à `config.steps` et son libellé dans `processingReport.ts`.
+**Ajouter une étape à l'Atelier** : créer `src/workflow/steps/paper/monEtape.ts` (ou `common/` si elle est partagée) avec `createStep({ id, execute })`, l'insérer dans `paperProductionWorkflow.ts`, ajouter son identifiant à `config.steps` et son libellé dans `STEP_LABELS` (`src/workflow/reports/paperReport.ts`).
 
-**Ajouter un paramètre** : l'ajouter à `defaultWorkflowConfig` ; il apparaît automatiquement dans l'interface (ajouter un libellé dans `LABELS`, et la section dans `SECTIONS`, de `paper.html`).
+**Ajouter une étape à exploZoteroAnno** : créer `src/workflow/steps/explo/monEtape.ts`, l'insérer dans `exploWorkflow.ts`, lire sa sortie dans `src/runners/explo.ts` (fichiers, documents importés dans Omeka) et l'ajouter au rapport (`src/workflow/reports/exploReport.ts`).
+
+**Ajouter un paramètre à l'Atelier** : l'ajouter à `defaultWorkflowConfig` ; il apparaît automatiquement dans l'interface (ajouter un libellé dans `LABELS`, et la section dans `SECTIONS`, de `paper.html`).
+
+**Ajouter un paramètre à exploZoteroAnno** : l'ajouter à `defaultExploConfig`, puis le champ dans l'onglet Grille d'`explo.html` (affichage dans le rendu des réglages, mise à jour de `config` par `bind` ou un gestionnaire `onchange`).
+
+**Ajouter une application** : déclarer une entrée dans `APPS` (`src/ui/server.ts` : lanceur, page, fichiers de connexions, variables de port et d'adresse), créer son lanceur dans `src/runners/`, sa page dans `src/ui/public/`, et un service dans `docker-compose.yml`.
 
 ## 12. Workflow exploZoteroAnno
 
@@ -403,8 +472,9 @@ Chaque serveur a son propre traitement en cours (les deux applications peuvent t
 - `npm run docs` convertit `docs/*.md` en `docs/html/*.html` (script `scripts/build-docs.ts`, bibliothèque **marked** ; les diagrammes **Mermaid** sont rendus dans le navigateur).
 - `Dockerfile` : image `node:22-bookworm-slim`, code dans `/app`, données dans le volume `/data`, commandes `workflow-ui` (serveur de l'application `WORKFLOW_APP`), `workflow` et `workflow-explo` (lignes de commande).
 - `docker-compose.yml` : deux services à partir de la même image, `workflow` (Atelier, 7272) et `explo` (exploZoteroAnno, 7273), publiés sur `127.0.0.1` et partageant `./data`.
-- `docker/entrypoint.sh` : le conteneur démarre en root, rétablit si besoin la propriété de `/data` pour l'utilisateur `node` (uid 1000), puis exécute la commande sous `node` avec `setpriv`. Les commandes `workflow` et `workflow-ui` lancées par `docker compose exec` (en root) passent aussi par ce point d'entrée.
-- `docker-compose.yml` : port publié sur `127.0.0.1:7272`, volume `./data:/data`, `host.docker.internal` pour un Omeka S local.
+- `docker/entrypoint.sh` : le conteneur démarre en root, rétablit si besoin la propriété de `/data` pour l'utilisateur `node` (uid 1000), puis exécute la commande sous `node` avec `setpriv`. Les commandes `workflow`, `workflow-explo` et `workflow-ui` lancées par `docker compose exec` (en root) passent aussi par ce point d'entrée.
+- `docker-compose.yml` (suite) : volume `./data:/data` commun, `host.docker.internal` pour un Omeka S local ; le contrôle de santé interroge le port de l'application du conteneur (`WORKFLOW_APP`).
+- `.vscode/launch.json` : débogage des deux workflows sans interface, des deux serveurs sur 7282 et 7283 (avec suivi du workflow lancé en processus enfant) et du fichier courant.
 
 ## 14. Limites connues
 
@@ -412,3 +482,5 @@ Chaque serveur a son propre traitement en cours (les deux applications peuvent t
 - La reconstruction des passages surlignés d'un PDF est une approximation proportionnelle à la largeur des blocs de texte.
 - Les sites protégés contre les robots ne peuvent pas être téléchargés : utiliser un fichier local.
 - Le contexte des modèles limite la taille des textes transmis (appel très long, plan très détaillé).
+- exploZoteroAnno : le repli « même titre et même année » peut fusionner deux documents distincts au titre identique (comptes rendus, éditions successives) ; la fusion se désactive par `analysis.mergeDuplicates`. Un doublon déjà enregistré dans Omeka S par une exécution antérieure n'est pas supprimé (avertissement dans le journal).
+- exploZoteroAnno : les annotations sans auteur (bibliothèque personnelle, PDF annotés hors Zotero) ne peuvent pas être attribuées et sont regroupées sous `analysis.unassignedLabel`.

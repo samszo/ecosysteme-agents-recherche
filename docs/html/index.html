@@ -46,7 +46,26 @@
 <div class="layout">
 <main>
 <h1 id="documentation"><a class="anchor" href="#documentation">#</a>Documentation</h1>
-<p>Écosystème d&#39;agents IA pour la production d&#39;articles scientifiques : à partir d&#39;une <strong>collection Zotero</strong> annotée et d&#39;un <strong>appel à propositions</strong>, le workflow analyse les attendus de l&#39;appel, construit un graphe de concepts, mesure l&#39;accord entre annotateurs et rédige une <strong>proposition d&#39;article</strong>, le tout archivé dans <strong>Omeka S</strong>.</p>
+<p>Écosystème d&#39;agents IA pour la recherche (Laboratoire Paragraphe, Université Paris 8). Deux applications, chacune avec son workflow et son serveur, partagent les mêmes sources (<strong>Zotero</strong>), les mêmes modèles (<strong>API Albert</strong>) et la même archive (<strong>Omeka S</strong>) :</p>
+<table>
+<thead>
+<tr>
+<th>Application</th>
+<th>Adresse</th>
+<th>Rôle</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Atelier d&#39;articles</strong></td>
+<td><a href="http://127.0.0.1:7272" target="_blank" rel="noopener">http://127.0.0.1:7272</a></td>
+<td>à partir d&#39;une collection annotée et d&#39;un <strong>appel à propositions</strong> : attendus de l&#39;appel, graphe de concepts, accord entre annotateurs, <strong>proposition d&#39;article</strong></td>
+</tr>
+<tr>
+<td><strong>exploZoteroAnno</strong></td>
+<td><a href="http://127.0.0.1:7273" target="_blank" rel="noopener">http://127.0.0.1:7273</a></td>
+<td><strong>annotation collective</strong> d&#39;une collection : grille de couleurs et guide, participation, collaborations, thèmes de discussion</td>
+</tr>
+</tbody></table>
 <table>
 <thead>
 <tr>
@@ -58,28 +77,28 @@
 <tbody><tr>
 <td><a href="installation.html">Installation</a></td>
 <td>administrateur</td>
-<td>prérequis, installation locale et Docker, préparation d&#39;Omeka S et de Zotero, dépannage</td>
+<td>prérequis, installation locale, débogage et Docker (deux serveurs), préparation d&#39;Omeka S et de Zotero, dépannage</td>
 </tr>
 <tr>
 <td><a href="utilisateur.html">Utilisateur</a></td>
-<td>chercheur, annotateur</td>
-<td>préparer le corpus, utiliser l&#39;interface, lire les résultats</td>
+<td>chercheur, annotateur, animateur de groupe</td>
+<td>préparer le corpus, utiliser l&#39;Atelier d&#39;articles et exploZoteroAnno, lire les résultats</td>
 </tr>
 <tr>
 <td><a href="technique.html">Technique</a></td>
 <td>développeur</td>
-<td>architecture, workflow, modules, modèle de données, configuration, API</td>
+<td>architecture, les deux workflows, modules, modèle de données, configuration, API</td>
 </tr>
 </tbody></table>
 <pre class="mermaid">flowchart LR
-    Z[(Zotero&lt;br/&gt;collection annotée)] --&gt; W{{Workflow d'agents}}
-    AAP[Appel à propositions] --&gt; W
-    W --&gt; A[AttenduAPP&lt;br/&gt;attendus de l'appel]
-    W --&gt; P[PropAPP&lt;br/&gt;proposition d'article]
-    W --&gt; G[Graphe de concepts]
-    W --&gt; K[Accord inter-juges]
-    A &amp; P &amp; G &amp; K --&gt; O[(Omeka S)]</pre>
-<p>La version HTML de cette documentation est générée par <code>npm run docs</code> dans <code>docs/html/</code> ; elle est aussi servie par l&#39;interface sur <a href="http://127.0.0.1:7272/docs/" target="_blank" rel="noopener">http://127.0.0.1:7272/docs/</a>.</p>
+    Z[(Zotero&lt;br/&gt;collection annotée)] --&gt; W1{{Atelier d'articles}}
+    AAP[Appel à propositions] --&gt; W1
+    Z --&gt; W2{{exploZoteroAnno}}
+    GR[Grille de couleurs] --&gt; W2
+    W1 --&gt; R1[AttenduAPP, PropAPP,&lt;br/&gt;graphe de concepts, kappa]
+    W2 --&gt; R2[Participation, collaborations,&lt;br/&gt;thèmes de discussion]
+    R1 &amp; R2 --&gt; O[(Omeka S)]</pre>
+<p>La version HTML de cette documentation est générée par <code>npm run docs</code> dans <code>docs/html/</code> ; elle est aussi servie par chacun des deux serveurs sur <code>/docs/</code> (<a href="http://127.0.0.1:7272/docs/" target="_blank" rel="noopener">http://127.0.0.1:7272/docs/</a>, <a href="http://127.0.0.1:7273/docs/" target="_blank" rel="noopener">http://127.0.0.1:7273/docs/</a>).</p>
 
 </main>
 

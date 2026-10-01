@@ -46,7 +46,7 @@
 <div class="layout">
 <main>
 <h1 id="documentation-d-39-installation"><a class="anchor" href="#documentation-d-39-installation">#</a>Documentation d&#39;installation</h1>
-<p>Ce guide explique comment installer l&#39;écosystème d&#39;agents de production d&#39;articles scientifiques, soit <strong>en local avec Node.js</strong>, soit <strong>dans un conteneur Docker</strong>, puis comment préparer les trois services dont il dépend : l&#39;API <strong>Albert</strong>, <strong>Zotero</strong> et <strong>Omeka S</strong>. Pour débuter rapidement, une <strong>instance Omeka S préparée</strong> (application et base de données) est fournie, et la section 8 décrit l&#39;installation complète sur un <strong>serveur Debian / Apache / Let&#39;s Encrypt</strong>.</p>
+<p>Ce guide explique comment installer l&#39;écosystème d&#39;agents et ses deux applications, l&#39;<strong>Atelier d&#39;articles</strong> (réponse à un appel à propositions, port 7272) et <strong>exploZoteroAnno</strong> (annotation collective, port 7273), soit <strong>en local avec Node.js</strong>, soit <strong>dans un conteneur Docker</strong>, puis comment préparer les trois services dont il dépend : l&#39;API <strong>Albert</strong>, <strong>Zotero</strong> et <strong>Omeka S</strong>. Pour débuter rapidement, une <strong>instance Omeka S préparée</strong> (application et base de données) est fournie, et la section 8 décrit l&#39;installation complète sur un <strong>serveur Debian / Apache / Let&#39;s Encrypt</strong>.</p>
 <pre class="mermaid">flowchart TD
     A([Début]) --&gt; B{Docker disponible ?}
     B -- oui --&gt; C[Installation Docker&lt;br/&gt;docker compose up -d]
@@ -60,7 +60,7 @@
     P --&gt; S[Sécuriser : nouveau compte,&lt;br/&gt;nouvelle clé, compte de démo supprimé]
     S --&gt; H
     G --&gt; H[Préparer Zotero&lt;br/&gt;clé API, bibliothèque de groupe]
-    H --&gt; I[Ouvrir l'interface&lt;br/&gt;http://127.0.0.1:7272]
+    H --&gt; I[Ouvrir les interfaces&lt;br/&gt;Atelier 127.0.0.1:7272&lt;br/&gt;exploZoteroAnno 127.0.0.1:7273]
     I --&gt; J[Tester les connexions]
     J -- toutes vertes --&gt; K([Prêt : lancer un traitement])
     J -- erreur --&gt; L[Voir la section Dépannage]
@@ -91,7 +91,7 @@
 </tr>
 <tr>
 <td>Zotero</td>
-<td>un compte, une clé d&#39;API en lecture, idéalement une <strong>bibliothèque de groupe</strong> pour les annotations de plusieurs juges</td>
+<td>un compte, une clé d&#39;API en lecture, idéalement une <strong>bibliothèque de groupe</strong> pour les annotations de plusieurs juges (indispensable pour exploZoteroAnno : c&#39;est elle qui conserve l&#39;auteur de chaque annotation)</td>
 </tr>
 <tr>
 <td>Omeka S</td>
@@ -103,7 +103,7 @@
 </tr>
 </tbody></table>
 <h2 id="2-variables-d-39-environnement-env"><a class="anchor" href="#2-variables-d-39-environnement-env">#</a>2. Variables d&#39;environnement (<code>.env</code>)</h2>
-<p>Le fichier <code>.env</code> contient les accès aux services. Un modèle est fourni dans <code>.env.example</code>. Toutes ces valeurs sont aussi modifiables depuis l&#39;onglet <strong>Paramètres</strong> de l&#39;interface.</p>
+<p>Le fichier <code>.env</code> contient les accès aux services. Un modèle est fourni dans <code>.env.example</code>. Toutes ces valeurs sont aussi modifiables depuis l&#39;onglet <strong>Paramètres</strong> de l&#39;Atelier d&#39;articles, ou la section <strong>Grille › Connexions</strong> d&#39;exploZoteroAnno.</p>
 <table>
 <thead>
 <tr>
@@ -167,6 +167,26 @@
 <td>non</td>
 <td>Adresses publiques des deux applications, pour les liens entre elles (derrière un proxy)</td>
 </tr>
+<tr>
+<td><code>WORKFLOW_APP</code></td>
+<td>non</td>
+<td>Application servie par <code>src/ui/server.ts</code> sans argument : <code>paper</code> (défaut) ou <code>explo</code> (utilisé par Docker)</td>
+</tr>
+<tr>
+<td><code>EXPLO_ENV_FILE</code></td>
+<td>non</td>
+<td>Fichier de connexions propre à exploZoteroAnno (<code>.env.explo</code> par défaut)</td>
+</tr>
+<tr>
+<td><code>WORKFLOW_CONFIG_FILE</code>, <code>EXPLO_CONFIG_FILE</code></td>
+<td>non</td>
+<td>Fichiers de configuration de chaque application (<code>workflow.config.json</code>, <code>explo.config.json</code>)</td>
+</tr>
+<tr>
+<td><code>WORKFLOW_HISTORY_FILE</code></td>
+<td>non</td>
+<td>Historique des exécutions de l&#39;Atelier (<code>workflow.history.json</code>)</td>
+</tr>
 </tbody></table>
 <p>Chaque application a <strong>son propre serveur</strong>, avec son port, sa configuration et son traitement en cours : les deux peuvent traiter en même temps. exploZoteroAnno lit <code>.env</code>, <strong>surchargé par <code>.env.explo</code></strong> (nom modifiable par <code>EXPLO_ENV_FILE</code>) : on peut ainsi lui donner d&#39;autres connexions (par exemple une autre bibliothèque de groupe Zotero ou une autre instance Omeka S). Son onglet <em>Grille › Connexions</em> n&#39;écrit dans <code>.env.explo</code> que les valeurs qui diffèrent de <code>.env</code> ; les autres restent « héritées ».</p>
 <blockquote>
@@ -197,7 +217,7 @@ npm run ui:explo        # exploZoteroAnno (autre terminal) : http://127.0.0.1:72
 </tr>
 <tr>
 <td><code>npm start</code></td>
-<td>Lance le workflow en ligne de commande avec la configuration enregistrée</td>
+<td>Lance le workflow de l&#39;Atelier d&#39;articles en ligne de commande avec la configuration enregistrée</td>
 </tr>
 <tr>
 <td><code>npm run explo</code></td>
@@ -208,36 +228,130 @@ npm run ui:explo        # exploZoteroAnno (autre terminal) : http://127.0.0.1:72
 <td>Régénère la documentation HTML (<code>docs/html/</code>) à partir des fichiers markdown</td>
 </tr>
 </tbody></table>
-<p>Les fichiers produits sont écrits dans <code>resultats/atelier/</code> (AttenduAPP, PropAPP, rapport, relecture, graphe, désaccords) et <code>resultats/explo/</code> (exploZoteroAnno) : à la racine du projet en local, dans <code>data/resultats/</code> avec Docker.</p>
+<p>Les fichiers produits sont écrits dans <code>resultats/atelier/</code> (AttenduAPP, PropAPP, rapport, relecture, graphe, désaccords) et <code>resultats/explo/</code> (guide d&#39;annotation, participation, collaborations, réseau, thèmes, rapport) : à la racine du projet en local, dans <code>data/resultats/</code> avec Docker.</p>
+<p>Fichiers de données de chaque application (répertoire courant en local, <code>data/</code> avec Docker) :</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Atelier d&#39;articles</th>
+<th>exploZoteroAnno</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Connexions</td>
+<td><code>.env</code></td>
+<td><code>.env</code>, surchargé par <code>.env.explo</code></td>
+</tr>
+<tr>
+<td>Configuration</td>
+<td><code>workflow.config.json</code></td>
+<td><code>explo.config.json</code></td>
+</tr>
+<tr>
+<td>Historique</td>
+<td><code>workflow.history.json</code></td>
+<td>configurations dans Omeka S</td>
+</tr>
+<tr>
+<td>Résultats</td>
+<td><code>resultats/atelier/</code></td>
+<td><code>resultats/explo/</code></td>
+</tr>
+<tr>
+<td>Appels importés</td>
+<td><code>aap/</code></td>
+<td>—</td>
+</tr>
+</tbody></table>
+<h3 id="deboguer-avec-visual-studio-code"><a class="anchor" href="#deboguer-avec-visual-studio-code">#</a>Déboguer avec Visual Studio Code</h3>
+<p>Le fichier <code>.vscode/launch.json</code> fournit des configurations de débogage (<em>Exécuter et déboguer</em>), avec points d&#39;arrêt directement dans les fichiers <code>.ts</code> (exécution par tsx) :</p>
+<table>
+<thead>
+<tr>
+<th>Configuration</th>
+<th>Usage</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><em>Workflow : Atelier d&#39;articles</em></td>
+<td>workflow de l&#39;Atelier sans interface (comme <code>npm start</code>)</td>
+</tr>
+<tr>
+<td><em>Workflow : exploZoteroAnno</em></td>
+<td>workflow exploZoteroAnno sans interface (comme <code>npm run explo</code>)</td>
+</tr>
+<tr>
+<td><em>Interface : Atelier d&#39;articles (7282)</em></td>
+<td>serveur de l&#39;Atelier <strong>et</strong> workflow lancé depuis l&#39;interface (processus enfant suivi par <code>autoAttachChildProcesses</code>)</td>
+</tr>
+<tr>
+<td><em>Interface : exploZoteroAnno (7283)</em></td>
+<td>idem pour exploZoteroAnno</td>
+</tr>
+<tr>
+<td><em>Interfaces : Atelier + exploZoteroAnno</em></td>
+<td>les deux serveurs en même temps, liens entre eux fonctionnels</td>
+</tr>
+<tr>
+<td><em>Fichier courant (tsx)</em></td>
+<td>le fichier <code>.ts</code> ouvert dans l&#39;éditeur</td>
+</tr>
+</tbody></table>
+<p>Les interfaces de débogage écoutent sur 7282 et 7283 pour ne pas entrer en conflit avec les conteneurs Docker (7272, 7273). Ces lancements utilisent les mêmes fichiers de données que <code>npm run ui</code> : un traitement lancé en débogage écrit réellement dans Omeka S et consomme des tokens Albert.</p>
 <h2 id="4-installation-docker"><a class="anchor" href="#4-installation-docker">#</a>4. Installation Docker</h2>
-<p>L&#39;image contient le code dans <code>/app</code> ; les <strong>données</strong> (<code>.env</code>, <code>workflow.config.json</code>, résultats, fichiers d&#39;appels importés) sont dans le volume <code>/data</code>, monté depuis le dossier <code>data/</code> du projet.</p>
+<p>L&#39;image contient le code dans <code>/app</code> ; les <strong>données</strong> (<code>.env</code>, <code>.env.explo</code>, <code>workflow.config.json</code>, <code>explo.config.json</code>, historique, résultats, fichiers d&#39;appels importés) sont dans le volume <code>/data</code>, monté depuis le dossier <code>data/</code> du projet. <code>docker-compose.yml</code> démarre <strong>deux services</strong> à partir de la même image, un par application (variable <code>WORKFLOW_APP</code>) :</p>
+<table>
+<thead>
+<tr>
+<th>Service</th>
+<th>Conteneur</th>
+<th>Application</th>
+<th>Adresse</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>workflow</code></td>
+<td><code>ecosysteme-agents-recherche</code></td>
+<td>Atelier d&#39;articles (<code>WORKFLOW_APP=paper</code>)</td>
+<td><a href="http://127.0.0.1:7272" target="_blank" rel="noopener">http://127.0.0.1:7272</a></td>
+</tr>
+<tr>
+<td><code>explo</code></td>
+<td><code>ecosysteme-agents-recherche-explo</code></td>
+<td>exploZoteroAnno (<code>WORKFLOW_APP=explo</code>)</td>
+<td><a href="http://127.0.0.1:7273" target="_blank" rel="noopener">http://127.0.0.1:7273</a></td>
+</tr>
+</tbody></table>
 <pre class="mermaid">flowchart LR
     subgraph Hôte
-        B[Navigateur&lt;br/&gt;127.0.0.1:7272]
-        D[(dossier data/&lt;br/&gt;.env, workflow.config.json,&lt;br/&gt;PropAPP.md, rapport…)]
+        B[Navigateur&lt;br/&gt;127.0.0.1:7272 et :7273]
+        D[(dossier data/&lt;br/&gt;.env, .env.explo,&lt;br/&gt;configurations, resultats/)]
         O[Omeka S local&lt;br/&gt;optionnel]
     end
-    subgraph Conteneur[&quot;Conteneur ecosysteme-agents-recherche&quot;]
-        UI[Interface&lt;br/&gt;workflow-ui]
-        WF[Workflow&lt;br/&gt;processus enfant]
-        APP[/app : code&lt;br/&gt;et node_modules/]
+    subgraph C1[&quot;Service workflow (7272)&quot;]
+        UI1[Interface Atelier&lt;br/&gt;workflow-ui] --&gt; WF1[runners/paper.ts&lt;br/&gt;processus enfant]
     end
-    B -- port publié sur 127.0.0.1 --&gt; UI
-    UI --&gt; WF
-    D &lt;-- volume /data --&gt; UI
-    D &lt;-- volume /data --&gt; WF
-    WF -- host.docker.internal --&gt; O
-    WF --&gt; Albert[(API Albert)]
-    WF --&gt; Zotero[(API Zotero)]</pre>
+    subgraph C2[&quot;Service explo (7273)&quot;]
+        UI2[Interface exploZoteroAnno&lt;br/&gt;workflow-ui] --&gt; WF2[runners/explo.ts&lt;br/&gt;processus enfant]
+    end
+    B -- ports publiés sur 127.0.0.1 --&gt; UI1
+    B --&gt; UI2
+    D &lt;-- volume /data --&gt; C1
+    D &lt;-- volume /data --&gt; C2
+    WF1 &amp; WF2 -- host.docker.internal --&gt; O
+    WF1 &amp; WF2 --&gt; EXT[(API Albert,&lt;br/&gt;API Zotero)]</pre>
 <pre><code class="language-bash">mkdir -p data
 cp .env.example data/.env      # puis renseigner les valeurs
-docker compose up -d --build   # construit l'image et démarre l'interface
+docker compose up -d --build   # construit l'image et démarre les deux interfaces
 docker compose logs -f         # suivre le démarrage</code></pre>
-<p>L&#39;interface est disponible sur <a href="http://127.0.0.1:7272" target="_blank" rel="noopener">http://127.0.0.1:7272</a> (le port n&#39;est publié que sur la machine hôte).</p>
+<p>L&#39;Atelier d&#39;articles est disponible sur <a href="http://127.0.0.1:7272" target="_blank" rel="noopener">http://127.0.0.1:7272</a> et exploZoteroAnno sur <a href="http://127.0.0.1:7273" target="_blank" rel="noopener">http://127.0.0.1:7273</a> (les ports ne sont publiés que sur la machine hôte). Pour ne démarrer qu&#39;une application : <code>docker compose up -d workflow</code> ou <code>docker compose up -d explo</code>.</p>
 <p>Le conteneur démarre en root le temps de vérifier le volume : si le dossier <code>data/</code> ou ses fichiers n&#39;appartiennent pas à l&#39;utilisateur <code>node</code> du conteneur (uid 1000), c&#39;est le cas quand ils ont été créés par root sur un serveur Linux, leur propriétaire est rétabli (<code>🔧 Droits du volume /data attribués à l&#39;utilisateur node</code> dans le journal). L&#39;interface et le workflow s&#39;exécutent ensuite sans les droits root. Sur l&#39;hôte, <code>data/</code> appartient donc à l&#39;uid 1000 : l&#39;éditer avec <code>sudo</code> ou avec l&#39;utilisateur d&#39;uid 1000.</p>
 <p>Autres commandes utiles :</p>
-<pre><code class="language-bash">docker compose exec workflow workflow        # lancer le workflow en ligne de commande dans le conteneur
-docker compose restart workflow              # redémarrer après une modification du .env
+<pre><code class="language-bash">docker compose exec workflow workflow        # workflow de l'Atelier en ligne de commande dans le conteneur
+docker compose exec explo workflow-explo     # workflow exploZoteroAnno en ligne de commande
+docker compose restart                       # redémarrer les deux services (après une modification du .env)
+docker compose restart explo                 # redémarrer un seul service
 docker compose down                          # arrêter
 docker compose build --no-cache              # reconstruire après une mise à jour du code</code></pre>
 <p><strong>Omeka S installé sur la machine hôte</strong> : dans le conteneur, <code>localhost</code> désigne le conteneur lui-même. Le même <code>.env</code> peut pourtant servir en local et dans Docker : dans le conteneur (<code>RUNNING_IN_DOCKER=1</code>), une URL <code>http://localhost/…</code> ou <code>http://127.0.0.1/…</code> est automatiquement redirigée vers <code>host.docker.internal</code> (déclaré dans <code>docker-compose.yml</code>) pour les requêtes, tandis que les liens affichés (rapport, graphe) gardent l&#39;URL d&#39;origine, ouvrable depuis le navigateur de l&#39;hôte.</p>
@@ -387,21 +501,34 @@ host     = &quot;localhost&quot;</code></pre>
 <tr>
 <td><code>html</code></td>
 <td><code>text/html</code></td>
-<td>graphe sigma.js, pages web enregistrées</td>
+<td>graphe sigma.js, réseau des collaborations, pages web enregistrées</td>
+</tr>
+<tr>
+<td><code>json</code></td>
+<td><code>application/json</code>, <code>text/plain</code></td>
+<td>exploZoteroAnno : données de participation et de collaborations</td>
 </tr>
 </tbody></table>
-<p>Un type refusé n&#39;interrompt pas le traitement. Si seule l&#39;<strong>extension</strong> est refusée (cas fréquent de <code>csv</code>, <code>bib</code> ou <code>md</code>), le fichier est déposé une seconde fois avec l&#39;extension <code>.txt</code>, son format d&#39;origine étant noté dans <code>dcterms:format</code>. Si le <strong>type de contenu</strong> est refusé aussi, un avertissement indique quoi autoriser et le fichier reste disponible localement. Le graphe au format JSON (<code>visualisation_graphe.json</code>) n&#39;est pas déposé : ses données sont incluses dans <code>visualisation_graphe.html</code>.</p>
+<p>Un type refusé n&#39;interrompt pas le traitement. Si seule l&#39;<strong>extension</strong> est refusée (cas fréquent de <code>csv</code>, <code>bib</code> ou <code>md</code>), le fichier est déposé une seconde fois avec l&#39;extension <code>.txt</code>, son format d&#39;origine étant noté dans <code>dcterms:format</code>. Si le <strong>type de contenu</strong> est refusé aussi, un avertissement indique quoi autoriser et le fichier reste disponible localement. Le graphe de l&#39;Atelier au format JSON (<code>visualisation_graphe.json</code>) n&#39;est pas déposé : ses données sont incluses dans <code>visualisation_graphe.html</code>.</p>
 <h2 id="6-preparer-zotero"><a class="anchor" href="#6-preparer-zotero">#</a>6. Préparer Zotero</h2>
 <ol>
 <li>Créer une clé sur <a href="https://www.zotero.org/settings/keys" target="_blank" rel="noopener">https://www.zotero.org/settings/keys</a> avec l&#39;accès en lecture à la bibliothèque (et au groupe).</li>
 <li>Pour mesurer l&#39;accord inter-juges, utiliser une <strong>bibliothèque de groupe</strong> : chaque annotation y garde son auteur. Renseigner alors <code>ZOTERO_GROUP_ID</code>.</li>
-<li>Choisir la collection à traiter dans l&#39;interface (la liste est chargée depuis Zotero).</li>
+<li>Choisir la collection à traiter dans l&#39;interface : la liste est chargée depuis Zotero, et dans exploZoteroAnno elle suit l&#39;identifiant de groupe saisi dans <em>Grille › Connexions</em>, avant même son enregistrement.</li>
+<li>Pour <strong>exploZoteroAnno</strong>, chaque collaborateur doit être membre du groupe et annoter dans le lecteur de Zotero (les annotations y gardent leur auteur et leur date). Le guide d&#39;annotation produit par l&#39;application explique la marche à suivre.</li>
 </ol>
 <h2 id="7-verifier-l-39-installation"><a class="anchor" href="#7-verifier-l-39-installation">#</a>7. Vérifier l&#39;installation</h2>
+<p><strong>Atelier d&#39;articles</strong></p>
 <ol>
 <li>Ouvrir <a href="http://127.0.0.1:7272" target="_blank" rel="noopener">http://127.0.0.1:7272</a>.</li>
 <li>Onglet <strong>Paramètres › Tester les connexions</strong> : Albert, Zotero et Omeka S doivent apparaître en vert.</li>
 <li>Choisir la collection Zotero et l&#39;appel à propositions, puis <strong>Enregistrer et lancer</strong>.</li>
+</ol>
+<p><strong>exploZoteroAnno</strong></p>
+<ol>
+<li>Ouvrir <a href="http://127.0.0.1:7273" target="_blank" rel="noopener">http://127.0.0.1:7273</a> (ou le lien dans l&#39;en-tête de l&#39;Atelier).</li>
+<li>Onglet <strong>Grille › Tester les connexions</strong> : les connexions sont héritées de <code>.env</code> ; une valeur modifiée ici est enregistrée dans <code>.env.explo</code>.</li>
+<li>Choisir la collection, puis <strong>Enregistrer et analyser</strong> ; les onglets Participation, Collaborations, Thèmes et Rapport se remplissent à la fin du traitement.</li>
 </ol>
 <pre class="mermaid">sequenceDiagram
     actor U as Utilisateur
@@ -410,24 +537,26 @@ host     = &quot;localhost&quot;</code></pre>
     participant Z as Zotero
     participant O as Omeka S
     U-&gt;&gt;UI: Tester les connexions
-    UI-&gt;&gt;UI: enregistre .env et workflow.config.json
+    UI-&gt;&gt;UI: enregistre .env (ou .env.explo) et la configuration
     UI-&gt;&gt;A: GET /models
     A--&gt;&gt;UI: liste des modèles
     UI-&gt;&gt;Z: GET /collections
     Z--&gt;&gt;UI: collections de la bibliothèque
-    UI-&gt;&gt;O: GET /vocabularies et /users
-    O--&gt;&gt;UI: vocabulaires installés
+    UI-&gt;&gt;O: GET /vocabularies, PATCH d'un item inexistant
+    O--&gt;&gt;UI: vocabulaires installés, clé valide (404) ou refusée (403)
     UI--&gt;&gt;U: ✓ Albert ✓ Zotero ✓ Omeka S (ou vocabulaires manquants)</pre>
 <h2 id="8-installation-sur-un-serveur-debian-apache-let-39-s-encrypt"><a class="anchor" href="#8-installation-sur-un-serveur-debian-apache-let-39-s-encrypt">#</a>8. Installation sur un serveur Debian / Apache / Let&#39;s Encrypt</h2>
-<p>Protocole pour un serveur <strong>Debian 12 (bookworm) ou 13 (trixie)</strong> hébergeant Omeka S (à partir de l&#39;instance préparée) derrière <strong>Apache</strong> en <strong>HTTPS</strong> (certificat <strong>Let&#39;s Encrypt</strong>), et, sur le même serveur, le workflow et son interface. Les commandes sont à lancer en root (ou avec <code>sudo</code>). Dans les exemples, remplacer <code>omeka.example.org</code> et <code>workflow.example.org</code> par vos noms de domaine.</p>
+<p>Protocole pour un serveur <strong>Debian 12 (bookworm) ou 13 (trixie)</strong> hébergeant Omeka S (à partir de l&#39;instance préparée) derrière <strong>Apache</strong> en <strong>HTTPS</strong> (certificat <strong>Let&#39;s Encrypt</strong>), et, sur le même serveur, les deux applications et leurs interfaces. Les commandes sont à lancer en root (ou avec <code>sudo</code>). Dans les exemples, remplacer <code>omeka.example.org</code>, <code>workflow.example.org</code> et <code>explo.example.org</code> par vos noms de domaine.</p>
 <pre class="mermaid">flowchart TB
     U[Navigateur] -- HTTPS 443 --&gt; AP
     subgraph Serveur[&quot;Serveur Debian&quot;]
         AP[Apache&lt;br/&gt;certificats Let's Encrypt]
         AP -- PHP-FPM / mod_php --&gt; OM[Omeka S&lt;br/&gt;/var/www/omeka]
-        AP -- proxy + authentification --&gt; UI[Interface du workflow&lt;br/&gt;127.0.0.1:7272]
+        AP -- proxy + authentification --&gt; UI[Atelier d'articles&lt;br/&gt;127.0.0.1:7272]
+        AP -- proxy + authentification --&gt; UX[exploZoteroAnno&lt;br/&gt;127.0.0.1:7273]
         OM --&gt; DB[(MariaDB)]
-        UI --&gt; WF[Workflow&lt;br/&gt;Docker ou Node.js]
+        UI --&gt; WF[Workflows&lt;br/&gt;Docker ou Node.js]
+        UX --&gt; WF
         WF -- HTTPS --&gt; AP
     end
     WF --&gt; ALB[(API Albert)]
@@ -435,7 +564,7 @@ host     = &quot;localhost&quot;</code></pre>
 <h3 id="8-1-prerequis"><a class="anchor" href="#8-1-prerequis">#</a>8.1 Prérequis</h3>
 <ul>
 <li>un serveur Debian à jour, avec un accès SSH et un compte administrateur ;</li>
-<li>des <strong>enregistrements DNS</strong> (A et, si besoin, AAAA) de <code>omeka.example.org</code> et <code>workflow.example.org</code> pointant vers le serveur ;</li>
+<li>des <strong>enregistrements DNS</strong> (A et, si besoin, AAAA) de <code>omeka.example.org</code>, <code>workflow.example.org</code> et <code>explo.example.org</code> pointant vers le serveur ;</li>
 <li>les ports <strong>80</strong> et <strong>443</strong> ouverts (Let&#39;s Encrypt valide le domaine par le port 80).</li>
 </ul>
 <h3 id="8-2-paquets"><a class="anchor" href="#8-2-paquets">#</a>8.2 Paquets</h3>
@@ -553,7 +682,7 @@ certbot --apache -d workflow.example.org --redirect</code></pre>
 mysqldump --single-transaction omeka | gzip &gt; /var/backups/omeka-$(date +%F).sql.gz
 find /var/backups -name &quot;omeka-*.sql.gz&quot; -mtime +30 -delete</code></pre>
 </li>
-<li><p><strong>Fichiers</strong> : sauvegarder <code>/var/www/omeka/files</code> et le dossier <code>data/</code> du workflow (<code>.env</code>, <code>workflow.config.json</code>, <code>workflow.history.json</code>, résultats).</p>
+<li><p><strong>Fichiers</strong> : sauvegarder <code>/var/www/omeka/files</code> et le dossier <code>data/</code> des applications (<code>.env</code>, <code>.env.explo</code>, <code>workflow.config.json</code>, <code>explo.config.json</code>, <code>workflow.history.json</code>, <code>aap/</code>, <code>resultats/</code>).</p>
 </li>
 <li><p><strong>Système</strong> : <code>apt update &amp;&amp; apt upgrade</code> régulièrement (ou le paquet <code>unattended-upgrades</code>).</p>
 </li>
@@ -591,8 +720,38 @@ find /var/backups -name &quot;omeka-*.sql.gz&quot; -mtime +30 -delete</code></pr
 </tr>
 <tr>
 <td><code>EADDRINUSE</code> au lancement de l&#39;interface</td>
-<td>port déjà utilisé</td>
-<td>changer <code>PORT</code> dans <code>.env</code></td>
+<td>port déjà utilisé (par exemple par un conteneur Docker de la même application)</td>
+<td>arrêter l&#39;autre instance, ou changer <code>PORT</code> (Atelier) ou <code>EXPLO_PORT</code> (exploZoteroAnno)</td>
+</tr>
+<tr>
+<td>Lien vers l&#39;autre application cassé derrière un proxy</td>
+<td>adresses publiques inconnues du serveur</td>
+<td>renseigner <code>PAPER_URL</code> et <code>EXPLO_URL</code> dans <code>.env</code></td>
+</tr>
+<tr>
+<td>exploZoteroAnno : liste des collections vide ou d&#39;une autre bibliothèque</td>
+<td>identifiant de groupe erroné, ou clé Zotero sans accès au groupe</td>
+<td>vérifier <code>ZOTERO_GROUP_ID</code> dans <em>Grille › Connexions</em> (valeur propre dans <code>.env.explo</code> ou héritée de <code>.env</code>) et les droits de la clé</td>
+</tr>
+<tr>
+<td>exploZoteroAnno : un seul collaborateur « (non attribué) »</td>
+<td>bibliothèque personnelle ou PDF annotés hors de Zotero : pas d&#39;auteur</td>
+<td>annoter dans une bibliothèque de groupe, avec le lecteur de Zotero</td>
+</tr>
+<tr>
+<td>exploZoteroAnno : kappa « non calculé »</td>
+<td>moins de passages communs que <code>minPassagesForKappa</code></td>
+<td>attendre plus d&#39;annotations, ou baisser le seuil ou la similarité dans <em>Grille › Analyse</em></td>
+</tr>
+<tr>
+<td>exploZoteroAnno : deux documents différents fusionnés</td>
+<td>même titre et même année (critère de repli)</td>
+<td>décocher <em>Fusionner les documents en double</em>, ou corriger le titre ou la date dans Zotero</td>
+</tr>
+<tr>
+<td>exploZoteroAnno : refus des fichiers <code>json</code> par Omeka S</td>
+<td><code>application/json</code> absent des types autorisés</td>
+<td>l&#39;ajouter dans <em>Admin › Paramètres › Sécurité</em> (sinon dépôt en <code>.txt</code>)</td>
 </tr>
 <tr>
 <td><code>EACCES: permission denied, open &#39;/data/.env&#39;</code> (Docker)</td>
@@ -647,7 +806,7 @@ find /var/backups -name &quot;omeka-*.sql.gz&quot; -mtime +30 -delete</code></pr
 </tbody></table>
 
 </main>
-<nav class="toc"><strong>Sur cette page</strong><a class="l2" href="#1-prerequis">1. Prérequis</a><a class="l2" href="#2-variables-d-39-environnement-env">2. Variables d&#39;environnement (.env)</a><a class="l2" href="#3-installation-locale-node-js">3. Installation locale (Node.js)</a><a class="l2" href="#4-installation-docker">4. Installation Docker</a><a class="l2" href="#5-preparer-omeka-s">5. Préparer Omeka S</a><a class="l3" href="#demarrer-avec-l-39-instance-omeka-s-preparee">Démarrer avec l&#39;instance Omeka S préparée</a><a class="l3" href="#vocabulaires">Vocabulaires</a><a class="l3" href="#cle-d-39-api">Clé d&#39;API</a><a class="l3" href="#types-de-fichiers-autorises">Types de fichiers autorisés</a><a class="l2" href="#6-preparer-zotero">6. Préparer Zotero</a><a class="l2" href="#7-verifier-l-39-installation">7. Vérifier l&#39;installation</a><a class="l2" href="#8-installation-sur-un-serveur-debian-apache-let-39-s-encrypt">8. Installation sur un serveur Debian / Apache / Let&#39;s Encrypt</a><a class="l3" href="#8-1-prerequis">8.1 Prérequis</a><a class="l3" href="#8-2-paquets">8.2 Paquets</a><a class="l3" href="#8-3-pare-feu">8.3 Pare-feu</a><a class="l3" href="#8-4-base-de-donnees">8.4 Base de données</a><a class="l3" href="#8-5-omeka-s">8.5 Omeka S</a><a class="l3" href="#8-6-hote-virtuel-apache">8.6 Hôte virtuel Apache</a><a class="l3" href="#8-7-certificat-let-39-s-encrypt">8.7 Certificat Let&#39;s Encrypt</a><a class="l3" href="#8-8-workflow-et-interface">8.8 Workflow et interface</a><a class="l3" href="#8-9-acces-a-l-39-interface">8.9 Accès à l&#39;interface</a><a class="l3" href="#8-10-sauvegardes-et-mises-a-jour">8.10 Sauvegardes et mises à jour</a><a class="l2" href="#9-depannage">9. Dépannage</a></nav>
+<nav class="toc"><strong>Sur cette page</strong><a class="l2" href="#1-prerequis">1. Prérequis</a><a class="l2" href="#2-variables-d-39-environnement-env">2. Variables d&#39;environnement (.env)</a><a class="l2" href="#3-installation-locale-node-js">3. Installation locale (Node.js)</a><a class="l3" href="#deboguer-avec-visual-studio-code">Déboguer avec Visual Studio Code</a><a class="l2" href="#4-installation-docker">4. Installation Docker</a><a class="l2" href="#5-preparer-omeka-s">5. Préparer Omeka S</a><a class="l3" href="#demarrer-avec-l-39-instance-omeka-s-preparee">Démarrer avec l&#39;instance Omeka S préparée</a><a class="l3" href="#vocabulaires">Vocabulaires</a><a class="l3" href="#cle-d-39-api">Clé d&#39;API</a><a class="l3" href="#types-de-fichiers-autorises">Types de fichiers autorisés</a><a class="l2" href="#6-preparer-zotero">6. Préparer Zotero</a><a class="l2" href="#7-verifier-l-39-installation">7. Vérifier l&#39;installation</a><a class="l2" href="#8-installation-sur-un-serveur-debian-apache-let-39-s-encrypt">8. Installation sur un serveur Debian / Apache / Let&#39;s Encrypt</a><a class="l3" href="#8-1-prerequis">8.1 Prérequis</a><a class="l3" href="#8-2-paquets">8.2 Paquets</a><a class="l3" href="#8-3-pare-feu">8.3 Pare-feu</a><a class="l3" href="#8-4-base-de-donnees">8.4 Base de données</a><a class="l3" href="#8-5-omeka-s">8.5 Omeka S</a><a class="l3" href="#8-6-hote-virtuel-apache">8.6 Hôte virtuel Apache</a><a class="l3" href="#8-7-certificat-let-39-s-encrypt">8.7 Certificat Let&#39;s Encrypt</a><a class="l3" href="#8-8-workflow-et-interface">8.8 Workflow et interface</a><a class="l3" href="#8-9-acces-a-l-39-interface">8.9 Accès à l&#39;interface</a><a class="l3" href="#8-10-sauvegardes-et-mises-a-jour">8.10 Sauvegardes et mises à jour</a><a class="l2" href="#9-depannage">9. Dépannage</a></nav>
 </div>
 <script type="module">
 import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";

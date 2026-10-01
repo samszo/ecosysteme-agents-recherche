@@ -46,37 +46,78 @@
 <div class="layout">
 <main>
 <h1 id="documentation-technique"><a class="anchor" href="#documentation-technique">#</a>Documentation technique</h1>
-<p>Écosystème d&#39;agents IA pour la production d&#39;articles scientifiques (Laboratoire Paragraphe, Université Paris 8). Le projet est écrit en <strong>TypeScript</strong>, exécuté par <strong>tsx</strong> sous <strong>Node.js 22+</strong>, et orchestré par un workflow <strong>Mastra</strong>. Les modèles de langage sont ceux de l&#39;<strong>API Albert</strong> (compatible OpenAI), les sources viennent de <strong>Zotero</strong> et les résultats sont archivés dans <strong>Omeka S</strong>.</p>
+<p>Écosystème d&#39;agents IA pour la production d&#39;articles scientifiques (Laboratoire Paragraphe, Université Paris 8). Le projet est écrit en <strong>TypeScript</strong>, exécuté par <strong>tsx</strong> sous <strong>Node.js 22+</strong>, et orchestré par des workflows <strong>Mastra</strong>. Les modèles de langage sont ceux de l&#39;<strong>API Albert</strong> (compatible OpenAI), les sources viennent de <strong>Zotero</strong> et les résultats sont archivés dans <strong>Omeka S</strong>.</p>
+<p>Deux applications partagent ce socle, chacune avec son workflow, son lanceur, sa page et son serveur :</p>
+<table>
+<thead>
+<tr>
+<th>Application</th>
+<th>Workflow</th>
+<th>Lanceur</th>
+<th>Page</th>
+<th>Serveur</th>
+<th>Section</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Atelier d&#39;articles</td>
+<td><code>paperProductionWorkflow</code> (<code>src/workflow/paperProductionWorkflow.ts</code>)</td>
+<td><code>src/runners/paper.ts</code></td>
+<td><code>paper.html</code></td>
+<td><code>PORT</code> 7272</td>
+<td>2</td>
+</tr>
+<tr>
+<td>exploZoteroAnno</td>
+<td><code>exploWorkflow</code> (<code>src/workflow/exploWorkflow.ts</code>)</td>
+<td><code>src/runners/explo.ts</code></td>
+<td><code>explo.html</code></td>
+<td><code>EXPLO_PORT</code> 7273</td>
+<td>12</td>
+</tr>
+</tbody></table>
+<p>Elles partagent l&#39;étape <code>fetch-literature</code> (lecture de la collection Zotero et enregistrement dans Omeka S), les bibliothèques de <code>src/lib/</code>, le comptage des tokens et l&#39;estimation du coût, l&#39;enregistrement des configurations d&#39;exécution et le serveur <code>src/ui/server.ts</code>.</p>
 <h2 id="1-architecture"><a class="anchor" href="#1-architecture">#</a>1. Architecture</h2>
 <pre class="mermaid">flowchart LR
     subgraph Client
         NAV[Navigateur]
     end
-    subgraph Serveur[&quot;Serveur Node.js (src/ui/server.ts)&quot;]
-        UI[API HTTP + page&lt;br/&gt;src/ui/public/paper.html]
-        CFG[(.env&lt;br/&gt;workflow.config.json)]
+    subgraph S1[&quot;Serveur paper : src/ui/server.ts (7272)&quot;]
+        UI1[API HTTP + paper.html]
+        CFG1[(.env&lt;br/&gt;workflow.config.json)]
     end
-    subgraph Traitement[&quot;Processus enfant (src/runners/)&quot;]
-        WF[Workflow Mastra&lt;br/&gt;paperProductionWorkflow]
-        AG[Agents]
-        TL[Outils]
+    subgraph S2[&quot;Serveur explo : src/ui/server.ts explo (7273)&quot;]
+        UI2[API HTTP + explo.html]
+        CFG2[(.env + .env.explo&lt;br/&gt;explo.config.json)]
     end
-    NAV -- HTTP / SSE --&gt; UI
-    UI -- lit / écrit --&gt; CFG
-    UI -- spawn tsx --&gt; WF
-    WF --&gt; AG
-    WF --&gt; TL
+    subgraph T1[&quot;Processus enfant : runners/paper.ts&quot;]
+        WF1[paperProductionWorkflow]
+    end
+    subgraph T2[&quot;Processus enfant : runners/explo.ts&quot;]
+        WF2[exploWorkflow]
+    end
+    AG[Agents]
+    TL[Outils et bibliothèques]
+    NAV -- HTTP / SSE --&gt; UI1
+    NAV -- HTTP / SSE --&gt; UI2
+    UI1 -- lit / écrit --&gt; CFG1
+    UI2 -- lit / écrit --&gt; CFG2
+    UI1 -- spawn tsx --&gt; WF1
+    UI2 -- spawn tsx --&gt; WF2
+    WF1 &amp; WF2 --&gt; AG
+    WF1 &amp; WF2 --&gt; TL
     AG -- chat completions --&gt; ALB[(API Albert)]
     TL -- API web v3 --&gt; ZOT[(Zotero)]
     TL -- API REST --&gt; OMK[(Omeka S)]
-    WF -- fichiers résultats --&gt; FS[(répertoire de données)]
-    UI -- lit --&gt; FS</pre>
+    WF1 &amp; WF2 -- fichiers résultats --&gt; FS[(répertoire de données)]
+    UI1 &amp; UI2 -- lit --&gt; FS</pre>
 <ul>
-<li><strong>Interface</strong> (<code>src/ui/server.ts</code>) : serveur <code>node:http</code> sans dépendance, qui gère <code>.env</code> et <code>workflow.config.json</code>, lance le workflow dans un <strong>processus enfant</strong> (la configuration et les connexions sont ainsi relues à chaque exécution), diffuse le journal en <strong>Server-Sent Events</strong> et sert les résultats.</li>
-<li><strong>Lanceurs</strong> (<code>src/runners/paper.ts</code>, <code>src/runners/explo.ts</code>) : enregistre la configuration dans Omeka S, exécute le workflow Mastra, produit la visualisation du graphe, le rapport de traitement, et importe les documents de fin d&#39;analyse dans l&#39;item de configuration de l&#39;exécution.</li>
+<li><strong>Interface</strong> (<code>src/ui/server.ts</code>) : serveur <code>node:http</code> sans dépendance, lancé une fois par application (voir <em>Un serveur par application</em>), qui gère les connexions et la configuration de son application, lance son workflow dans un <strong>processus enfant</strong> (la configuration et les connexions sont ainsi relues à chaque exécution), diffuse le journal en <strong>Server-Sent Events</strong> et sert les résultats.</li>
+<li><strong>Lanceurs</strong> (<code>src/runners/paper.ts</code>, <code>src/runners/explo.ts</code>) : enregistrent la configuration dans Omeka S, exécutent le workflow Mastra, produisent les fichiers de résultats (graphe ou réseau sigma.js, rapport de traitement…) et importent les documents de fin d&#39;analyse dans l&#39;item de configuration de l&#39;exécution.</li>
 <li><strong>Répertoire de données</strong> : le répertoire courant. En local c&#39;est la racine du projet ; dans Docker c&#39;est le volume <code>/data</code>, le code étant dans <code>/app</code>.</li>
 </ul>
-<h2 id="2-le-workflow"><a class="anchor" href="#2-le-workflow">#</a>2. Le workflow</h2>
+<h2 id="2-le-workflow-de-l-39-atelier-d-39-articles"><a class="anchor" href="#2-le-workflow-de-l-39-atelier-d-39-articles">#</a>2. Le workflow de l&#39;Atelier d&#39;articles</h2>
+<p>Le workflow exploZoteroAnno est décrit à la section 12.</p>
 <pre class="mermaid">flowchart TD
     IN([cfpUrl, cfpFile, cfpText,&lt;br/&gt;zoteroCollection]) --&gt; P1
     subgraph P1[parallèle]
@@ -165,7 +206,7 @@
 │   ├── metrics/              usage (tokens), impact (énergie, carbone, argent)
 │   ├── omeka/                omk (client), oaAnnotations, conceptIndex, conceptStore, zoteroCollections, verify
 │   ├── visualization/        graphViz (graphology, sigma.js)
-│   └── zotero/               zotero (client), zoteroToOmeka (correspondance des métadonnées)
+│   └── zotero/               zotero (client), zoteroToOmeka (correspondance des métadonnées), duplicates (doublons)
 ├── tools/                    outils Mastra uniquement (index.ts ré-exporte)
 ├── workflow/
 │   ├── paperProductionWorkflow.ts   assemblage de l'Atelier d'articles
@@ -180,7 +221,7 @@
 └── ui/
     ├── server.ts             serveur d'une application (npm run ui / npm run ui:explo)
     └── public/               paper.html, explo.html</code></pre>
-<p>Hors de <code>src/</code> : <code>docs/</code> (documentation, <code>grille_annotation.md</code>), <code>scripts/build-docs.ts</code>, <code>docker/entrypoint.sh</code>, <code>install/</code> (instance Omeka S préparée, distribuée à part). Les fichiers produits vont dans <code>resultats/atelier/</code> et <code>resultats/explo/</code> (réglages <code>outputDir</code>), dans le répertoire de données : la racine du projet en local, le volume <code>data/</code> avec Docker.</p>
+<p>Hors de <code>src/</code> : <code>docs/</code> (documentation, <code>grille_annotation.md</code>), <code>scripts/build-docs.ts</code>, <code>docker/entrypoint.sh</code>, <code>.vscode/launch.json</code> (configurations de débogage des deux workflows et des deux serveurs), <code>install/</code> (instance Omeka S préparée, distribuée à part). Les fichiers produits vont dans <code>resultats/atelier/</code> et <code>resultats/explo/</code> (réglages <code>outputDir</code>), dans le répertoire de données : la racine du projet en local, le volume <code>data/</code> avec Docker.</p>
 <h3 id="agents-src-agents"><a class="anchor" href="#agents-src-agents">#</a>Agents (<code>src/agents/</code>)</h3>
 <table>
 <thead>
@@ -211,6 +252,11 @@
 <td>bilan de l&#39;accord inter-juges et recommandations de recalibrage</td>
 </tr>
 <tr>
+<td><code>discussionAgent</code></td>
+<td>analytique</td>
+<td>exploZoteroAnno : thèmes de discussion à partir des passages convergents et divergents</td>
+</tr>
+<tr>
 <td><code>librarianAgent</code>, <code>wikiArchitectAgent</code>, <code>ontologistAgent</code></td>
 <td>rapide / analytique</td>
 <td>agents outillés disponibles pour un usage conversationnel</td>
@@ -231,7 +277,11 @@
 </tr>
 <tr>
 <td><code>fetchZoteroData</code></td>
-<td>parcourt la collection, extrait chaque pièce jointe, fusionne annotations et notes, enregistre documents, annotations et médias dans Omeka</td>
+<td>parcourt la collection, regroupe les doublons (option <code>mergeDuplicates</code>), extrait chaque pièce jointe, fusionne annotations et notes, enregistre documents, annotations et médias dans Omeka</td>
+</tr>
+<tr>
+<td><code>duplicates</code></td>
+<td><code>groupDuplicates</code> : documents en double d&#39;une collection (fichier, DOI, URL, titre et année), exemplaire principal</td>
 </tr>
 <tr>
 <td><code>attachmentExtract</code></td>
@@ -309,9 +359,17 @@
 <td><code>chunkText</code></td>
 <td>découpage des textes en extraits avec chevauchement</td>
 </tr>
+<tr>
+<td><code>computeParticipation</code></td>
+<td>exploZoteroAnno : participation par collaborateur, document, couleur de la grille et semaine</td>
+</tr>
+<tr>
+<td><code>analyzeCollaboration</code></td>
+<td>exploZoteroAnno : passages communs, convergences et divergences, kappa, réseau collaborateurs–documents</td>
+</tr>
 </tbody></table>
 <h3 id="comptage-des-tokens-src-lib-metrics-usage-ts"><a class="anchor" href="#comptage-des-tokens-src-lib-metrics-usage-ts">#</a>Comptage des tokens (<code>src/lib/metrics/usage.ts</code>)</h3>
-<p>Chaque appel à un modèle enregistre sa consommation avec <code>recordUsage(source, modèle, usage)</code> : <code>totalUsage</code> pour les agents Mastra (appels d&#39;outils compris), <code>usage</code> pour <code>generateObject</code> du SDK <code>ai</code>. Le workflow tourne dans un seul processus : le compteur est partagé par toutes les étapes, et <code>usageSummary()</code> fournit le détail par traitement et par modèle au rapport de traitement, à l&#39;item de configuration (<code>curation:data</code>, JSON) et à l&#39;historique. Un appel en erreur n&#39;est pas compté.</p>
+<p>Chaque appel à un modèle, dans l&#39;un ou l&#39;autre workflow, enregistre sa consommation avec <code>recordUsage(source, modèle, usage)</code> : <code>totalUsage</code> pour les agents Mastra (appels d&#39;outils compris), <code>usage</code> pour <code>generateObject</code> du SDK <code>ai</code>. Le workflow tourne dans un seul processus : le compteur est partagé par toutes les étapes, et <code>usageSummary()</code> fournit le détail par traitement et par modèle au rapport de traitement, à l&#39;item de configuration (<code>curation:data</code>, JSON) et à l&#39;historique. Un appel en erreur n&#39;est pas compté.</p>
 <h3 id="estimation-du-cout-src-lib-metrics-impact-ts"><a class="anchor" href="#estimation-du-cout-src-lib-metrics-impact-ts">#</a>Estimation du coût (<code>src/lib/metrics/impact.ts</code>)</h3>
 <p><code>estimateImpact(usageSummary())</code> convertit les tokens de chaque modèle en énergie, carbone et argent, avec les hypothèses de <code>config.costs</code> :</p>
 <ul>
@@ -321,7 +379,7 @@
 </ul>
 <p>Le résultat alimente la section « Coût du traitement » du rapport, l&#39;item de configuration (<code>curation:data</code>, avec les tokens) et l&#39;historique.</p>
 <h3 id="historique-des-executions-src-workflow-runs-history-ts"><a class="anchor" href="#historique-des-executions-src-workflow-runs-history-ts">#</a>Historique des exécutions (<code>src/workflow/runs/history.ts</code>)</h3>
-<p>À la fin de chaque exécution, <code>src/runners/paper.ts</code> ajoute une entrée à <code>workflow.history.json</code> (répertoire de données, 500 entrées au plus ; chemin modifiable par <code>WORKFLOW_HISTORY_FILE</code>) : identifiant, dates, statut, paramètres d&#39;entrée, appel (titre, item), collection, configuration, titre de la proposition, tokens. L&#39;interface fusionne cet historique avec les items de configuration d&#39;Omeka S (<code>GET /api/history</code>) et regroupe les exécutions par appel (lien, fichier ou empreinte du texte).</p>
+<p>À la fin de chaque exécution de l&#39;Atelier d&#39;articles, <code>src/runners/paper.ts</code> ajoute une entrée à <code>workflow.history.json</code> (répertoire de données, 500 entrées au plus ; chemin modifiable par <code>WORKFLOW_HISTORY_FILE</code>) : identifiant, dates, statut, paramètres d&#39;entrée, appel (titre, item), collection, configuration, titre de la proposition, tokens. L&#39;interface fusionne cet historique avec les items de configuration d&#39;Omeka S (<code>GET /api/history</code>) et regroupe les exécutions par appel (lien, fichier ou empreinte du texte). exploZoteroAnno ne tient pas d&#39;historique local : ses exécutions sont retrouvées par leurs items de configuration dans Omeka S.</p>
 <h2 id="4-extraction-des-documents"><a class="anchor" href="#4-extraction-des-documents">#</a>4. Extraction des documents</h2>
 <pre class="mermaid">flowchart TD
     A[Pièce jointe Zotero] --&gt; B{linkMode}
@@ -343,7 +401,7 @@
     E --&gt; M
     T --&gt; M
     M --&gt; O[Item Omeka : métadonnées de la notice,&lt;br/&gt;texte, oa:Annotation, médias]</pre>
-<p>Clé de fusion des annotations : phrase normalisée, commentaire, auteur et code (deux juges peuvent annoter la même phrase). Les codes de la grille présents dans les marqueurs sont séparés des marqueurs ordinaires (<code>splitCodes</code>).</p>
+<p>Clé de fusion des annotations : phrase normalisée, commentaire, auteur et code (deux juges peuvent annoter la même phrase). Quand les doublons sont fusionnés (exploZoteroAnno), seul l&#39;exemplaire principal de chaque groupe suit ce parcours ; les annotations du lecteur, les notes, les annotations incrustées dans les PDF et les marqueurs des autres exemplaires sont ajoutés à la fusion (voir section 12). Les codes de la grille présents dans les marqueurs sont séparés des marqueurs ordinaires (<code>splitCodes</code>).</p>
 <h2 id="5-graphe-de-concepts"><a class="anchor" href="#5-graphe-de-concepts">#</a>5. Graphe de concepts</h2>
 <pre class="mermaid">flowchart LR
     A[Articles] --&gt; M0[Marqueurs Zotero&lt;br/&gt;→ nœuds verrouillés]
@@ -397,7 +455,7 @@
     }
     DOCUMENT {
         classe bibo_AcademicArticle &quot;ou BookSection, Webpage…&quot;
-        dcterms_identifier cle &quot;clé de la pièce jointe&quot;
+        dcterms_identifier cle &quot;clé de la pièce jointe (et des doublons)&quot;
         dcterms_creator auteurs &quot;métadonnées de la notice&quot;
         dcterms_description texte &quot;texte extrait&quot;
         curation_access date &quot;date d'extraction&quot;
@@ -411,6 +469,7 @@
         curation_category position &quot;positionnement&quot;
         curation_type code &quot;code de la grille&quot;
         dcterms_creator juge &quot;auteur de l'annotation&quot;
+        dcterms_created date &quot;date de l'annotation&quot;
     }
     CONCEPT {
         classe skos_Concept
@@ -427,10 +486,11 @@
     CONFIGURATION {
         classe dcterms_MethodOfInstruction
         dcterms_identifier runId &quot;exécution&quot;
+        dcterms_title titre &quot;Configuration academic-paper-factory ou explo-zotero-anno&quot;
         dcterms_description json &quot;configuration&quot;
         curation_status statut &quot;running, success, failed&quot;
-        curation_data tokens &quot;consommation (JSON)&quot;
-        medias documents &quot;relecture, graphe, rapport, désaccords&quot;
+        curation_data tokens &quot;consommation et coût (JSON)&quot;
+        medias documents &quot;Atelier : relecture, graphe, rapport, désaccords ; explo : guide, rapport, thèmes, réseau, JSON&quot;
     }
     DOCUMENT }o--|{ COLLECTION : &quot;dcterms:isPartOf&quot;
     ANNOTATION }o--|| DOCUMENT : &quot;oa:hasTarget&quot;
@@ -439,9 +499,35 @@
     CONCEPT }o--o{ CONCEPT : &quot;dcterms:relation&quot;
     APPEL }o--|| COLLECTION : &quot;dcterms:relation&quot;
     CONFIGURATION }o--|| COLLECTION : &quot;dcterms:isPartOf&quot;</pre>
-<p>Les termes utilisés sont paramétrables dans <code>config.omeka</code> (<code>accessTerm</code>, <code>subjectTerm</code>, <code>relationTerm</code>, <code>codeTerm</code>, <code>authorTerm</code>, <code>conceptClass</code>, <code>configClass</code>, <code>cfpClass</code>).</p>
+<p>Les deux workflows écrivent dans ce même modèle : documents, annotations, concepts et collections sont partagés ; l&#39;appel n&#39;existe que pour l&#39;Atelier ; chaque exécution, de l&#39;une ou l&#39;autre application, crée un item de configuration (identifiant de workflow <code>academic-paper-factory</code> ou <code>explo-zotero-anno</code>). exploZoteroAnno lit les termes Omeka de la configuration de l&#39;Atelier (<code>workflowConfig.omeka</code>). Les termes utilisés sont paramétrables dans <code>config.omeka</code> (<code>accessTerm</code>, <code>subjectTerm</code>, <code>relationTerm</code>, <code>codeTerm</code>, <code>authorTerm</code>, <code>conceptClass</code>, <code>configClass</code>, <code>cfpClass</code>).</p>
 <h2 id="9-configuration"><a class="anchor" href="#9-configuration">#</a>9. Configuration</h2>
-<p>La configuration par défaut est dans <code>src/config/index.ts</code> (<code>defaultWorkflowConfig</code>). Les modifications faites dans l&#39;interface sont enregistrées dans <code>workflow.config.json</code> (seules les différences) et fusionnées au chargement (<code>configStore.ts</code>). Les chemins <code>kappa.codes</code>, <code>annotationPositions</code>, <code>omeka.vocabs</code> et <code>steps</code> sont remplacés en bloc, les autres objets sont fusionnés clé par clé. Le fichier est désigné par <code>WORKFLOW_CONFIG_FILE</code> s&#39;il est défini.</p>
+<p>Chaque application a sa configuration par défaut et son fichier de surcharges :</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Atelier d&#39;articles</th>
+<th>exploZoteroAnno</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Défauts</td>
+<td><code>src/config/index.ts</code> (<code>defaultWorkflowConfig</code>)</td>
+<td><code>src/config/explo.ts</code> (<code>defaultExploConfig</code>)</td>
+</tr>
+<tr>
+<td>Surcharges</td>
+<td><code>workflow.config.json</code> (<code>WORKFLOW_CONFIG_FILE</code>)</td>
+<td><code>explo.config.json</code> (<code>EXPLO_CONFIG_FILE</code>)</td>
+</tr>
+<tr>
+<td>Configuration effective</td>
+<td><code>workflowConfig</code></td>
+<td><code>exploConfig</code></td>
+</tr>
+</tbody></table>
+<p>Les modifications faites dans l&#39;interface sont enregistrées dans le fichier de surcharges (seules les différences, <code>writeConfigOverride</code>) et fusionnées au chargement (<code>mergeConfig</code> et <code>readConfigOverride</code> de <code>src/config/store.ts</code>). Les chemins <code>kappa.codes</code>, <code>annotationPositions</code>, <code>omeka.vocabs</code>, <code>steps</code> et <code>costs.models</code> sont remplacés en bloc, les autres objets sont fusionnés clé par clé.</p>
+<p><strong>Atelier d&#39;articles</strong> (<code>defaultWorkflowConfig</code>) :</p>
 <table>
 <thead>
 <tr>
@@ -502,7 +588,57 @@
 <td>vocabulaires, classes et propriétés</td>
 </tr>
 </tbody></table>
+<p><strong>exploZoteroAnno</strong> (<code>defaultExploConfig</code>) ; les modèles, l&#39;extraction, les coûts et les termes Omeka sont repris de la configuration de l&#39;Atelier :</p>
+<table>
+<thead>
+<tr>
+<th>Clé</th>
+<th>Rôle</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>workflowId</code></td>
+<td>identifiant du workflow (<code>explo-zotero-anno</code>), titre de l&#39;item de configuration</td>
+</tr>
+<tr>
+<td><code>input.zoteroCollection</code></td>
+<td>clé de la collection Zotero (par défaut celle de l&#39;Atelier)</td>
+</tr>
+<tr>
+<td><code>grid.title</code>, <code>grid.introduction</code></td>
+<td>titre et introduction du guide d&#39;annotation</td>
+</tr>
+<tr>
+<td><code>grid.positions</code>, <code>grid.tolerance</code></td>
+<td>grille de couleurs (couleur, nom, signification, consigne) et distance RVB maximale de rattachement</td>
+</tr>
+<tr>
+<td><code>analysis.unitSimilarity</code></td>
+<td>taux de recouvrement des mots (Jaccard) pour que deux surlignages portent sur le même passage</td>
+</tr>
+<tr>
+<td><code>analysis.unassignedLabel</code></td>
+<td>nom des annotations sans auteur</td>
+</tr>
+<tr>
+<td><code>analysis.mergeDuplicates</code></td>
+<td>fusion des documents en double (<code>true</code> par défaut)</td>
+</tr>
+<tr>
+<td><code>analysis.minPassagesForKappa</code></td>
+<td>nombre minimum de passages communs pour calculer un kappa</td>
+</tr>
+<tr>
+<td><code>themes.count</code>, <code>themes.maxPassages</code></td>
+<td>nombre de thèmes, passages transmis à l&#39;agent</td>
+</tr>
+<tr>
+<td><code>outputDir</code></td>
+<td>dossier des fichiers produits (<code>resultats/explo</code>)</td>
+</tr>
+</tbody></table>
 <h2 id="10-api-de-l-39-interface"><a class="anchor" href="#10-api-de-l-39-interface">#</a>10. API de l&#39;interface</h2>
+<p>Routes communes aux deux serveurs (chacune s&#39;applique à l&#39;application du serveur) :</p>
 <table>
 <thead>
 <tr>
@@ -512,31 +648,35 @@
 </thead>
 <tbody><tr>
 <td><code>GET /</code></td>
-<td>page de l&#39;interface</td>
+<td>page de l&#39;application (<code>paper.html</code> ou <code>explo.html</code>)</td>
 </tr>
 <tr>
 <td><code>GET /api/settings</code></td>
-<td>variables <code>.env</code> (secrets masqués), configuration effective et par défaut</td>
+<td>connexions (secrets masqués, valeurs héritées signalées pour exploZoteroAnno), configuration effective et par défaut</td>
 </tr>
 <tr>
 <td><code>POST /api/settings</code></td>
-<td>enregistre <code>.env</code> (un secret vide est conservé) et <code>workflow.config.json</code></td>
+<td>enregistre les connexions (<code>.env</code> ou <code>.env.explo</code> ; un secret vide est conservé) et la configuration</td>
 </tr>
 <tr>
 <td><code>POST /api/check</code></td>
-<td>teste Albert, Zotero et Omeka S (vocabulaires)</td>
+<td>teste Albert, Zotero et Omeka S (vocabulaires, clé d&#39;écriture par un <code>PATCH</code> sur un item inexistant : 404 = valide, 403 = refusée)</td>
 </tr>
 <tr>
 <td><code>GET /api/zotero/collections</code></td>
-<td>collections de la bibliothèque</td>
+<td>collections de la bibliothèque enregistrée</td>
+</tr>
+<tr>
+<td><code>POST /api/zotero/collections</code></td>
+<td>collections de la bibliothèque saisie dans le formulaire (<code>{ userId, groupId, apiKey }</code>, non encore enregistrée)</td>
+</tr>
+<tr>
+<td><code>GET /api/apps</code></td>
+<td>adresses des deux applications (liens entre elles)</td>
 </tr>
 <tr>
 <td><code>GET /api/albert/models</code></td>
 <td>modèles disponibles</td>
-</tr>
-<tr>
-<td><code>POST /api/cfp-file?name=</code></td>
-<td>importe le fichier de l&#39;appel dans <code>aap/</code></td>
 </tr>
 <tr>
 <td><code>POST /api/run</code>, <code>POST /api/run/stop</code>, <code>GET /api/run</code></td>
@@ -547,6 +687,23 @@
 <td>journal et statut en Server-Sent Events</td>
 </tr>
 <tr>
+<td><code>GET /docs/…</code></td>
+<td>documentation HTML</td>
+</tr>
+</tbody></table>
+<p>Routes propres à l&#39;Atelier d&#39;articles :</p>
+<table>
+<thead>
+<tr>
+<th>Méthode et route</th>
+<th>Rôle</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>POST /api/cfp-file?name=</code></td>
+<td>importe le fichier de l&#39;appel dans <code>aap/</code></td>
+</tr>
+<tr>
 <td><code>GET /api/results</code>, <code>GET /api/file?name=</code></td>
 <td>liste et contenu des résultats (liste blanche)</td>
 </tr>
@@ -554,16 +711,16 @@
 <td><code>GET /api/history</code></td>
 <td>appels traités : historique local et configurations Omeka S, regroupés par appel</td>
 </tr>
-<tr>
-<td><code>GET /docs/…</code></td>
-<td>documentation HTML</td>
-</tr>
 </tbody></table>
-<p>Le serveur écoute sur <code>127.0.0.1</code> (variable <code>HOST</code> pour le conteneur) et le port <code>PORT</code> (7272).</p>
+<p>Routes propres à exploZoteroAnno : <code>GET</code> et <code>POST /api/explo/settings</code>, <code>POST /api/explo/guide</code> (guide d&#39;annotation à partir de la grille), <code>GET /api/explo/results</code>, <code>GET /api/explo/file?name=</code>.</p>
+<p>Une route de l&#39;autre application répond 404. Chaque serveur écoute sur <code>127.0.0.1</code> (<code>HOST</code>, ou <code>EXPLO_HOST</code> pour exploZoteroAnno ; <code>0.0.0.0</code> dans le conteneur) et sur son port : <code>PORT</code> (7272) ou <code>EXPLO_PORT</code> (7273). Un seul traitement à la fois par serveur (<code>POST /api/run</code> répond 409 si un traitement est en cours).</p>
 <h2 id="11-etendre-le-projet"><a class="anchor" href="#11-etendre-le-projet">#</a>11. Étendre le projet</h2>
 <p><strong>Ajouter un outil</strong> : créer <code>src/tools/monOutil.ts</code> sur le modèle des outils existants (<code>new Tool({ name, description, schema, execute: async ({ data }) =&gt; … })</code>, schéma zod typé avec <code>z.infer</code>), puis l&#39;exporter dans <code>src/tools/index.ts</code>.</p>
-<p><strong>Ajouter une étape</strong> : créer <code>src/workflow/steps/paper/monEtape.ts</code> (ou <code>explo/</code>, <code>common/</code>) avec <code>createStep({ id, execute })</code>, l&#39;insérer dans <code>paperProductionWorkflow.ts</code>, ajouter son identifiant à <code>config.steps</code> et son libellé dans <code>processingReport.ts</code>.</p>
-<p><strong>Ajouter un paramètre</strong> : l&#39;ajouter à <code>defaultWorkflowConfig</code> ; il apparaît automatiquement dans l&#39;interface (ajouter un libellé dans <code>LABELS</code>, et la section dans <code>SECTIONS</code>, de <code>paper.html</code>).</p>
+<p><strong>Ajouter une étape à l&#39;Atelier</strong> : créer <code>src/workflow/steps/paper/monEtape.ts</code> (ou <code>common/</code> si elle est partagée) avec <code>createStep({ id, execute })</code>, l&#39;insérer dans <code>paperProductionWorkflow.ts</code>, ajouter son identifiant à <code>config.steps</code> et son libellé dans <code>STEP_LABELS</code> (<code>src/workflow/reports/paperReport.ts</code>).</p>
+<p><strong>Ajouter une étape à exploZoteroAnno</strong> : créer <code>src/workflow/steps/explo/monEtape.ts</code>, l&#39;insérer dans <code>exploWorkflow.ts</code>, lire sa sortie dans <code>src/runners/explo.ts</code> (fichiers, documents importés dans Omeka) et l&#39;ajouter au rapport (<code>src/workflow/reports/exploReport.ts</code>).</p>
+<p><strong>Ajouter un paramètre à l&#39;Atelier</strong> : l&#39;ajouter à <code>defaultWorkflowConfig</code> ; il apparaît automatiquement dans l&#39;interface (ajouter un libellé dans <code>LABELS</code>, et la section dans <code>SECTIONS</code>, de <code>paper.html</code>).</p>
+<p><strong>Ajouter un paramètre à exploZoteroAnno</strong> : l&#39;ajouter à <code>defaultExploConfig</code>, puis le champ dans l&#39;onglet Grille d&#39;<code>explo.html</code> (affichage dans le rendu des réglages, mise à jour de <code>config</code> par <code>bind</code> ou un gestionnaire <code>onchange</code>).</p>
+<p><strong>Ajouter une application</strong> : déclarer une entrée dans <code>APPS</code> (<code>src/ui/server.ts</code> : lanceur, page, fichiers de connexions, variables de port et d&#39;adresse), créer son lanceur dans <code>src/runners/</code>, sa page dans <code>src/ui/public/</code>, et un service dans <code>docker-compose.yml</code>.</p>
 <h2 id="12-workflow-explozoteroanno"><a class="anchor" href="#12-workflow-explozoteroanno">#</a>12. Workflow exploZoteroAnno</h2>
 <p>Second workflow (<code>src/workflow/exploWorkflow.ts</code>, étapes dans <code>src/workflow/steps/explo/</code>), consacré à l&#39;annotation collective d&#39;une collection Zotero. Il a sa propre configuration (<code>defaultExploConfig</code> dans <code>src/config/explo.ts</code>, surcharges dans <code>explo.config.json</code>), sa page (<code>src/ui/public/explo.html</code>) et <strong>son propre serveur</strong> (voir <em>Un serveur par application</em>).</p>
 <pre class="mermaid">flowchart TD
@@ -669,8 +826,9 @@
 <li><code>npm run docs</code> convertit <code>docs/*.md</code> en <code>docs/html/*.html</code> (script <code>scripts/build-docs.ts</code>, bibliothèque <strong>marked</strong> ; les diagrammes <strong>Mermaid</strong> sont rendus dans le navigateur).</li>
 <li><code>Dockerfile</code> : image <code>node:22-bookworm-slim</code>, code dans <code>/app</code>, données dans le volume <code>/data</code>, commandes <code>workflow-ui</code> (serveur de l&#39;application <code>WORKFLOW_APP</code>), <code>workflow</code> et <code>workflow-explo</code> (lignes de commande).</li>
 <li><code>docker-compose.yml</code> : deux services à partir de la même image, <code>workflow</code> (Atelier, 7272) et <code>explo</code> (exploZoteroAnno, 7273), publiés sur <code>127.0.0.1</code> et partageant <code>./data</code>.</li>
-<li><code>docker/entrypoint.sh</code> : le conteneur démarre en root, rétablit si besoin la propriété de <code>/data</code> pour l&#39;utilisateur <code>node</code> (uid 1000), puis exécute la commande sous <code>node</code> avec <code>setpriv</code>. Les commandes <code>workflow</code> et <code>workflow-ui</code> lancées par <code>docker compose exec</code> (en root) passent aussi par ce point d&#39;entrée.</li>
-<li><code>docker-compose.yml</code> : port publié sur <code>127.0.0.1:7272</code>, volume <code>./data:/data</code>, <code>host.docker.internal</code> pour un Omeka S local.</li>
+<li><code>docker/entrypoint.sh</code> : le conteneur démarre en root, rétablit si besoin la propriété de <code>/data</code> pour l&#39;utilisateur <code>node</code> (uid 1000), puis exécute la commande sous <code>node</code> avec <code>setpriv</code>. Les commandes <code>workflow</code>, <code>workflow-explo</code> et <code>workflow-ui</code> lancées par <code>docker compose exec</code> (en root) passent aussi par ce point d&#39;entrée.</li>
+<li><code>docker-compose.yml</code> (suite) : volume <code>./data:/data</code> commun, <code>host.docker.internal</code> pour un Omeka S local ; le contrôle de santé interroge le port de l&#39;application du conteneur (<code>WORKFLOW_APP</code>).</li>
+<li><code>.vscode/launch.json</code> : débogage des deux workflows sans interface, des deux serveurs sur 7282 et 7283 (avec suivi du workflow lancé en processus enfant) et du fichier courant.</li>
 </ul>
 <h2 id="14-limites-connues"><a class="anchor" href="#14-limites-connues">#</a>14. Limites connues</h2>
 <ul>
@@ -678,10 +836,12 @@
 <li>La reconstruction des passages surlignés d&#39;un PDF est une approximation proportionnelle à la largeur des blocs de texte.</li>
 <li>Les sites protégés contre les robots ne peuvent pas être téléchargés : utiliser un fichier local.</li>
 <li>Le contexte des modèles limite la taille des textes transmis (appel très long, plan très détaillé).</li>
+<li>exploZoteroAnno : le repli « même titre et même année » peut fusionner deux documents distincts au titre identique (comptes rendus, éditions successives) ; la fusion se désactive par <code>analysis.mergeDuplicates</code>. Un doublon déjà enregistré dans Omeka S par une exécution antérieure n&#39;est pas supprimé (avertissement dans le journal).</li>
+<li>exploZoteroAnno : les annotations sans auteur (bibliothèque personnelle, PDF annotés hors Zotero) ne peuvent pas être attribuées et sont regroupées sous <code>analysis.unassignedLabel</code>.</li>
 </ul>
 
 </main>
-<nav class="toc"><strong>Sur cette page</strong><a class="l2" href="#1-architecture">1. Architecture</a><a class="l2" href="#2-le-workflow">2. Le workflow</a><a class="l2" href="#3-organisation-du-code">3. Organisation du code</a><a class="l3" href="#agents-src-agents">Agents (src/agents/)</a><a class="l3" href="#outils-src-tools-et-bibliotheques-src-lib">Outils (src/tools/) et bibliothèques (src/lib/)</a><a class="l3" href="#comptage-des-tokens-src-lib-metrics-usage-ts">Comptage des tokens (src/lib/metrics/usage.ts)</a><a class="l3" href="#estimation-du-cout-src-lib-metrics-impact-ts">Estimation du coût (src/lib/metrics/impact.ts)</a><a class="l3" href="#historique-des-executions-src-workflow-runs-history-ts">Historique des exécutions (src/workflow/runs/history.ts)</a><a class="l2" href="#4-extraction-des-documents">4. Extraction des documents</a><a class="l2" href="#5-graphe-de-concepts">5. Graphe de concepts</a><a class="l2" href="#6-accord-inter-juges">6. Accord inter-juges</a><a class="l2" href="#7-proposition-d-39-article-propapp">7. Proposition d&#39;article (PropAPP)</a><a class="l2" href="#8-modele-de-donnees-omeka-s">8. Modèle de données Omeka S</a><a class="l2" href="#9-configuration">9. Configuration</a><a class="l2" href="#10-api-de-l-39-interface">10. API de l&#39;interface</a><a class="l2" href="#11-etendre-le-projet">11. Étendre le projet</a><a class="l2" href="#12-workflow-explozoteroanno">12. Workflow exploZoteroAnno</a><a class="l3" href="#un-serveur-par-application">Un serveur par application</a><a class="l2" href="#13-documentation-et-conteneur">13. Documentation et conteneur</a><a class="l2" href="#14-limites-connues">14. Limites connues</a></nav>
+<nav class="toc"><strong>Sur cette page</strong><a class="l2" href="#1-architecture">1. Architecture</a><a class="l2" href="#2-le-workflow-de-l-39-atelier-d-39-articles">2. Le workflow de l&#39;Atelier d&#39;articles</a><a class="l2" href="#3-organisation-du-code">3. Organisation du code</a><a class="l3" href="#agents-src-agents">Agents (src/agents/)</a><a class="l3" href="#outils-src-tools-et-bibliotheques-src-lib">Outils (src/tools/) et bibliothèques (src/lib/)</a><a class="l3" href="#comptage-des-tokens-src-lib-metrics-usage-ts">Comptage des tokens (src/lib/metrics/usage.ts)</a><a class="l3" href="#estimation-du-cout-src-lib-metrics-impact-ts">Estimation du coût (src/lib/metrics/impact.ts)</a><a class="l3" href="#historique-des-executions-src-workflow-runs-history-ts">Historique des exécutions (src/workflow/runs/history.ts)</a><a class="l2" href="#4-extraction-des-documents">4. Extraction des documents</a><a class="l2" href="#5-graphe-de-concepts">5. Graphe de concepts</a><a class="l2" href="#6-accord-inter-juges">6. Accord inter-juges</a><a class="l2" href="#7-proposition-d-39-article-propapp">7. Proposition d&#39;article (PropAPP)</a><a class="l2" href="#8-modele-de-donnees-omeka-s">8. Modèle de données Omeka S</a><a class="l2" href="#9-configuration">9. Configuration</a><a class="l2" href="#10-api-de-l-39-interface">10. API de l&#39;interface</a><a class="l2" href="#11-etendre-le-projet">11. Étendre le projet</a><a class="l2" href="#12-workflow-explozoteroanno">12. Workflow exploZoteroAnno</a><a class="l3" href="#un-serveur-par-application">Un serveur par application</a><a class="l2" href="#13-documentation-et-conteneur">13. Documentation et conteneur</a><a class="l2" href="#14-limites-connues">14. Limites connues</a></nav>
 </div>
 <script type="module">
 import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";

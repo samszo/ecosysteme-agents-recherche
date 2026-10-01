@@ -71,7 +71,6 @@ const ENV_FIELDS = [
   { key: "OMKS_KEY_IDENTITY", label: "Identité de la clé Omeka S", group: "Omeka S", help: "Clé API d'un utilisateur Omeka S (Utilisateur > Clés API)." },
   { key: "OMKS_KEY_CREDENTIAL", label: "Secret de la clé Omeka S", secret: true, group: "Omeka S" },
   { key: APP_DEF.portKey, label: "Port de cette interface", group: "Interface", help: `Pris en compte au prochain lancement du serveur (${APP_DEF.defaultPort} par défaut).` },
-  { key: APPS[OTHER].urlKey, label: `Adresse de l'application ${APPS[OTHER].label}`, group: "Interface", help: `Pour le lien entre les deux applications (par défaut http://127.0.0.1:${APPS[OTHER].defaultPort}).` },
 ];
 const SECRET_KEYS = new Set(ENV_FIELDS.filter(f => f.secret).map(f => f.key));
 

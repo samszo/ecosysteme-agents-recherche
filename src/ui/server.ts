@@ -15,6 +15,8 @@ import { Zotero } from "../lib/zotero/zotero";
 import { Omk } from "../lib/omeka/omk";
 import crypto from "crypto";
 import { readHistory, type HistoryEntry } from "../workflow/runs/history";
+import { Albert } from "../lib/albert/albert";
+import { albertCollectionByName, createDefaultPrompts, listAnswers, listPrompts, queryRag, saveAnswer, savePrompt, type RagAnswer } from "../lib/rag/ragQuery";
 
 // ROOT : répertoire de données (.env, workflow.config.json, résultats) = répertoire courant
 // APP_DIR : code du projet (identique à ROOT en local, distinct dans le conteneur Docker)
@@ -330,6 +332,26 @@ async function history() {
   return { calls: [...calls.values()], omekaAdmin, omekaError: omeka.error ?? null };
 }
 
+// ==========================================
+// RAG Albert (exploZoteroAnno) : clients construits avec les connexions de ce serveur
+// ==========================================
+
+async function serverOmk() {
+  const env = readEnv();
+  if (!env.OMKS_API_URL || !env.OMKS_KEY_IDENTITY || !env.OMKS_KEY_CREDENTIAL) throw new Error("Connexion Omeka S incomplète (page Paramètres)");
+  const omk = new Omk({ api: env.OMKS_API_URL, ident: env.OMKS_KEY_IDENTITY, key: env.OMKS_KEY_CREDENTIAL, vocabs: currentConfig().omeka.vocabs });
+  await omk.init();
+  return omk;
+}
+const serverAlbert = () => new Albert(currentConfig().models.provider, readEnv().ALBERT_API_KEY ?? "");
+async function zoteroCollection(key: string) {
+  const env = readEnv();
+  const c = await new Zotero(env.ZOTERO_USER_ID ?? "", env.ZOTERO_API_KEY ?? "", env.ZOTERO_GROUP_ID || undefined).collection(key);
+  return { key, name: String(c?.data?.name ?? key) };
+}
+// réponses récentes, en attente d'un éventuel enregistrement dans Omeka S
+const ragAnswers = new Map<string, RagAnswer>();
+
 // fichiers produits par exploZoteroAnno (dossier outputDir)
 function exploResultFiles() {
   const dir = path.join(ROOT, currentExploConfig().outputDir);
@@ -340,6 +362,7 @@ function exploResultFiles() {
     { name: "guide_annotation.md", title: "Guide d'annotation" },
     { name: "participation.json", title: "Participation (données)" },
     { name: "collaborations.json", title: "Collaborations (données)" },
+    { name: "rag_indexation.json", title: "Indexation RAG Albert (données)" },
   ];
   return known
     .map(f => {
@@ -396,8 +419,14 @@ const routes: Record<string, (req: http.IncomingMessage, res: http.ServerRespons
     res.end(fs.readFileSync(path.join(PUBLIC_DIR, APP_DEF.page)));
   },
 
+  // page des paramètres de connexion (commune aux deux applications, connexions du serveur qui la sert)
+  "GET /parametres": (_req, res) => {
+    res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+    res.end(fs.readFileSync(path.join(PUBLIC_DIR, "settings.html")));
+  },
+
   // application de ce serveur et adresses des deux applications
-  "GET /api/apps": (_req, res) => sendJson(res, 200, { current: APP, apps: appUrls() }),
+  "GET /api/apps": (_req, res) => sendJson(res, 200, { current: APP, apps: appUrls(), envFiles: APP_DEF.envFiles }),
 
   "GET /api/settings": (_req, res) => {
     const env = readEnv();
@@ -527,6 +556,82 @@ const routes: Record<string, (req: http.IncomingMessage, res: http.ServerRespons
 
   "GET /api/explo/results": (_req, res) => sendJson(res, 200, exploResultFiles()),
 
+  // collection Albert de la collection Zotero (même nom) : existence et nombre de documents
+  "GET /api/explo/rag/status": async (_req, res, url) => {
+    const key = url.searchParams.get("collection") || currentExploConfig().input.zoteroCollection;
+    try {
+      const collection = await zoteroCollection(key);
+      const albert = await albertCollectionByName(serverAlbert(), collection.name);
+      sendJson(res, 200, { collection, albert: albert && { id: albert.id, documents: albert.documents ?? null, size: albert.size ?? null } });
+    } catch (e) {
+      sendJson(res, 502, { error: (e as Error).message });
+    }
+  },
+
+  // modèles de prompt enregistrés dans Omeka S
+  "GET /api/explo/rag/prompts": async (_req, res) => {
+    try { sendJson(res, 200, await listPrompts(await serverOmk(), currentExploConfig().rag)); }
+    catch (e) { sendJson(res, 502, { error: (e as Error).message }); }
+  },
+  "POST /api/explo/rag/prompts": async (req, res) => {
+    const body = await readBody(req);
+    try { sendJson(res, 200, await savePrompt(await serverOmk(), currentExploConfig().rag, body)); }
+    catch (e) { sendJson(res, 502, { error: (e as Error).message }); }
+  },
+  "POST /api/explo/rag/prompts/defaults": async (_req, res) => {
+    try { sendJson(res, 200, await createDefaultPrompts(await serverOmk(), currentExploConfig().rag)); }
+    catch (e) { sendJson(res, 502, { error: (e as Error).message }); }
+  },
+
+  // consultation : recherche dans la collection Albert, réponse du modèle avec le modèle de prompt choisi, coût
+  "POST /api/explo/rag/query": async (req, res) => {
+    const body = await readBody(req);
+    try {
+      const config = currentExploConfig();
+      const omk = await serverOmk();
+      const prompt = (await listPrompts(omk, config.rag)).find(p => p.id === Number(body.promptId));
+      if (!prompt) throw new Error("Modèle de prompt introuvable dans Omeka S");
+      const answer = await queryRag({
+        albert: serverAlbert(), rag: config.rag, costs: currentConfig().costs,
+        model: String(body.model || currentConfig().models.analytics),
+        collection: await zoteroCollection(String(body.collection || config.input.zoteroCollection)),
+        question: String(body.question ?? ""),
+        prompt,
+        ...(body.limit ? { limit: Number(body.limit) } : {}),
+        ...(body.method ? { method: body.method } : {}),
+        ...(body.scoreThreshold !== undefined && body.scoreThreshold !== "" ? { scoreThreshold: Number(body.scoreThreshold) } : {}),
+      });
+      const id = crypto.randomUUID();
+      ragAnswers.set(id, answer);
+      while (ragAnswers.size > 30) ragAnswers.delete(ragAnswers.keys().next().value!);
+      sendJson(res, 200, { id, ...answer });
+    } catch (e) {
+      sendJson(res, 502, { error: (e as Error).message });
+    }
+  },
+
+  // enregistrement d'une réponse dans Omeka S, à la demande de l'utilisateur
+  "POST /api/explo/rag/save": async (req, res) => {
+    const { id } = await readBody(req);
+    const answer = ragAnswers.get(String(id));
+    if (!answer) return sendJson(res, 404, { error: "Réponse introuvable (serveur redémarré ?) : relancer la question" });
+    try {
+      const itemId = await saveAnswer(await serverOmk(), currentExploConfig().rag, answer);
+      sendJson(res, 200, { itemId, adminUrl: `${readEnv().OMKS_API_URL?.replace(/\/api\/?$/, "")}/admin/item/${itemId}` });
+    } catch (e) {
+      sendJson(res, 502, { error: (e as Error).message });
+    }
+  },
+
+  "GET /api/explo/rag/answers": async (_req, res, url) => {
+    try {
+      const key = url.searchParams.get("collection") || currentExploConfig().input.zoteroCollection;
+      sendJson(res, 200, { answers: await listAnswers(await serverOmk(), currentExploConfig().rag, key), omekaAdmin: readEnv().OMKS_API_URL?.replace(/\/api\/?$/, "/admin/item/") ?? "" });
+    } catch (e) {
+      sendJson(res, 502, { error: (e as Error).message });
+    }
+  },
+
   "GET /api/explo/file": (_req, res, url) => {
     const name = url.searchParams.get("name") ?? "";
     const file = exploResultFiles().find((f: any) => f.name === name);
@@ -576,6 +681,9 @@ const APP_ONLY: Record<string, AppName> = {
   "POST /api/cfp-file": "paper", "GET /api/results": "paper", "GET /api/history": "paper", "GET /api/file": "paper",
   "GET /api/explo/settings": "explo", "POST /api/explo/settings": "explo", "POST /api/explo/guide": "explo",
   "GET /api/explo/results": "explo", "GET /api/explo/file": "explo",
+  "GET /api/explo/rag/status": "explo", "GET /api/explo/rag/prompts": "explo", "POST /api/explo/rag/prompts": "explo",
+  "POST /api/explo/rag/prompts/defaults": "explo", "POST /api/explo/rag/query": "explo", "POST /api/explo/rag/save": "explo",
+  "GET /api/explo/rag/answers": "explo",
 };
 
 // documentation HTML générée par npm run docs (docs/html)

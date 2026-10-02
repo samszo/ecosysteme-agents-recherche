@@ -87,7 +87,7 @@
 </tr>
 <tr>
 <td>API Albert</td>
-<td>une clé d&#39;API (Etalab) donnant accès aux modèles <code>openai/gpt-oss-120b</code> et <code>mistralai/Ministral-3-8B-Instruct-2512</code> (modifiables)</td>
+<td>une clé d&#39;API (Etalab) donnant accès aux modèles <code>openai/gpt-oss-120b</code> et <code>mistralai/Ministral-3-8B-Instruct-2512</code> (modifiables) ; pour le RAG d&#39;exploZoteroAnno, aux collections, documents et à la recherche (<code>/v1/collections</code>, <code>/v1/documents</code>, <code>/v1/search</code>)</td>
 </tr>
 <tr>
 <td>Zotero</td>
@@ -103,7 +103,7 @@
 </tr>
 </tbody></table>
 <h2 id="2-variables-d-39-environnement-env"><a class="anchor" href="#2-variables-d-39-environnement-env">#</a>2. Variables d&#39;environnement (<code>.env</code>)</h2>
-<p>Le fichier <code>.env</code> contient les accès aux services. Un modèle est fourni dans <code>.env.example</code>. Toutes ces valeurs sont aussi modifiables depuis l&#39;onglet <strong>Paramètres</strong> de l&#39;Atelier d&#39;articles, ou la section <strong>Grille › Connexions</strong> d&#39;exploZoteroAnno.</p>
+<p>Le fichier <code>.env</code> contient les accès aux services. Un modèle est fourni dans <code>.env.example</code>. Toutes ces valeurs sont aussi modifiables depuis la page <strong>⚙ Paramètres</strong> de chaque application (<code>/parametres</code>).</p>
 <table>
 <thead>
 <tr>
@@ -188,7 +188,7 @@
 <td>Historique des exécutions de l&#39;Atelier (<code>workflow.history.json</code>)</td>
 </tr>
 </tbody></table>
-<p>Chaque application a <strong>son propre serveur</strong>, avec son port, sa configuration et son traitement en cours : les deux peuvent traiter en même temps. exploZoteroAnno lit <code>.env</code>, <strong>surchargé par <code>.env.explo</code></strong> (nom modifiable par <code>EXPLO_ENV_FILE</code>) : on peut ainsi lui donner d&#39;autres connexions (par exemple une autre bibliothèque de groupe Zotero ou une autre instance Omeka S). Son onglet <em>Grille › Connexions</em> n&#39;écrit dans <code>.env.explo</code> que les valeurs qui diffèrent de <code>.env</code> ; les autres restent « héritées ».</p>
+<p>Chaque application a <strong>son propre serveur</strong>, avec son port, sa configuration et son traitement en cours : les deux peuvent traiter en même temps. exploZoteroAnno lit <code>.env</code>, <strong>surchargé par <code>.env.explo</code></strong> (nom modifiable par <code>EXPLO_ENV_FILE</code>) : on peut ainsi lui donner d&#39;autres connexions (par exemple une autre bibliothèque de groupe Zotero ou une autre instance Omeka S). Sa page <em>Paramètres</em> n&#39;écrit dans <code>.env.explo</code> que les valeurs qui diffèrent de <code>.env</code> ; les autres restent « héritées ».</p>
 <blockquote>
 <p>Le fichier <code>.env</code> contient des secrets : il est exclu de git (<code>.gitignore</code>) et de l&#39;image Docker (<code>.dockerignore</code>).</p>
 </blockquote>
@@ -435,7 +435,7 @@ host     = &quot;localhost&quot;</code></pre>
 </ol>
 <p>Pour un simple essai en local, la clé de démarrage peut être utilisée telle quelle dans <code>.env</code>, à condition que l&#39;instance ne soit pas accessible depuis le réseau.</p>
 <h3 id="vocabulaires"><a class="anchor" href="#vocabulaires">#</a>Vocabulaires</h3>
-<p>Le workflow utilise les vocabulaires suivants (réglage <code>omeka.vocabs</code>). L&#39;onglet <strong>Paramètres › Tester les connexions</strong> signale ceux qui manquent.</p>
+<p>Le workflow utilise les vocabulaires suivants (réglage <code>omeka.vocabs</code>). La page <strong>⚙ Paramètres › Enregistrer et tester les connexions</strong> signale ceux qui manquent.</p>
 <table>
 <thead>
 <tr>
@@ -506,7 +506,7 @@ host     = &quot;localhost&quot;</code></pre>
 <tr>
 <td><code>json</code></td>
 <td><code>application/json</code>, <code>text/plain</code></td>
-<td>exploZoteroAnno : données de participation et de collaborations</td>
+<td>exploZoteroAnno : données de participation et de collaborations, trace de l&#39;indexation RAG sur chaque document</td>
 </tr>
 </tbody></table>
 <p>Un type refusé n&#39;interrompt pas le traitement. Si seule l&#39;<strong>extension</strong> est refusée (cas fréquent de <code>csv</code>, <code>bib</code> ou <code>md</code>), le fichier est déposé une seconde fois avec l&#39;extension <code>.txt</code>, son format d&#39;origine étant noté dans <code>dcterms:format</code>. Si le <strong>type de contenu</strong> est refusé aussi, un avertissement indique quoi autoriser et le fichier reste disponible localement. Le graphe de l&#39;Atelier au format JSON (<code>visualisation_graphe.json</code>) n&#39;est pas déposé : ses données sont incluses dans <code>visualisation_graphe.html</code>.</p>
@@ -514,21 +514,21 @@ host     = &quot;localhost&quot;</code></pre>
 <ol>
 <li>Créer une clé sur <a href="https://www.zotero.org/settings/keys" target="_blank" rel="noopener">https://www.zotero.org/settings/keys</a> avec l&#39;accès en lecture à la bibliothèque (et au groupe).</li>
 <li>Pour mesurer l&#39;accord inter-juges, utiliser une <strong>bibliothèque de groupe</strong> : chaque annotation y garde son auteur. Renseigner alors <code>ZOTERO_GROUP_ID</code>.</li>
-<li>Choisir la collection à traiter dans l&#39;interface : la liste est chargée depuis Zotero, et dans exploZoteroAnno elle suit l&#39;identifiant de groupe saisi dans <em>Grille › Connexions</em>, avant même son enregistrement.</li>
+<li>Choisir la collection à traiter dans l&#39;interface : la liste est chargée depuis la bibliothèque enregistrée sur la page <em>Paramètres</em>, qui indique pendant la saisie la bibliothèque et son nombre de collections.</li>
 <li>Pour <strong>exploZoteroAnno</strong>, chaque collaborateur doit être membre du groupe et annoter dans le lecteur de Zotero (les annotations y gardent leur auteur et leur date). Le guide d&#39;annotation produit par l&#39;application explique la marche à suivre.</li>
 </ol>
 <h2 id="7-verifier-l-39-installation"><a class="anchor" href="#7-verifier-l-39-installation">#</a>7. Vérifier l&#39;installation</h2>
 <p><strong>Atelier d&#39;articles</strong></p>
 <ol>
 <li>Ouvrir <a href="http://127.0.0.1:7272" target="_blank" rel="noopener">http://127.0.0.1:7272</a>.</li>
-<li>Onglet <strong>Paramètres › Tester les connexions</strong> : Albert, Zotero et Omeka S doivent apparaître en vert.</li>
-<li>Choisir la collection Zotero et l&#39;appel à propositions, puis <strong>Enregistrer et lancer</strong>.</li>
+<li><strong>⚙ Paramètres › Enregistrer et tester les connexions</strong> : Albert, Zotero et Omeka S doivent apparaître en vert.</li>
+<li>Onglet <strong>Configuration</strong> : choisir la collection Zotero et l&#39;appel à propositions, puis <strong>Enregistrer et lancer</strong>.</li>
 </ol>
 <p><strong>exploZoteroAnno</strong></p>
 <ol>
 <li>Ouvrir <a href="http://127.0.0.1:7273" target="_blank" rel="noopener">http://127.0.0.1:7273</a> (ou le lien dans l&#39;en-tête de l&#39;Atelier).</li>
-<li>Onglet <strong>Grille › Tester les connexions</strong> : les connexions sont héritées de <code>.env</code> ; une valeur modifiée ici est enregistrée dans <code>.env.explo</code>.</li>
-<li>Choisir la collection, puis <strong>Enregistrer et analyser</strong> ; les onglets Participation, Collaborations, Thèmes et Rapport se remplissent à la fin du traitement.</li>
+<li><strong>⚙ Paramètres › Enregistrer et tester les connexions</strong> : les connexions sont héritées de <code>.env</code> ; une valeur modifiée ici est enregistrée dans <code>.env.explo</code>.</li>
+<li>Onglet <strong>Grille</strong> : choisir la collection, puis <strong>Enregistrer et analyser</strong> ; les onglets Participation, Collaborations, Thèmes et Rapport se remplissent à la fin du traitement, et l&#39;onglet <strong>RAG</strong> permet d&#39;interroger la collection (créer d&#39;abord les modèles de prompt par défaut).</li>
 </ol>
 <pre class="mermaid">sequenceDiagram
     actor U as Utilisateur
@@ -747,6 +747,16 @@ find /var/backups -name &quot;omeka-*.sql.gz&quot; -mtime +30 -delete</code></pr
 <td>exploZoteroAnno : deux documents différents fusionnés</td>
 <td>même titre et même année (critère de repli)</td>
 <td>décocher <em>Fusionner les documents en double</em>, ou corriger le titre ou la date dans Zotero</td>
+</tr>
+<tr>
+<td>exploZoteroAnno : « pas encore indexée » dans l&#39;onglet RAG</td>
+<td>aucune analyse avec le RAG activé, ou nom de collection Zotero modifié depuis</td>
+<td>lancer une analyse avec <em>Grille › RAG Albert › Indexer les documents dans Albert</em></td>
+</tr>
+<tr>
+<td>exploZoteroAnno : <code>Albert 403</code> ou <code>401</code> à l&#39;indexation</td>
+<td>clé Albert sans accès aux collections et documents</td>
+<td>demander les droits RAG pour la clé, ou désactiver l&#39;indexation</td>
 </tr>
 <tr>
 <td>exploZoteroAnno : refus des fichiers <code>json</code> par Omeka S</td>

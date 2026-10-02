@@ -51,6 +51,8 @@ flowchart LR
 
 - **Interface** (`src/ui/server.ts`) : serveur `node:http` sans dépendance, lancé une fois par application (voir *Un serveur par application*), qui gère les connexions et la configuration de son application, lance son workflow dans un **processus enfant** (la configuration et les connexions sont ainsi relues à chaque exécution), diffuse le journal en **Server-Sent Events** et sert les résultats.
 - **Lanceurs** (`src/runners/paper.ts`, `src/runners/explo.ts`) : enregistrent la configuration dans Omeka S, exécutent le workflow Mastra, produisent les fichiers de résultats (graphe ou réseau sigma.js, rapport de traitement…) et importent les documents de fin d'analyse dans l'item de configuration de l'exécution.
+- **Paramètres de connexion** : page commune `src/ui/public/settings.html`, servie par chaque serveur sur `/parametres` ; elle enregistre les connexions de l'application qui la sert (`.env`, ou `.env.explo` pour exploZoteroAnno). Les pages des applications n'enregistrent que leur configuration.
+- **RAG Albert** (exploZoteroAnno) : l'indexation est une étape du workflow (processus enfant) ; la consultation, les modèles de prompt et l'enregistrement des réponses sont des routes du serveur (`src/lib/rag/ragQuery.ts`), qui appellent directement Albert et Omeka S avec les connexions du serveur.
 - **Répertoire de données** : le répertoire courant. En local c'est la racine du projet ; dans Docker c'est le volume `/data`, le code étant dans `/app`.
 
 ## 2. Le workflow de l'Atelier d'articles
@@ -108,6 +110,8 @@ src/
 │   ├── extraction/           pdfExtract, attachmentExtract, zip, chunkText
 │   ├── metrics/              usage (tokens), impact (énergie, carbone, argent)
 │   ├── omeka/                omk (client), oaAnnotations, conceptIndex, conceptStore, zoteroCollections, verify
+│   ├── albert/               albert (client de l'API Albert : collections, documents, recherche, complétions)
+│   ├── rag/                  ragIndex (indexation d'une collection), ragQuery (modèles de prompt, consultation, réponses)
 │   ├── visualization/        graphViz (graphology, sigma.js)
 │   └── zotero/               zotero (client), zoteroToOmeka (correspondance des métadonnées), duplicates (doublons)
 ├── tools/                    outils Mastra uniquement (index.ts ré-exporte)
@@ -117,13 +121,13 @@ src/
 │   ├── steps/
 │   │   ├── common/           fetchLiteratureStep (partagée)
 │   │   ├── paper/            analyzeCfp, buildWiki, kappaAnalysis, normalizeOkf, draftPaper, reviewPaper
-│   │   └── explo/            participation, collaboration, themes
+│   │   └── explo/            participation, collaboration, ragIndex, themes
 │   ├── reports/              paperReport, exploReport, annotationGuide
 │   └── runs/                 saveWorkflowConfig (item Omeka), importSynthesis (médias), history (historique local)
 ├── runners/                  lanceurs : paper.ts (npm start), explo.ts (npm run explo)
 └── ui/
     ├── server.ts             serveur d'une application (npm run ui / npm run ui:explo)
-    └── public/               paper.html, explo.html
+    └── public/               paper.html, explo.html, settings.html (page Paramètres commune)
 ```
 
 Hors de `src/` : `docs/` (documentation, `grille_annotation.md`), `scripts/build-docs.ts`, `docker/entrypoint.sh`, `.vscode/launch.json` (configurations de débogage des deux workflows et des deux serveurs), `install/` (instance Omeka S préparée, distribuée à part). Les fichiers produits vont dans `resultats/atelier/` et `resultats/explo/` (réglages `outputDir`), dans le répertoire de données : la racine du projet en local, le volume `data/` avec Docker.
@@ -320,7 +324,25 @@ erDiagram
         curation_data tokens "consommation et coût (JSON)"
         medias documents "Atelier : relecture, graphe, rapport, désaccords ; explo : guide, rapport, thèmes, réseau, JSON"
     }
+    PROMPT_RAG {
+        classe dcterms_MethodOfInstruction "rag.promptClass"
+        dcterms_type type "Modèle de prompt RAG"
+        dcterms_title titre "nom du modèle"
+        dcterms_abstract description "présentation"
+        dcterms_description gabarit "variables question, extraits, collection"
+    }
+    REPONSE_RAG {
+        classe bibo_Note "rag.answerClass"
+        dcterms_type type "Réponse RAG"
+        dcterms_abstract question "question posée"
+        dcterms_description reponse "réponse du modèle"
+        curation_data json "modèle, paramètres, extraits, tokens, coût"
+        medias reponse "Markdown complet"
+    }
     DOCUMENT }o--|{ COLLECTION : "dcterms:isPartOf"
+    REPONSE_RAG }o--o| PROMPT_RAG : "dcterms:source"
+    REPONSE_RAG }o--o{ DOCUMENT : "dcterms:references"
+    REPONSE_RAG }o--o| COLLECTION : "dcterms:isPartOf"
     ANNOTATION }o--|| DOCUMENT : "oa:hasTarget"
     DOCUMENT }o--o{ CONCEPT : "dcterms:subject"
     ANNOTATION }o--o{ CONCEPT : "curation:tag"
@@ -374,6 +396,13 @@ Les modifications faites dans l'interface sont enregistrées dans le fichier de 
 | `analysis.mergeDuplicates` | fusion des documents en double (`true` par défaut) |
 | `analysis.minPassagesForKappa` | nombre minimum de passages communs pour calculer un kappa |
 | `themes.count`, `themes.maxPassages` | nombre de thèmes, passages transmis à l'agent |
+| `rag.enabled`, `rag.allCollections` | indexation dans Albert à chaque analyse ; dépôt aussi dans les autres collections Zotero du document |
+| `rag.chunkSize`, `rag.chunkOverlap` | découpage des documents par Albert (caractères ; séparateurs Markdown) |
+| `rag.embeddingsModel` | modèle de vectorisation (estimation du coût, `costs.models`) |
+| `rag.limit`, `rag.method`, `rag.scoreThreshold` | consultation : nombre d'extraits, recherche `hybrid`, `semantic` ou `lexical`, seuil (sémantique) |
+| `rag.system` | instructions générales du modèle |
+| `rag.promptType`, `rag.promptClass`, `rag.answerType`, `rag.answerClass` | repérage et classes Omeka S des modèles de prompt et des réponses |
+| `rag.defaultPrompts` | modèles proposés par « Créer les modèles par défaut » |
 | `outputDir` | dossier des fichiers produits (`resultats/explo`) |
 
 ## 10. API de l'interface
@@ -388,7 +417,8 @@ Routes communes aux deux serveurs (chacune s'applique à l'application du serveu
 | `POST /api/check` | teste Albert, Zotero et Omeka S (vocabulaires, clé d'écriture par un `PATCH` sur un item inexistant : 404 = valide, 403 = refusée) |
 | `GET /api/zotero/collections` | collections de la bibliothèque enregistrée |
 | `POST /api/zotero/collections` | collections de la bibliothèque saisie dans le formulaire (`{ userId, groupId, apiKey }`, non encore enregistrée) |
-| `GET /api/apps` | adresses des deux applications (liens entre elles) |
+| `GET /parametres` | page des connexions (`settings.html`) |
+| `GET /api/apps` | application du serveur, adresses des deux applications (liens entre elles), fichiers de connexion |
 | `GET /api/albert/models` | modèles disponibles |
 | `POST /api/run`, `POST /api/run/stop`, `GET /api/run` | lancer, arrêter, état |
 | `GET /api/run/events` | journal et statut en Server-Sent Events |
@@ -402,7 +432,16 @@ Routes propres à l'Atelier d'articles :
 | `GET /api/results`, `GET /api/file?name=` | liste et contenu des résultats (liste blanche) |
 | `GET /api/history` | appels traités : historique local et configurations Omeka S, regroupés par appel |
 
-Routes propres à exploZoteroAnno : `GET` et `POST /api/explo/settings`, `POST /api/explo/guide` (guide d'annotation à partir de la grille), `GET /api/explo/results`, `GET /api/explo/file?name=`.
+Routes propres à exploZoteroAnno : `GET` et `POST /api/explo/settings`, `POST /api/explo/guide` (guide d'annotation à partir de la grille), `GET /api/explo/results`, `GET /api/explo/file?name=`, et pour le RAG :
+
+| Méthode et route | Rôle |
+|---|---|
+| `GET /api/explo/rag/status?collection=` | collection Albert de même nom que la collection Zotero : identifiant, nombre de documents |
+| `GET`, `POST /api/explo/rag/prompts` | liste, création ou modification (`{ id?, title, description, template }`) d'un modèle de prompt dans Omeka S |
+| `POST /api/explo/rag/prompts/defaults` | crée les modèles par défaut absents (comparaison sur le titre) |
+| `POST /api/explo/rag/query` | `{ collection, promptId, question, limit?, method?, model? }` : recherche, réponse, extraits, coût ; la réponse est gardée en mémoire (30 au plus) sous un identifiant |
+| `POST /api/explo/rag/save` | `{ id }` : enregistre la réponse dans Omeka S, renvoie l'item créé |
+| `GET /api/explo/rag/answers?collection=` | réponses enregistrées pour la collection |
 
 Une route de l'autre application répond 404. Chaque serveur écoute sur `127.0.0.1` (`HOST`, ou `EXPLO_HOST` pour exploZoteroAnno ; `0.0.0.0` dans le conteneur) et sur son port : `PORT` (7272) ou `EXPLO_PORT` (7273). Un seul traitement à la fois par serveur (`POST /api/run` répond 409 si un traitement est en cours).
 
@@ -431,6 +470,7 @@ flowchart TD
     subgraph PAR[parallèle]
         P[participation<br/>computeParticipation]
         C[collaboration<br/>analyzeCollaboration]
+        R[rag-index<br/>indexCollectionForRag<br/>→ collections Albert]
     end
     PAR --> T[themes<br/>discussionAgent + formatAnnotations]
     T --> OUT([rapport, thèmes, réseau sigma.js,<br/>données JSON, guide → Omeka])
@@ -442,11 +482,41 @@ flowchart TD
 | `groupDuplicates` (`src/lib/zotero/duplicates.ts`) | doublons de la collection (option `analysis.mergeDuplicates`, transmise par `fetch-literature` à `fetchZoteroData`) | clés d'identité `md5`, DOI (aussi dans `extra`), URL normalisée, titre normalisé + année (titres d'au moins 15 caractères) ; regroupement union-find ; exemplaire principal : fichier plutôt que lien, PDF, puis le plus ancien. Seul le principal est extrait et enregistré dans Omeka (`dcterms:identifier` = toutes les clés Zotero) ; annotations du lecteur, notes, annotations incrustées dans les PDF et marqueurs des doublons lui sont ajoutés (dédoublonnés sur passage, note, auteur, code) ; `articles[].duplicates` décrit les exemplaires fusionnés |
 | `computeParticipation` | par collaborateur, document, couleur de la grille, semaine | `positionForColor` avec la grille de l'exploration |
 | `analyzeCollaboration` | passages communs, paires, convergences et divergences, kappa, réseau | `words` / `jaccard`, `fleissKappa` / `cohenKappa`, `interpretKappa` |
+| `rag-index` (`src/lib/rag/ragIndex.ts`) | dépôt des documents dans les collections privées Albert (option `rag.enabled`) | voir *RAG Albert* ci-dessous |
 | `discussionAgent` | thèmes de discussion (modèle analytique) | `formatAnnotations` (grille en paramètre), comptage des tokens |
 | `src/runners/explo.ts` | lancement (`npm run explo`), fichiers, Omeka, coût | `saveWorkflowConfig`, `updateWorkflowStatus`, `attachDocuments`, `generateGraphHtml`, `usageReport`, `estimateImpact` |
 | `src/workflow/reports/annotationGuide.ts` | guide d'annotation à partir de la grille | — |
 
-Fichiers produits dans `resultats/explo/` (réglage `outputDir`) : `guide_annotation.md`, `participation.json`, `collaborations.json`, `reseau_collaborations.html`, `themes_discussion.md`, `rapport_explo.md`.
+Fichiers produits dans `resultats/explo/` (réglage `outputDir`) : `guide_annotation.md`, `participation.json`, `collaborations.json`, `reseau_collaborations.html`, `themes_discussion.md`, `rapport_explo.md`, `rag_indexation.json` (bilan de l'indexation).
+
+### RAG Albert
+
+Mise en œuvre du [guide RAG d'Albert](https://guides.ia.numerique.gouv.fr/albert-api/guides/rag) avec le client `src/lib/albert/albert.ts` (`/v1/collections`, `/v1/documents`, `/v1/search`, `/v1/chat/completions`).
+
+```mermaid
+sequenceDiagram
+    participant W as rag-index (workflow)
+    participant Z as Zotero
+    participant A as Albert
+    participant O as Omeka S
+    W->>Z: collections de la bibliothèque (clé → nom)
+    W->>W: un document par item Omeka ou texte identique,<br/>collections Zotero cumulées
+    loop chaque collection Zotero du document
+        W->>A: collection privée de même nom (créée au besoin)<br/>et documents déjà présents
+        alt document absent
+            W->>A: POST /documents (Markdown, chunk_size, métadonnées)
+        end
+    end
+    W->>O: média JSON « Indexation RAG Albert » de l'item du document
+```
+
+- **Une collection Albert par nom de collection Zotero** (`ensureCollection` : la plus ancienne collection privée de ce nom, sinon création). Deux collections Zotero de même nom partagent donc la même collection Albert.
+- **Un dépôt par document** : les exemplaires fusionnés par `fetchZoteroData` n'en font qu'un, et les articles de même texte (fusion désactivée, même PDF rattaché à deux notices) sont regroupés par empreinte SHA-1 du texte normalisé, leurs collections étant cumulées. Avec `rag.allCollections`, le document est déposé dans la collection Albert de chacune de ses collections Zotero (`articles[].collectionKeys`, doublons compris) ; sinon dans celle de la collection analysée seulement.
+- **Idempotence** : le nom du document Albert commence par un identifiant stable (`omeka-<item>`, à défaut `zotero-<clé>`) ; les documents déjà présents dans la collection Albert ne sont pas redéposés.
+- **Contenu déposé** : Markdown (titre, auteurs, année, clés Zotero et Omeka, texte extrait), découpé par Albert (`chunk_size`, `chunk_overlap`, séparateurs `markdown`) ; métadonnées recopiées sur chaque extrait : `omeka_id`, `zotero_key`, `title`, `creators`, `year`, `zotero_collection`. Un texte de plus de 5 millions de caractères est déposé en plusieurs parties (limite de 20 Mo).
+- **Trace** : à chaque nouveau dépôt, un média JSON « Indexation RAG Albert » est déposé sur l'item du document (collections Zotero et Albert, identifiants des documents Albert, statut `créé` ou `déjà présent`, taille, tokens estimés, découpage) ; il remplace la trace précédente de l'application. Extension refusée : dépôt en `.json.txt`.
+- **Consultation** (`queryRag`) : recherche dans la collection Albert, gabarit du modèle de prompt rempli (`{{question}}`, `{{extraits}}` numérotés avec leur référence, `{{collection}}`), complétion avec `rag.system` en message système et le modèle choisi (modèle analytique par défaut).
+- **Coût** : l'indexation enregistre une estimation des tokens vectorisés (`texte / 4`, modèle `rag.embeddingsModel`) dans le compteur du workflow, donc dans le rapport et l'item de configuration ; chaque consultation calcule son coût (`estimateImpact`) à partir des tokens renvoyés par Albert pour la recherche et la complétion (estimés si absents), et rapporte aussi le coût et les impacts déclarés par Albert (nuls tant que la plateforme ne facture pas).
 
 Pour permettre ce suivi, deux évolutions profitent aux deux workflows : la date des annotations et des notes Zotero est conservée (`dcterms:created` sur l'`oa:Annotation`), et les nouvelles annotations du lecteur Zotero sont synchronisées pour les documents déjà présents dans Omeka S. Les briques communes acceptent désormais un paramètre : grille de couleurs (`positionForColor`, `formatAnnotations`), fichier de configuration (`readConfigOverride`, `writeConfigOverride`), fichier d'historique (`appendHistory`), workflow décrit (`saveWorkflowConfig`).
 
@@ -483,4 +553,5 @@ Chaque serveur a son propre traitement en cours (les deux applications peuvent t
 - Les sites protégés contre les robots ne peuvent pas être téléchargés : utiliser un fichier local.
 - Le contexte des modèles limite la taille des textes transmis (appel très long, plan très détaillé).
 - exploZoteroAnno : le repli « même titre et même année » peut fusionner deux documents distincts au titre identique (comptes rendus, éditions successives) ; la fusion se désactive par `analysis.mergeDuplicates`. Un doublon déjà enregistré dans Omeka S par une exécution antérieure n'est pas supprimé (avertissement dans le journal).
+- RAG : seul le texte extrait des documents est indexé (pas les annotations ni les notes) ; un document modifié après son indexation n'est pas redéposé (supprimer le document dans Albert pour forcer un nouveau dépôt) ; renommer une collection Zotero crée une nouvelle collection Albert à la prochaine analyse.
 - exploZoteroAnno : les annotations sans auteur (bibliothèque personnelle, PDF annotés hors Zotero) ne peuvent pas être attribuées et sont regroupées sous `analysis.unassignedLabel`.

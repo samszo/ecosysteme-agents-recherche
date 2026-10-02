@@ -45,6 +45,7 @@ async function main() {
   const participation = steps["participation"]?.output ?? null;
   const collaboration = steps["collaboration"]?.output ?? null;
   const themes: string = steps["themes"]?.output?.themes ?? "";
+  const rag = steps["rag-index"]?.output?.rag ?? null;
 
   const usage = usageSummary();
   const impact = estimateImpact(usage);
@@ -69,13 +70,17 @@ async function main() {
       documents.push({ filePath: out("reseau_collaborations.html"), title: "Réseau des collaborations (sigma.js)", type: "text/html" });
     }
   }
+  if (rag) {
+    await fs.writeFile(out("rag_indexation.json"), JSON.stringify(rag, null, 2));
+    documents.push({ filePath: out("rag_indexation.json"), title: "Indexation RAG Albert (données)", type: "application/json" });
+  }
   if (themes) {
     await fs.writeFile(out("themes_discussion.md"), `# Thèmes de discussion – ${collectionName}\n\n${themes.replace(/^#\s.*\n+/, "")}\n`);
     documents.push({ filePath: out("themes_discussion.md"), title: "Thèmes de discussion" });
   }
   await fs.writeFile(out("rapport_explo.md"), buildExploReport({
     runId: run.runId, status: runResult.status, startedAt, endedAt, collectionName,
-    participation, collaboration, themes, usage, impact,
+    participation, collaboration, themes, rag, usage, impact,
     ...(runResult.status === "failed" ? { error: String(runResult.error?.message ?? runResult.error) } : {}),
   }));
   documents.push({ filePath: out("rapport_explo.md"), title: "Rapport de l'annotation collective" });

@@ -114,6 +114,8 @@
 <ul>
 <li><strong>Interface</strong> (<code>src/ui/server.ts</code>) : serveur <code>node:http</code> sans dépendance, lancé une fois par application (voir <em>Un serveur par application</em>), qui gère les connexions et la configuration de son application, lance son workflow dans un <strong>processus enfant</strong> (la configuration et les connexions sont ainsi relues à chaque exécution), diffuse le journal en <strong>Server-Sent Events</strong> et sert les résultats.</li>
 <li><strong>Lanceurs</strong> (<code>src/runners/paper.ts</code>, <code>src/runners/explo.ts</code>) : enregistrent la configuration dans Omeka S, exécutent le workflow Mastra, produisent les fichiers de résultats (graphe ou réseau sigma.js, rapport de traitement…) et importent les documents de fin d&#39;analyse dans l&#39;item de configuration de l&#39;exécution.</li>
+<li><strong>Paramètres de connexion</strong> : page commune <code>src/ui/public/settings.html</code>, servie par chaque serveur sur <code>/parametres</code> ; elle enregistre les connexions de l&#39;application qui la sert (<code>.env</code>, ou <code>.env.explo</code> pour exploZoteroAnno). Les pages des applications n&#39;enregistrent que leur configuration.</li>
+<li><strong>RAG Albert</strong> (exploZoteroAnno) : l&#39;indexation est une étape du workflow (processus enfant) ; la consultation, les modèles de prompt et l&#39;enregistrement des réponses sont des routes du serveur (<code>src/lib/rag/ragQuery.ts</code>), qui appellent directement Albert et Omeka S avec les connexions du serveur.</li>
 <li><strong>Répertoire de données</strong> : le répertoire courant. En local c&#39;est la racine du projet ; dans Docker c&#39;est le volume <code>/data</code>, le code étant dans <code>/app</code>.</li>
 </ul>
 <h2 id="2-le-workflow-de-l-39-atelier-d-39-articles"><a class="anchor" href="#2-le-workflow-de-l-39-atelier-d-39-articles">#</a>2. Le workflow de l&#39;Atelier d&#39;articles</h2>
@@ -205,6 +207,8 @@
 │   ├── extraction/           pdfExtract, attachmentExtract, zip, chunkText
 │   ├── metrics/              usage (tokens), impact (énergie, carbone, argent)
 │   ├── omeka/                omk (client), oaAnnotations, conceptIndex, conceptStore, zoteroCollections, verify
+│   ├── albert/               albert (client de l'API Albert : collections, documents, recherche, complétions)
+│   ├── rag/                  ragIndex (indexation d'une collection), ragQuery (modèles de prompt, consultation, réponses)
 │   ├── visualization/        graphViz (graphology, sigma.js)
 │   └── zotero/               zotero (client), zoteroToOmeka (correspondance des métadonnées), duplicates (doublons)
 ├── tools/                    outils Mastra uniquement (index.ts ré-exporte)
@@ -214,13 +218,13 @@
 │   ├── steps/
 │   │   ├── common/           fetchLiteratureStep (partagée)
 │   │   ├── paper/            analyzeCfp, buildWiki, kappaAnalysis, normalizeOkf, draftPaper, reviewPaper
-│   │   └── explo/            participation, collaboration, themes
+│   │   └── explo/            participation, collaboration, ragIndex, themes
 │   ├── reports/              paperReport, exploReport, annotationGuide
 │   └── runs/                 saveWorkflowConfig (item Omeka), importSynthesis (médias), history (historique local)
 ├── runners/                  lanceurs : paper.ts (npm start), explo.ts (npm run explo)
 └── ui/
     ├── server.ts             serveur d'une application (npm run ui / npm run ui:explo)
-    └── public/               paper.html, explo.html</code></pre>
+    └── public/               paper.html, explo.html, settings.html (page Paramètres commune)</code></pre>
 <p>Hors de <code>src/</code> : <code>docs/</code> (documentation, <code>grille_annotation.md</code>), <code>scripts/build-docs.ts</code>, <code>docker/entrypoint.sh</code>, <code>.vscode/launch.json</code> (configurations de débogage des deux workflows et des deux serveurs), <code>install/</code> (instance Omeka S préparée, distribuée à part). Les fichiers produits vont dans <code>resultats/atelier/</code> et <code>resultats/explo/</code> (réglages <code>outputDir</code>), dans le répertoire de données : la racine du projet en local, le volume <code>data/</code> avec Docker.</p>
 <h3 id="agents-src-agents"><a class="anchor" href="#agents-src-agents">#</a>Agents (<code>src/agents/</code>)</h3>
 <table>
@@ -492,7 +496,25 @@
         curation_data tokens &quot;consommation et coût (JSON)&quot;
         medias documents &quot;Atelier : relecture, graphe, rapport, désaccords ; explo : guide, rapport, thèmes, réseau, JSON&quot;
     }
+    PROMPT_RAG {
+        classe dcterms_MethodOfInstruction &quot;rag.promptClass&quot;
+        dcterms_type type &quot;Modèle de prompt RAG&quot;
+        dcterms_title titre &quot;nom du modèle&quot;
+        dcterms_abstract description &quot;présentation&quot;
+        dcterms_description gabarit &quot;variables question, extraits, collection&quot;
+    }
+    REPONSE_RAG {
+        classe bibo_Note &quot;rag.answerClass&quot;
+        dcterms_type type &quot;Réponse RAG&quot;
+        dcterms_abstract question &quot;question posée&quot;
+        dcterms_description reponse &quot;réponse du modèle&quot;
+        curation_data json &quot;modèle, paramètres, extraits, tokens, coût&quot;
+        medias reponse &quot;Markdown complet&quot;
+    }
     DOCUMENT }o--|{ COLLECTION : &quot;dcterms:isPartOf&quot;
+    REPONSE_RAG }o--o| PROMPT_RAG : &quot;dcterms:source&quot;
+    REPONSE_RAG }o--o{ DOCUMENT : &quot;dcterms:references&quot;
+    REPONSE_RAG }o--o| COLLECTION : &quot;dcterms:isPartOf&quot;
     ANNOTATION }o--|| DOCUMENT : &quot;oa:hasTarget&quot;
     DOCUMENT }o--o{ CONCEPT : &quot;dcterms:subject&quot;
     ANNOTATION }o--o{ CONCEPT : &quot;curation:tag&quot;
@@ -633,6 +655,34 @@
 <td>nombre de thèmes, passages transmis à l&#39;agent</td>
 </tr>
 <tr>
+<td><code>rag.enabled</code>, <code>rag.allCollections</code></td>
+<td>indexation dans Albert à chaque analyse ; dépôt aussi dans les autres collections Zotero du document</td>
+</tr>
+<tr>
+<td><code>rag.chunkSize</code>, <code>rag.chunkOverlap</code></td>
+<td>découpage des documents par Albert (caractères ; séparateurs Markdown)</td>
+</tr>
+<tr>
+<td><code>rag.embeddingsModel</code></td>
+<td>modèle de vectorisation (estimation du coût, <code>costs.models</code>)</td>
+</tr>
+<tr>
+<td><code>rag.limit</code>, <code>rag.method</code>, <code>rag.scoreThreshold</code></td>
+<td>consultation : nombre d&#39;extraits, recherche <code>hybrid</code>, <code>semantic</code> ou <code>lexical</code>, seuil (sémantique)</td>
+</tr>
+<tr>
+<td><code>rag.system</code></td>
+<td>instructions générales du modèle</td>
+</tr>
+<tr>
+<td><code>rag.promptType</code>, <code>rag.promptClass</code>, <code>rag.answerType</code>, <code>rag.answerClass</code></td>
+<td>repérage et classes Omeka S des modèles de prompt et des réponses</td>
+</tr>
+<tr>
+<td><code>rag.defaultPrompts</code></td>
+<td>modèles proposés par « Créer les modèles par défaut »</td>
+</tr>
+<tr>
 <td><code>outputDir</code></td>
 <td>dossier des fichiers produits (<code>resultats/explo</code>)</td>
 </tr>
@@ -671,8 +721,12 @@
 <td>collections de la bibliothèque saisie dans le formulaire (<code>{ userId, groupId, apiKey }</code>, non encore enregistrée)</td>
 </tr>
 <tr>
+<td><code>GET /parametres</code></td>
+<td>page des connexions (<code>settings.html</code>)</td>
+</tr>
+<tr>
 <td><code>GET /api/apps</code></td>
-<td>adresses des deux applications (liens entre elles)</td>
+<td>application du serveur, adresses des deux applications (liens entre elles), fichiers de connexion</td>
 </tr>
 <tr>
 <td><code>GET /api/albert/models</code></td>
@@ -712,7 +766,39 @@
 <td>appels traités : historique local et configurations Omeka S, regroupés par appel</td>
 </tr>
 </tbody></table>
-<p>Routes propres à exploZoteroAnno : <code>GET</code> et <code>POST /api/explo/settings</code>, <code>POST /api/explo/guide</code> (guide d&#39;annotation à partir de la grille), <code>GET /api/explo/results</code>, <code>GET /api/explo/file?name=</code>.</p>
+<p>Routes propres à exploZoteroAnno : <code>GET</code> et <code>POST /api/explo/settings</code>, <code>POST /api/explo/guide</code> (guide d&#39;annotation à partir de la grille), <code>GET /api/explo/results</code>, <code>GET /api/explo/file?name=</code>, et pour le RAG :</p>
+<table>
+<thead>
+<tr>
+<th>Méthode et route</th>
+<th>Rôle</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>GET /api/explo/rag/status?collection=</code></td>
+<td>collection Albert de même nom que la collection Zotero : identifiant, nombre de documents</td>
+</tr>
+<tr>
+<td><code>GET</code>, <code>POST /api/explo/rag/prompts</code></td>
+<td>liste, création ou modification (<code>{ id?, title, description, template }</code>) d&#39;un modèle de prompt dans Omeka S</td>
+</tr>
+<tr>
+<td><code>POST /api/explo/rag/prompts/defaults</code></td>
+<td>crée les modèles par défaut absents (comparaison sur le titre)</td>
+</tr>
+<tr>
+<td><code>POST /api/explo/rag/query</code></td>
+<td><code>{ collection, promptId, question, limit?, method?, model? }</code> : recherche, réponse, extraits, coût ; la réponse est gardée en mémoire (30 au plus) sous un identifiant</td>
+</tr>
+<tr>
+<td><code>POST /api/explo/rag/save</code></td>
+<td><code>{ id }</code> : enregistre la réponse dans Omeka S, renvoie l&#39;item créé</td>
+</tr>
+<tr>
+<td><code>GET /api/explo/rag/answers?collection=</code></td>
+<td>réponses enregistrées pour la collection</td>
+</tr>
+</tbody></table>
 <p>Une route de l&#39;autre application répond 404. Chaque serveur écoute sur <code>127.0.0.1</code> (<code>HOST</code>, ou <code>EXPLO_HOST</code> pour exploZoteroAnno ; <code>0.0.0.0</code> dans le conteneur) et sur son port : <code>PORT</code> (7272) ou <code>EXPLO_PORT</code> (7273). Un seul traitement à la fois par serveur (<code>POST /api/run</code> répond 409 si un traitement est en cours).</p>
 <h2 id="11-etendre-le-projet"><a class="anchor" href="#11-etendre-le-projet">#</a>11. Étendre le projet</h2>
 <p><strong>Ajouter un outil</strong> : créer <code>src/tools/monOutil.ts</code> sur le modèle des outils existants (<code>new Tool({ name, description, schema, execute: async ({ data }) =&gt; … })</code>, schéma zod typé avec <code>z.infer</code>), puis l&#39;exporter dans <code>src/tools/index.ts</code>.</p>
@@ -729,6 +815,7 @@
     subgraph PAR[parallèle]
         P[participation&lt;br/&gt;computeParticipation]
         C[collaboration&lt;br/&gt;analyzeCollaboration]
+        R[rag-index&lt;br/&gt;indexCollectionForRag&lt;br/&gt;→ collections Albert]
     end
     PAR --&gt; T[themes&lt;br/&gt;discussionAgent + formatAnnotations]
     T --&gt; OUT([rapport, thèmes, réseau sigma.js,&lt;br/&gt;données JSON, guide → Omeka])</pre>
@@ -761,6 +848,11 @@
 <td><code>words</code> / <code>jaccard</code>, <code>fleissKappa</code> / <code>cohenKappa</code>, <code>interpretKappa</code></td>
 </tr>
 <tr>
+<td><code>rag-index</code> (<code>src/lib/rag/ragIndex.ts</code>)</td>
+<td>dépôt des documents dans les collections privées Albert (option <code>rag.enabled</code>)</td>
+<td>voir <em>RAG Albert</em> ci-dessous</td>
+</tr>
+<tr>
 <td><code>discussionAgent</code></td>
 <td>thèmes de discussion (modèle analytique)</td>
 <td><code>formatAnnotations</code> (grille en paramètre), comptage des tokens</td>
@@ -776,7 +868,32 @@
 <td>—</td>
 </tr>
 </tbody></table>
-<p>Fichiers produits dans <code>resultats/explo/</code> (réglage <code>outputDir</code>) : <code>guide_annotation.md</code>, <code>participation.json</code>, <code>collaborations.json</code>, <code>reseau_collaborations.html</code>, <code>themes_discussion.md</code>, <code>rapport_explo.md</code>.</p>
+<p>Fichiers produits dans <code>resultats/explo/</code> (réglage <code>outputDir</code>) : <code>guide_annotation.md</code>, <code>participation.json</code>, <code>collaborations.json</code>, <code>reseau_collaborations.html</code>, <code>themes_discussion.md</code>, <code>rapport_explo.md</code>, <code>rag_indexation.json</code> (bilan de l&#39;indexation).</p>
+<h3 id="rag-albert"><a class="anchor" href="#rag-albert">#</a>RAG Albert</h3>
+<p>Mise en œuvre du <a href="https://guides.ia.numerique.gouv.fr/albert-api/guides/rag" target="_blank" rel="noopener">guide RAG d&#39;Albert</a> avec le client <code>src/lib/albert/albert.ts</code> (<code>/v1/collections</code>, <code>/v1/documents</code>, <code>/v1/search</code>, <code>/v1/chat/completions</code>).</p>
+<pre class="mermaid">sequenceDiagram
+    participant W as rag-index (workflow)
+    participant Z as Zotero
+    participant A as Albert
+    participant O as Omeka S
+    W-&gt;&gt;Z: collections de la bibliothèque (clé → nom)
+    W-&gt;&gt;W: un document par item Omeka ou texte identique,&lt;br/&gt;collections Zotero cumulées
+    loop chaque collection Zotero du document
+        W-&gt;&gt;A: collection privée de même nom (créée au besoin)&lt;br/&gt;et documents déjà présents
+        alt document absent
+            W-&gt;&gt;A: POST /documents (Markdown, chunk_size, métadonnées)
+        end
+    end
+    W-&gt;&gt;O: média JSON « Indexation RAG Albert » de l'item du document</pre>
+<ul>
+<li><strong>Une collection Albert par nom de collection Zotero</strong> (<code>ensureCollection</code> : la plus ancienne collection privée de ce nom, sinon création). Deux collections Zotero de même nom partagent donc la même collection Albert.</li>
+<li><strong>Un dépôt par document</strong> : les exemplaires fusionnés par <code>fetchZoteroData</code> n&#39;en font qu&#39;un, et les articles de même texte (fusion désactivée, même PDF rattaché à deux notices) sont regroupés par empreinte SHA-1 du texte normalisé, leurs collections étant cumulées. Avec <code>rag.allCollections</code>, le document est déposé dans la collection Albert de chacune de ses collections Zotero (<code>articles[].collectionKeys</code>, doublons compris) ; sinon dans celle de la collection analysée seulement.</li>
+<li><strong>Idempotence</strong> : le nom du document Albert commence par un identifiant stable (<code>omeka-&lt;item&gt;</code>, à défaut <code>zotero-&lt;clé&gt;</code>) ; les documents déjà présents dans la collection Albert ne sont pas redéposés.</li>
+<li><strong>Contenu déposé</strong> : Markdown (titre, auteurs, année, clés Zotero et Omeka, texte extrait), découpé par Albert (<code>chunk_size</code>, <code>chunk_overlap</code>, séparateurs <code>markdown</code>) ; métadonnées recopiées sur chaque extrait : <code>omeka_id</code>, <code>zotero_key</code>, <code>title</code>, <code>creators</code>, <code>year</code>, <code>zotero_collection</code>. Un texte de plus de 5 millions de caractères est déposé en plusieurs parties (limite de 20 Mo).</li>
+<li><strong>Trace</strong> : à chaque nouveau dépôt, un média JSON « Indexation RAG Albert » est déposé sur l&#39;item du document (collections Zotero et Albert, identifiants des documents Albert, statut <code>créé</code> ou <code>déjà présent</code>, taille, tokens estimés, découpage) ; il remplace la trace précédente de l&#39;application. Extension refusée : dépôt en <code>.json.txt</code>.</li>
+<li><strong>Consultation</strong> (<code>queryRag</code>) : recherche dans la collection Albert, gabarit du modèle de prompt rempli (<code>{{question}}</code>, <code>{{extraits}}</code> numérotés avec leur référence, <code>{{collection}}</code>), complétion avec <code>rag.system</code> en message système et le modèle choisi (modèle analytique par défaut).</li>
+<li><strong>Coût</strong> : l&#39;indexation enregistre une estimation des tokens vectorisés (<code>texte / 4</code>, modèle <code>rag.embeddingsModel</code>) dans le compteur du workflow, donc dans le rapport et l&#39;item de configuration ; chaque consultation calcule son coût (<code>estimateImpact</code>) à partir des tokens renvoyés par Albert pour la recherche et la complétion (estimés si absents), et rapporte aussi le coût et les impacts déclarés par Albert (nuls tant que la plateforme ne facture pas).</li>
+</ul>
 <p>Pour permettre ce suivi, deux évolutions profitent aux deux workflows : la date des annotations et des notes Zotero est conservée (<code>dcterms:created</code> sur l&#39;<code>oa:Annotation</code>), et les nouvelles annotations du lecteur Zotero sont synchronisées pour les documents déjà présents dans Omeka S. Les briques communes acceptent désormais un paramètre : grille de couleurs (<code>positionForColor</code>, <code>formatAnnotations</code>), fichier de configuration (<code>readConfigOverride</code>, <code>writeConfigOverride</code>), fichier d&#39;historique (<code>appendHistory</code>), workflow décrit (<code>saveWorkflowConfig</code>).</p>
 <p>API propre au serveur exploZoteroAnno : <code>GET</code> et <code>POST /api/explo/settings</code>, <code>POST /api/explo/guide</code>, <code>GET /api/explo/results</code>, <code>GET /api/explo/file?name=</code>.</p>
 <h3 id="un-serveur-par-application"><a class="anchor" href="#un-serveur-par-application">#</a>Un serveur par application</h3>
@@ -837,11 +954,12 @@
 <li>Les sites protégés contre les robots ne peuvent pas être téléchargés : utiliser un fichier local.</li>
 <li>Le contexte des modèles limite la taille des textes transmis (appel très long, plan très détaillé).</li>
 <li>exploZoteroAnno : le repli « même titre et même année » peut fusionner deux documents distincts au titre identique (comptes rendus, éditions successives) ; la fusion se désactive par <code>analysis.mergeDuplicates</code>. Un doublon déjà enregistré dans Omeka S par une exécution antérieure n&#39;est pas supprimé (avertissement dans le journal).</li>
+<li>RAG : seul le texte extrait des documents est indexé (pas les annotations ni les notes) ; un document modifié après son indexation n&#39;est pas redéposé (supprimer le document dans Albert pour forcer un nouveau dépôt) ; renommer une collection Zotero crée une nouvelle collection Albert à la prochaine analyse.</li>
 <li>exploZoteroAnno : les annotations sans auteur (bibliothèque personnelle, PDF annotés hors Zotero) ne peuvent pas être attribuées et sont regroupées sous <code>analysis.unassignedLabel</code>.</li>
 </ul>
 
 </main>
-<nav class="toc"><strong>Sur cette page</strong><a class="l2" href="#1-architecture">1. Architecture</a><a class="l2" href="#2-le-workflow-de-l-39-atelier-d-39-articles">2. Le workflow de l&#39;Atelier d&#39;articles</a><a class="l2" href="#3-organisation-du-code">3. Organisation du code</a><a class="l3" href="#agents-src-agents">Agents (src/agents/)</a><a class="l3" href="#outils-src-tools-et-bibliotheques-src-lib">Outils (src/tools/) et bibliothèques (src/lib/)</a><a class="l3" href="#comptage-des-tokens-src-lib-metrics-usage-ts">Comptage des tokens (src/lib/metrics/usage.ts)</a><a class="l3" href="#estimation-du-cout-src-lib-metrics-impact-ts">Estimation du coût (src/lib/metrics/impact.ts)</a><a class="l3" href="#historique-des-executions-src-workflow-runs-history-ts">Historique des exécutions (src/workflow/runs/history.ts)</a><a class="l2" href="#4-extraction-des-documents">4. Extraction des documents</a><a class="l2" href="#5-graphe-de-concepts">5. Graphe de concepts</a><a class="l2" href="#6-accord-inter-juges">6. Accord inter-juges</a><a class="l2" href="#7-proposition-d-39-article-propapp">7. Proposition d&#39;article (PropAPP)</a><a class="l2" href="#8-modele-de-donnees-omeka-s">8. Modèle de données Omeka S</a><a class="l2" href="#9-configuration">9. Configuration</a><a class="l2" href="#10-api-de-l-39-interface">10. API de l&#39;interface</a><a class="l2" href="#11-etendre-le-projet">11. Étendre le projet</a><a class="l2" href="#12-workflow-explozoteroanno">12. Workflow exploZoteroAnno</a><a class="l3" href="#un-serveur-par-application">Un serveur par application</a><a class="l2" href="#13-documentation-et-conteneur">13. Documentation et conteneur</a><a class="l2" href="#14-limites-connues">14. Limites connues</a></nav>
+<nav class="toc"><strong>Sur cette page</strong><a class="l2" href="#1-architecture">1. Architecture</a><a class="l2" href="#2-le-workflow-de-l-39-atelier-d-39-articles">2. Le workflow de l&#39;Atelier d&#39;articles</a><a class="l2" href="#3-organisation-du-code">3. Organisation du code</a><a class="l3" href="#agents-src-agents">Agents (src/agents/)</a><a class="l3" href="#outils-src-tools-et-bibliotheques-src-lib">Outils (src/tools/) et bibliothèques (src/lib/)</a><a class="l3" href="#comptage-des-tokens-src-lib-metrics-usage-ts">Comptage des tokens (src/lib/metrics/usage.ts)</a><a class="l3" href="#estimation-du-cout-src-lib-metrics-impact-ts">Estimation du coût (src/lib/metrics/impact.ts)</a><a class="l3" href="#historique-des-executions-src-workflow-runs-history-ts">Historique des exécutions (src/workflow/runs/history.ts)</a><a class="l2" href="#4-extraction-des-documents">4. Extraction des documents</a><a class="l2" href="#5-graphe-de-concepts">5. Graphe de concepts</a><a class="l2" href="#6-accord-inter-juges">6. Accord inter-juges</a><a class="l2" href="#7-proposition-d-39-article-propapp">7. Proposition d&#39;article (PropAPP)</a><a class="l2" href="#8-modele-de-donnees-omeka-s">8. Modèle de données Omeka S</a><a class="l2" href="#9-configuration">9. Configuration</a><a class="l2" href="#10-api-de-l-39-interface">10. API de l&#39;interface</a><a class="l2" href="#11-etendre-le-projet">11. Étendre le projet</a><a class="l2" href="#12-workflow-explozoteroanno">12. Workflow exploZoteroAnno</a><a class="l3" href="#rag-albert">RAG Albert</a><a class="l3" href="#un-serveur-par-application">Un serveur par application</a><a class="l2" href="#13-documentation-et-conteneur">13. Documentation et conteneur</a><a class="l2" href="#14-limites-connues">14. Limites connues</a></nav>
 </div>
 <script type="module">
 import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";

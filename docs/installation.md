@@ -30,14 +30,14 @@ flowchart TD
 | Node.js | 22 ou plus récent (installation locale) |
 | npm | fourni avec Node.js |
 | Docker | Docker Engine 24+ et Docker Compose v2 (installation Docker) |
-| API Albert | une clé d'API (Etalab) donnant accès aux modèles `openai/gpt-oss-120b` et `mistralai/Ministral-3-8B-Instruct-2512` (modifiables) |
+| API Albert | une clé d'API (Etalab) donnant accès aux modèles `openai/gpt-oss-120b` et `mistralai/Ministral-3-8B-Instruct-2512` (modifiables) ; pour le RAG d'exploZoteroAnno, aux collections, documents et à la recherche (`/v1/collections`, `/v1/documents`, `/v1/search`) |
 | Zotero | un compte, une clé d'API en lecture, idéalement une **bibliothèque de groupe** pour les annotations de plusieurs juges (indispensable pour exploZoteroAnno : c'est elle qui conserve l'auteur de chaque annotation) |
 | Omeka S | une instance accessible, une clé d'API avec droits d'écriture, les vocabulaires listés plus bas |
 | Accès internet | pour les API, et pour les bibliothèques d'affichage (marked, sigma.js, Mermaid) chargées depuis jsDelivr |
 
 ## 2. Variables d'environnement (`.env`)
 
-Le fichier `.env` contient les accès aux services. Un modèle est fourni dans `.env.example`. Toutes ces valeurs sont aussi modifiables depuis l'onglet **Paramètres** de l'Atelier d'articles, ou la section **Grille › Connexions** d'exploZoteroAnno.
+Le fichier `.env` contient les accès aux services. Un modèle est fourni dans `.env.example`. Toutes ces valeurs sont aussi modifiables depuis la page **⚙ Paramètres** de chaque application (`/parametres`).
 
 | Variable | Obligatoire | Description |
 |---|---|---|
@@ -57,7 +57,7 @@ Le fichier `.env` contient les accès aux services. Un modèle est fourni dans `
 | `WORKFLOW_CONFIG_FILE`, `EXPLO_CONFIG_FILE` | non | Fichiers de configuration de chaque application (`workflow.config.json`, `explo.config.json`) |
 | `WORKFLOW_HISTORY_FILE` | non | Historique des exécutions de l'Atelier (`workflow.history.json`) |
 
-Chaque application a **son propre serveur**, avec son port, sa configuration et son traitement en cours : les deux peuvent traiter en même temps. exploZoteroAnno lit `.env`, **surchargé par `.env.explo`** (nom modifiable par `EXPLO_ENV_FILE`) : on peut ainsi lui donner d'autres connexions (par exemple une autre bibliothèque de groupe Zotero ou une autre instance Omeka S). Son onglet *Grille › Connexions* n'écrit dans `.env.explo` que les valeurs qui diffèrent de `.env` ; les autres restent « héritées ».
+Chaque application a **son propre serveur**, avec son port, sa configuration et son traitement en cours : les deux peuvent traiter en même temps. exploZoteroAnno lit `.env`, **surchargé par `.env.explo`** (nom modifiable par `EXPLO_ENV_FILE`) : on peut ainsi lui donner d'autres connexions (par exemple une autre bibliothèque de groupe Zotero ou une autre instance Omeka S). Sa page *Paramètres* n'écrit dans `.env.explo` que les valeurs qui diffèrent de `.env` ; les autres restent « héritées ».
 
 > Le fichier `.env` contient des secrets : il est exclu de git (`.gitignore`) et de l'image Docker (`.dockerignore`).
 
@@ -239,7 +239,7 @@ Pour un simple essai en local, la clé de démarrage peut être utilisée telle 
 
 ### Vocabulaires
 
-Le workflow utilise les vocabulaires suivants (réglage `omeka.vocabs`). L'onglet **Paramètres › Tester les connexions** signale ceux qui manquent.
+Le workflow utilise les vocabulaires suivants (réglage `omeka.vocabs`). La page **⚙ Paramètres › Enregistrer et tester les connexions** signale ceux qui manquent.
 
 | Préfixe | Usage | Installation |
 |---|---|---|
@@ -265,7 +265,7 @@ Le workflow dépose des médias de plusieurs formats. Dans *Admin › Paramètre
 | `bib` | `application/x-bibtex`, `text/plain` | références BibTeX |
 | `csv` | `text/csv`, `text/plain` | désaccords entre juges |
 | `html` | `text/html` | graphe sigma.js, réseau des collaborations, pages web enregistrées |
-| `json` | `application/json`, `text/plain` | exploZoteroAnno : données de participation et de collaborations |
+| `json` | `application/json`, `text/plain` | exploZoteroAnno : données de participation et de collaborations, trace de l'indexation RAG sur chaque document |
 
 Un type refusé n'interrompt pas le traitement. Si seule l'**extension** est refusée (cas fréquent de `csv`, `bib` ou `md`), le fichier est déposé une seconde fois avec l'extension `.txt`, son format d'origine étant noté dans `dcterms:format`. Si le **type de contenu** est refusé aussi, un avertissement indique quoi autoriser et le fichier reste disponible localement. Le graphe de l'Atelier au format JSON (`visualisation_graphe.json`) n'est pas déposé : ses données sont incluses dans `visualisation_graphe.html`.
 
@@ -273,7 +273,7 @@ Un type refusé n'interrompt pas le traitement. Si seule l'**extension** est ref
 
 1. Créer une clé sur https://www.zotero.org/settings/keys avec l'accès en lecture à la bibliothèque (et au groupe).
 2. Pour mesurer l'accord inter-juges, utiliser une **bibliothèque de groupe** : chaque annotation y garde son auteur. Renseigner alors `ZOTERO_GROUP_ID`.
-3. Choisir la collection à traiter dans l'interface : la liste est chargée depuis Zotero, et dans exploZoteroAnno elle suit l'identifiant de groupe saisi dans *Grille › Connexions*, avant même son enregistrement.
+3. Choisir la collection à traiter dans l'interface : la liste est chargée depuis la bibliothèque enregistrée sur la page *Paramètres*, qui indique pendant la saisie la bibliothèque et son nombre de collections.
 4. Pour **exploZoteroAnno**, chaque collaborateur doit être membre du groupe et annoter dans le lecteur de Zotero (les annotations y gardent leur auteur et leur date). Le guide d'annotation produit par l'application explique la marche à suivre.
 
 ## 7. Vérifier l'installation
@@ -281,14 +281,14 @@ Un type refusé n'interrompt pas le traitement. Si seule l'**extension** est ref
 **Atelier d'articles**
 
 1. Ouvrir http://127.0.0.1:7272.
-2. Onglet **Paramètres › Tester les connexions** : Albert, Zotero et Omeka S doivent apparaître en vert.
-3. Choisir la collection Zotero et l'appel à propositions, puis **Enregistrer et lancer**.
+2. **⚙ Paramètres › Enregistrer et tester les connexions** : Albert, Zotero et Omeka S doivent apparaître en vert.
+3. Onglet **Configuration** : choisir la collection Zotero et l'appel à propositions, puis **Enregistrer et lancer**.
 
 **exploZoteroAnno**
 
 1. Ouvrir http://127.0.0.1:7273 (ou le lien dans l'en-tête de l'Atelier).
-2. Onglet **Grille › Tester les connexions** : les connexions sont héritées de `.env` ; une valeur modifiée ici est enregistrée dans `.env.explo`.
-3. Choisir la collection, puis **Enregistrer et analyser** ; les onglets Participation, Collaborations, Thèmes et Rapport se remplissent à la fin du traitement.
+2. **⚙ Paramètres › Enregistrer et tester les connexions** : les connexions sont héritées de `.env` ; une valeur modifiée ici est enregistrée dans `.env.explo`.
+3. Onglet **Grille** : choisir la collection, puis **Enregistrer et analyser** ; les onglets Participation, Collaborations, Thèmes et Rapport se remplissent à la fin du traitement, et l'onglet **RAG** permet d'interroger la collection (créer d'abord les modèles de prompt par défaut).
 
 ```mermaid
 sequenceDiagram
@@ -547,6 +547,8 @@ Pour exploZoteroAnno, créer de la même façon un hôte virtuel `explo.example.
 | exploZoteroAnno : un seul collaborateur « (non attribué) » | bibliothèque personnelle ou PDF annotés hors de Zotero : pas d'auteur | annoter dans une bibliothèque de groupe, avec le lecteur de Zotero |
 | exploZoteroAnno : kappa « non calculé » | moins de passages communs que `minPassagesForKappa` | attendre plus d'annotations, ou baisser le seuil ou la similarité dans *Grille › Analyse* |
 | exploZoteroAnno : deux documents différents fusionnés | même titre et même année (critère de repli) | décocher *Fusionner les documents en double*, ou corriger le titre ou la date dans Zotero |
+| exploZoteroAnno : « pas encore indexée » dans l'onglet RAG | aucune analyse avec le RAG activé, ou nom de collection Zotero modifié depuis | lancer une analyse avec *Grille › RAG Albert › Indexer les documents dans Albert* |
+| exploZoteroAnno : `Albert 403` ou `401` à l'indexation | clé Albert sans accès aux collections et documents | demander les droits RAG pour la clé, ou désactiver l'indexation |
 | exploZoteroAnno : refus des fichiers `json` par Omeka S | `application/json` absent des types autorisés | l'ajouter dans *Admin › Paramètres › Sécurité* (sinon dépôt en `.txt`) |
 | `EACCES: permission denied, open '/data/.env'` (Docker) | `data/` créé par root, image antérieure au point d'entrée | reconstruire l'image (`docker compose up -d --build`) ; ou `sudo chown -R 1000:1000 data` |
 | `clé d'API refusée ou droits insuffisants` au test des connexions | secret de la clé erroné, clé supprimée, ou utilisateur sans droit d'écriture (rôle Chercheur) | recréer la clé dans Omeka S (*Utilisateurs › Clés d'API*), recopier identité et secret ; rôle Auteur au minimum |

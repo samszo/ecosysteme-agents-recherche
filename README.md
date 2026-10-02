@@ -23,6 +23,7 @@ Deux applications, chacune avec son workflow d'agents et son serveur, partagent 
 - mesure la **participation** de chaque collaborateur (surlignages, notes, documents, chronologie) ;
 - analyse les **collaborations** : passages communs, convergences et divergences de lecture, kappa, réseau ;
 - propose des **thèmes de discussion** pour une séance collective ;
+- indexe la collection dans le **RAG d'Albert** (une collection privée Albert par collection Zotero) pour l'**interroger** avec des modèles de prompt enregistrés dans Omeka S, avec le coût de chaque consultation ;
 - fusionne les **documents en double** de la collection et archive le tout dans **Omeka S**.
 
 ```mermaid
@@ -54,7 +55,7 @@ npm run ui          # Atelier d'articles : http://127.0.0.1:7272
 npm run ui:explo    # exploZoteroAnno : http://127.0.0.1:7273
 ```
 
-Puis ouvrir l'Atelier d'articles (http://127.0.0.1:7272 : tester les connexions, choisir la collection Zotero et l'appel à propositions, lancer le traitement) ou exploZoteroAnno (http://127.0.0.1:7273 : choisir la collection, ajuster la grille, partager le guide, analyser). Les deux applications peuvent traiter en même temps.
+Les connexions (Albert, Zotero, Omeka S) se règlent sur la page **⚙ Paramètres** de chaque application (`/parametres`). Puis ouvrir l'Atelier d'articles (http://127.0.0.1:7272 : tester les connexions, choisir la collection Zotero et l'appel à propositions, lancer le traitement) ou exploZoteroAnno (http://127.0.0.1:7273 : choisir la collection, ajuster la grille, partager le guide, analyser). Les deux applications peuvent traiter en même temps.
 
 En ligne de commande, avec la configuration enregistrée : `npm start` (Atelier d'articles) et `npm run explo` (exploZoteroAnno).
 

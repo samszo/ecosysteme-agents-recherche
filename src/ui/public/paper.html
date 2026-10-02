@@ -84,13 +84,15 @@
   <div class="bar">
     <h1>Atelier d'articles <small>workflow academic-paper-factory</small></h1>
     <div class="spacer"></div>
+    <a id="link-explo" href="#" style="color:var(--accent);font-size:14px">exploZoteroAnno</a>
+    <a href="/parametres" style="color:var(--accent);font-size:14px" title="Connexions Albert, Zotero, Omeka S">⚙ Paramètres</a>
     <a href="/docs/" target="_blank" style="color:var(--accent);font-size:14px">Documentation</a>
     <span id="status" class="badge">aucun traitement</span>
     <button id="btn-run" class="btn primary">Enregistrer et lancer</button>
     <button id="btn-stop" class="btn danger hidden">Arrêter</button>
   </div>
   <nav>
-    <button data-tab="settings" class="active">Paramètres</button>
+    <button data-tab="settings" class="active">Configuration</button>
     <button data-tab="run">Exécution</button>
     <button data-tab="results">Résultats</button>
     <button data-tab="history">Appels traités</button>
@@ -100,16 +102,7 @@
 <main>
   <!-- ======================= PARAMÈTRES ======================= -->
   <div id="tab-settings">
-    <section class="card">
-      <h2>Connexions</h2>
-      <p class="lead">Variables du fichier <code>.env</code>. Les secrets ne sont jamais réaffichés : laisser vide pour conserver la valeur enregistrée.</p>
-      <div id="env" class="grid"></div>
-      <div class="toolbar" style="margin-top:14px">
-        <button id="btn-check" class="btn">Tester les connexions</button>
-        <span class="muted" style="font-size:13px">enregistre puis vérifie Albert, Zotero et Omeka S</span>
-      </div>
-      <div id="checks" class="checks"></div>
-    </section>
+    <p class="muted" style="font-size:13.5px;margin:0 0 12px">Les connexions (Albert, Zotero, Omeka S) se règlent sur la page <a href="/parametres" style="color:var(--accent)">⚙ Paramètres</a>.</p>
 
     <section class="card">
       <h2>Données d'entrée</h2>
@@ -279,24 +272,6 @@ function showTab(tab) {
 }
 
 // ==========================================
-// Formulaire .env
-// ==========================================
-function renderEnv() {
-  const box = $("#env"); box.replaceChildren();
-  for (const f of settings.env) {
-    const input = el("input", {
-      id: `env-${f.key}`, type: f.secret ? "password" : "text", value: f.value, autocomplete: "off",
-      placeholder: f.secret ? (f.isSet ? "•••••••• (enregistrée)" : "non définie") : "",
-    });
-    box.append(el("div", { className: "field" },
-      el("label", { htmlFor: input.id, textContent: `${f.label}` }),
-      input,
-      el("span", { className: "help", textContent: `${f.group} · ${f.key}${f.help ? " — " + f.help : ""}` })));
-  }
-}
-const envValues = () => Object.fromEntries(settings.env.map(f => [f.key, { value: $(`#env-${f.key}`).value }]));
-
-// ==========================================
 // Formulaire de configuration (généré depuis config.ts)
 // ==========================================
 function fieldFor(path, value) {
@@ -447,7 +422,7 @@ async function loadCollections() {
     help.textContent = `${cols.length} collection(s) dans la bibliothèque Zotero.`;
   } catch (e) {
     sel.replaceChildren(el("option", { value: current, textContent: current })); sel.value = current;
-    help.innerHTML = ""; help.append(`Collections indisponibles (${e.message}) : vérifier les connexions Zotero. `,
+    help.innerHTML = ""; help.append(`Collections indisponibles (${e.message}) : vérifier les connexions Zotero sur la page `, el("a", { href: "/parametres", textContent: "Paramètres", style: "color:var(--accent)" }), ". ",
       el("button", { className: "link", textContent: "Saisir une clé", onclick: () => { const k = prompt("Clé de la collection Zotero", current); if (k) { config.input.zoteroCollection = k.trim(); loadCollections(); } } }));
   }
 }
@@ -463,30 +438,21 @@ async function loadModels() {
 async function loadSettings() {
   settings = await api("/api/settings");
   config = structuredClone(settings.config);
-  renderEnv(); renderConfig();
+  renderConfig();
   loadCollections(); loadModels();
 }
+// configuration seulement : les connexions sont enregistrées par la page Paramètres
 async function save(silent = false) {
-  await api("/api/settings", { method: "POST", body: { env: envValues(), config } });
-  if (!silent) toast("Paramètres enregistrés");
-  // les secrets saisis ne sont pas réaffichés
+  await api("/api/settings", { method: "POST", body: { config } });
+  if (!silent) toast("Configuration enregistrée");
   settings = await api("/api/settings");
-  renderEnv();
 }
+// retour depuis la page Paramètres (autre onglet) : la bibliothèque Zotero a pu changer
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && config) { loadCollections(); loadModels(); } });
 $("#btn-save").onclick = async () => { try { await save(); loadCollections(); loadModels(); } catch (e) { toast("Erreur : " + e.message); } };
 $("#btn-reset").onclick = () => {
   if (!confirm("Rétablir toute la configuration par défaut (config.ts) ? Les connexions (.env) ne sont pas modifiées.")) return;
   config = structuredClone(settings.defaults); renderConfig(); loadCollections(); toast("Configuration par défaut rétablie — enregistrer pour confirmer");
-};
-$("#btn-check").onclick = async () => {
-  const box = $("#checks"); box.textContent = "Vérification…";
-  try {
-    await save(true);
-    const r = await api("/api/check", { method: "POST" });
-    const names = { albert: "Albert", zotero: "Zotero", omeka: "Omeka S" };
-    box.replaceChildren(...Object.entries(r).map(([k, v]) => el("div", {}, el("span", { className: v.ok ? "ok" : "ko", textContent: v.ok ? "✓ " : "✗ " }), el("strong", { textContent: names[k] + " : " }), v.message)));
-    loadCollections(); loadModels();
-  } catch (e) { box.textContent = "Erreur : " + e.message; }
 };
 
 // ==========================================

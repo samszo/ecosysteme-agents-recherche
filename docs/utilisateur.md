@@ -7,6 +7,16 @@ L'écosystème d'agents propose deux applications, qui travaillent sur une **col
 | **Atelier d'articles** | http://127.0.0.1:7272 | pour **répondre à un appel à propositions (AAP)** : analyse des attendus de l'appel, concepts de la collection, accord entre annotateurs, **proposition d'article** avec références, citations et mots-clés | 2 |
 | **exploZoteroAnno** | http://127.0.0.1:7273 | pour **animer une annotation collective** : grille de couleurs commune, participation de chacun, convergences et divergences de lecture, thèmes de discussion | 3 |
 
+### La page Paramètres (connexions)
+
+Dans chaque application, le lien **⚙ Paramètres** de l'en-tête ouvre la page des **connexions** (adresse `/parametres`) : clé de l'API Albert, bibliothèque Zotero (clé, identifiant utilisateur, groupe), instance Omeka S (URL et clé d'API), port de l'interface.
+
+- Les secrets ne sont jamais réaffichés : laisser le champ vide garde la valeur enregistrée.
+- Pendant la saisie de la bibliothèque Zotero, la page indique la bibliothèque correspondante et son nombre de collections, avant même l'enregistrement.
+- **Enregistrer et tester les connexions** vérifie Albert, Zotero et Omeka S (vocabulaires et droits de la clé).
+- Dans exploZoteroAnno, les connexions sont par défaut **héritées** de celles de l'Atelier (mention « héritée de .env ») ; une valeur modifiée ne vaut que pour exploZoteroAnno (par exemple un autre groupe Zotero).
+- De retour sur l'application, la liste des collections est rechargée.
+
 Les deux applications sont indépendantes (chacune son serveur, ses réglages et son traitement en cours) mais complémentaires : un groupe peut annoter une collection avec exploZoteroAnno, puis s'appuyer sur ces annotations dans l'Atelier pour rédiger une proposition. Les documents, annotations et concepts enregistrés dans Omeka S sont partagés : un document déjà extrait par l'une n'est pas réextrait par l'autre. La préparation du corpus dans Zotero (section 1) vaut pour les deux.
 
 Parcours de l'**Atelier d'articles** :
@@ -77,13 +87,12 @@ Les juges doivent travailler dans une **bibliothèque de groupe** Zotero : c'est
 
 ## 2. Atelier d'articles : utiliser l'interface
 
-L'interface s'ouvre sur http://127.0.0.1:7272. Elle comporte quatre onglets : Paramètres, Exécution, Résultats et Appels traités. Le lien **exploZoteroAnno** de l'en-tête ouvre la seconde application.
+L'interface s'ouvre sur http://127.0.0.1:7272. Elle comporte quatre onglets : Configuration, Exécution, Résultats et Appels traités. Dans l'en-tête, **exploZoteroAnno** ouvre la seconde application et **⚙ Paramètres** la page des connexions.
 
-### Paramètres
+### Configuration
 
 | Section | Contenu |
 |---|---|
-| Connexions | accès à Albert, Zotero et Omeka S (fichier `.env`). Les secrets ne sont jamais réaffichés : laisser le champ vide pour garder la valeur enregistrée. Le bouton **Tester les connexions** vérifie les trois services. |
 | Données d'entrée | collection Zotero (liste déroulante), **lien vers l'appel**, **fichier de l'appel** (si le site bloque le téléchargement), texte ou précisions sur l'appel |
 | Proposition d'article | **plan en markdown**, auteurs supplémentaires, nombre de mots-clés et de citations, style de citation |
 | Modèles de langage | modèles Albert (suggestions chargées depuis l'API) |
@@ -201,13 +210,13 @@ L'onglet **Appels traités** liste les appels à propositions déjà analysés, 
 Pour chaque appel :
 
 - **Rejouer** relance l'analyse avec la collection choisie (par défaut, la dernière utilisée), **avec les paramètres et les connexions actuels** : c'est l'usage prévu après une modification de la collection Zotero (nouveaux documents, annotations, notes), un changement de modèle ou de connexion ;
-- **Charger dans les paramètres** reprend l'appel et la collection dans l'onglet Paramètres, pour les ajuster avant de lancer.
+- **Charger dans les paramètres** reprend l'appel et la collection dans l'onglet Configuration, pour les ajuster avant de lancer.
 
 Seuls les documents nouveaux ou modifiés sont retraités : ceux dont l'extraction est déjà faite sont relus dans Omeka S. Un appel importé depuis un fichier local ne peut être rejoué que si le fichier est toujours présent dans `aap/`.
 
 ## 3. exploZoteroAnno : animer une annotation collective
 
-**exploZoteroAnno** est la seconde application, avec son propre serveur : http://127.0.0.1:7273 (lien dans l'en-tête de l'Atelier d'articles). Elle peut analyser pendant qu'un traitement de l'Atelier est en cours. Elle comporte six onglets : Grille, Exécution, Participation, Collaborations, Thèmes et Rapport. Elle accompagne un groupe qui annote ensemble une collection Zotero : elle fixe une grille de couleurs commune, mesure la participation de chacun, analyse les convergences et divergences de lecture, et propose des thèmes pour une séance de discussion. Tout est enregistré dans Omeka S.
+**exploZoteroAnno** est la seconde application, avec son propre serveur : http://127.0.0.1:7273 (lien dans l'en-tête de l'Atelier d'articles). Elle peut analyser pendant qu'un traitement de l'Atelier est en cours. Elle comporte sept onglets : Grille, Exécution, Participation, Collaborations, Thèmes, RAG et Rapport ; ses connexions se règlent sur la page **⚙ Paramètres**. Elle accompagne un groupe qui annote ensemble une collection Zotero : elle fixe une grille de couleurs commune, mesure la participation de chacun, analyse les convergences et divergences de lecture, et propose des thèmes pour une séance de discussion. Tout est enregistré dans Omeka S.
 
 ```mermaid
 flowchart LR
@@ -223,10 +232,10 @@ flowchart LR
 
 ### Paramétrer la grille (onglet Grille)
 
-- **Connexions** : Albert, Zotero et Omeka S. Par défaut, elles sont **héritées** de celles de l'Atelier d'articles (mention « hérité ») ; une valeur modifiée ici ne vaut que pour exploZoteroAnno (par exemple un autre groupe Zotero ou une autre instance Omeka S). Un secret laissé vide conserve la valeur enregistrée. **Tester les connexions** vérifie les trois services.
-- **Collection** : la collection Zotero annotée, idéalement dans une **bibliothèque de groupe** pour que chaque annotation garde son auteur. La liste se met à jour dès que l'identifiant de groupe Zotero change, et l'application retient la collection choisie pour chaque bibliothèque.
+- **Collection** : la collection Zotero annotée, idéalement dans une **bibliothèque de groupe** pour que chaque annotation garde son auteur. La liste suit la bibliothèque enregistrée sur la page Paramètres, et l'application retient la collection choisie pour chaque bibliothèque.
 - **Grille de couleurs** : pour chaque couleur de surlignage de Zotero, une signification (idée clé, accord, désaccord, définition, méthode, question, exemple, contexte par défaut) et une consigne « quand l'utiliser ». La grille se modifie librement (couleurs, libellés, ajout ou suppression).
 - **Guide d'annotation** : produit à partir de la grille, avec les consignes d'annotation (bibliothèque de groupe, commentaires, notes, marqueurs). Il se copie ou se télécharge pour être envoyé aux collaborateurs, et il est enregistré dans Omeka S à chaque analyse.
+- **RAG Albert** : indexation des documents dans Albert à chaque analyse (activée par défaut), dépôt aussi dans les autres collections du document, taille et chevauchement des extraits, nombre d'extraits par question et méthode de recherche par défaut, instructions générales du modèle (voir l'onglet RAG).
 - **Analyse** : similarité à partir de laquelle deux surlignages portent sur le même passage, nombre minimum de passages communs pour calculer un kappa, nombre de thèmes de discussion, et **fusion des documents en double** (activée par défaut) : quand plusieurs membres du groupe ont ajouté le même document à la collection (même fichier, même DOI, même URL, ou même titre et même année), il n'est enregistré qu'une fois dans Omeka S et cumule les surlignages, notes et marqueurs de tous ses exemplaires. L'onglet Participation signale ces documents (« N exemplaires fusionnés ») et le rapport les liste.
 
 **Enregistrer** garde les réglages sans lancer de traitement ; **Rétablir la grille par défaut** remet les couleurs d'origine. **Enregistrer et analyser** lance le workflow ; il peut être relancé à tout moment pendant l'annotation : les nouvelles annotations de Zotero sont prises en compte, sans réextraire les documents déjà enregistrés dans Omeka S.
@@ -256,9 +265,43 @@ Le journal s'affiche en direct : documents lus, doublons fusionnés, annotations
 
 Un agent propose des thèmes pour une séance collective à partir des passages divergents et convergents, des commentaires, des notes et des marqueurs : pour chaque thème, une question ouverte, la raison du choix, les passages à relire (avec les personnes concernées) et une piste d'animation. Il veille à impliquer aussi les participants les moins actifs.
 
+### Interroger la collection (onglet RAG)
+
+Le **RAG** (génération augmentée par la recherche, [guide Albert](https://guides.ia.numerique.gouv.fr/albert-api/guides/rag)) permet de poser une question à la collection : les passages les plus pertinents sont cherchés dans le texte des documents, puis un modèle de langage répond à partir de ces seuls passages, en les citant.
+
+```mermaid
+flowchart LR
+    Z[(Collection Zotero<br/>« Lectures »)] -- analyse --> A[(Collection privée Albert<br/>« Lectures »)]
+    Q[Question] --> S[Recherche<br/>hybride, sémantique ou lexicale]
+    A --> S
+    P[Modèle de prompt<br/>Omeka S] --> M[Modèle de langage]
+    S -- extraits numérotés --> M
+    M --> R[Réponse citée,<br/>coût]
+    R -. si demandé .-> O[(Omeka S<br/>Réponse RAG)]
+```
+
+**Indexation**, à chaque analyse (*Grille › RAG Albert*) :
+
+- chaque collection Zotero a une **collection privée Albert de même nom**, créée au besoin ;
+- le texte de chaque document (référence puis texte extrait) y est déposé **une seule fois**, même si le document est en double dans la collection ;
+- un document qui appartient aussi à **d'autres collections Zotero** est déposé dans chacune des collections Albert correspondantes ;
+- les documents déjà présents dans une collection Albert ne sont pas redéposés ; les liens sans fichier (pas de texte) ne sont pas indexés ;
+- le résultat du dépôt (collections et documents Albert créés) est enregistré dans un fichier JSON, média « Indexation RAG Albert » de l'**item Omeka S du document**.
+
+**Consultation** :
+
+1. choisir la **collection** (l'état de sa collection Albert s'affiche) et un **modèle de prompt** ;
+2. saisir la **question**, ajuster si besoin le nombre d'extraits, la méthode de recherche et le modèle de langage ;
+3. **Interroger** : la réponse s'affiche, ses citations `[n]` renvoient aux extraits utilisés (document, auteurs, score, item Omeka S), avec le **coût de la consultation** (tokens de la recherche et de la réponse, énergie, carbone, équivalent API) ; le prompt envoyé au modèle est consultable ;
+4. **Enregistrer dans Omeka S**, si la réponse mérite d'être gardée : elle devient un item « Réponse RAG » (voir section 4) et rejoint la liste des **réponses enregistrées** de la collection.
+
+**Modèles de prompt** : ils sont enregistrés dans Omeka S, donc partagés par tous les utilisateurs de l'instance. **Créer les modèles par défaut** propose Synthèse, Définitions, Questions de discussion et Citations ; **Nouveau modèle** et **Modifier** ouvrent l'éditeur. Un gabarit utilise les variables `{{question}}`, `{{extraits}}` (extraits numérotés ; ajoutés à la fin s'ils ne sont pas placés) et `{{collection}}`.
+
+**Coût** : l'indexation compte la vectorisation du texte déposé (estimation, environ 4 caractères par token, modèle `bge-m3`) dans le coût de l'analyse ; chaque consultation affiche son propre coût. Albert ne facturant pas ces appels, il s'agit d'estimations faites avec les hypothèses de la configuration (voir *Le coût du traitement*).
+
 ### Rapport et enregistrement (onglet Rapport)
 
-Le rapport reprend participation (dont les documents en double fusionnés), collaborations et thèmes, ainsi que les tokens consommés et le coût estimé (énergie, carbone, argent). Chaque analyse crée dans Omeka S un item « Configuration explo-zotero-anno » (classe `dcterms:MethodOfInstruction`) avec la grille et les paramètres, son statut, sa consommation et, en médias : guide d'annotation, rapport, thèmes, réseau, données de participation et de collaborations. Les documents et annotations de la collection sont enregistrés comme dans l'Atelier d'articles (`oa:Annotation` avec auteur, couleur, date).
+Le rapport reprend participation (dont les documents en double fusionnés), collaborations, thèmes et indexation RAG (collections Albert, documents déposés ou déjà présents), ainsi que les tokens consommés et le coût estimé (énergie, carbone, argent). Chaque analyse crée dans Omeka S un item « Configuration explo-zotero-anno » (classe `dcterms:MethodOfInstruction`) avec la grille et les paramètres, son statut, sa consommation et, en médias : guide d'annotation, rapport, thèmes, réseau, données de participation et de collaborations. Les documents et annotations de la collection sont enregistrés comme dans l'Atelier d'articles (`oa:Annotation` avec auteur, couleur, date).
 
 ## 4. Ce qui est enregistré dans Omeka S
 
@@ -274,6 +317,10 @@ flowchart TD
     AAP -. médias .-> M1[AttenduAPP, PropAPP, BibTeX]
     CFG -. médias .-> M2[Atelier : relecture, graphe,<br/>rapport, CSV]
     CFG -. médias .-> M3[exploZoteroAnno : guide, rapport,<br/>thèmes, réseau, JSON]
+    DOC -. média .-> J[Indexation RAG Albert<br/>JSON]
+    REP[Réponse RAG<br/>bibo:Note] -- dcterms:references --> DOC
+    REP -- dcterms:source --> PR[Modèle de prompt RAG<br/>dcterms:MethodOfInstruction]
+    REP -- dcterms:isPartOf --> COL
 ```
 
 Les deux applications utilisent les mêmes classes : un document, une annotation ou un concept enregistré par l'une est retrouvé par l'autre. Seuls l'appel à propositions et ses médias sont propres à l'Atelier d'articles.
@@ -281,6 +328,7 @@ Les deux applications utilisent les mêmes classes : un document, une annotation
 - Chaque **document** porte les métadonnées de sa notice Zotero (auteurs, date, revue, DOI…), son texte, ses fichiers et images, et la date de sa dernière extraction (`curation:access`). Un document fusionné par exploZoteroAnno porte les clés Zotero de tous ses exemplaires (`dcterms:identifier`).
 - Chaque **annotation** porte le passage, votre commentaire, la couleur et le positionnement, les marqueurs (liés aux concepts), le code de la grille, son auteur et sa date (`dcterms:created`).
 - Un **concept** n'est jamais créé en double : avant de le créer, le workflow cherche un concept de même identifiant ou de même titre.
+- exploZoteroAnno ajoute les **modèles de prompt RAG** (titre, description, gabarit) et les **réponses RAG** enregistrées (question, réponse, documents cités, modèle de prompt, coût et extraits dans `curation:data`, réponse complète en Markdown en média), ainsi que la trace JSON de l'indexation sur chaque document.
 - Chaque **exécution**, de l'une ou l'autre application, crée un item de configuration (« Configuration academic-paper-factory » ou « Configuration explo-zotero-anno ») : configuration (sans les clés d'API), statut, tokens consommés, coût estimé et, en médias, ses documents de fin d'analyse.
 
 ## 5. Questions fréquentes
@@ -296,6 +344,10 @@ Les deux applications utilisent les mêmes classes : un document, une annotation
 **exploZoteroAnno : pourquoi un collaborateur n'apparaît-il pas ?** Ses annotations n'ont pas d'auteur (bibliothèque personnelle, PDF annoté hors de Zotero) : elles sont regroupées sous « (non attribué) ». Ou bien elles ne sont pas encore synchronisées avec le serveur Zotero.
 
 **exploZoteroAnno : que signifie « couleurs hors grille » ?** Des surlignages dont la couleur est trop éloignée de toutes celles de la grille (tolérance réglable). Ils sont comptés dans la participation, mais sans signification.
+
+**exploZoteroAnno : pourquoi le RAG ne trouve-t-il rien ?** La collection n'est pas encore indexée (lancer une analyse avec *Indexer les documents dans Albert*), ou ses documents sont des liens sans texte. L'indexation par Albert peut aussi prendre quelques instants après le dépôt.
+
+**exploZoteroAnno : que voit Albert ?** Le texte extrait des documents de la collection, envoyé à l'API Albert (plateforme de l'État) dans des collections privées propres à la clé d'API. Décocher *Indexer les documents dans Albert* pour ne rien envoyer.
 
 **exploZoteroAnno : comment sont repérés les documents en double ?** Même fichier, même DOI, même URL, ou même titre (assez long) et même année. Un seul exemplaire est enregistré dans Omeka S, de préférence le PDF ; les annotations, notes et marqueurs de tous les exemplaires y sont cumulés. Pour désactiver la fusion : *Grille › Analyse › Fusionner les documents en double*.
 

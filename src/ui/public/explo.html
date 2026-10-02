@@ -95,6 +95,8 @@
   <div class="bar">
     <h1>exploZoteroAnno <small>annotation collective d'une collection Zotero</small></h1>
     <div class="spacer"></div>
+    <a id="link-paper" href="#">Atelier d'articles</a>
+    <a href="/parametres" title="Connexions Albert, Zotero, Omeka S">⚙ Paramètres</a>
     <a href="/docs/" target="_blank">Documentation</a>
     <span id="status" class="badge">aucun traitement</span>
     <button id="btn-run" class="btn primary">Enregistrer et analyser</button>
@@ -106,6 +108,7 @@
     <button data-tab="participation">Participation</button>
     <button data-tab="collab">Collaborations</button>
     <button data-tab="themes">Thèmes</button>
+    <button data-tab="rag">RAG</button>
     <button data-tab="report">Rapport</button>
   </nav>
 </header>
@@ -114,24 +117,14 @@
   <!-- ======================= GRILLE ======================= -->
   <div id="tab-grid">
     <section class="card">
-      <h2>Connexions</h2>
-      <p class="lead" id="env-lead">Connexions propres à exploZoteroAnno. Une valeur non modifiée reste celle du fichier commun <code>.env</code> (marquée « héritée ») ; les secrets ne sont jamais réaffichés : laisser vide pour conserver la valeur enregistrée.</p>
-      <div id="env" class="grid"></div>
-    </section>
-
-    <section class="card">
       <h2>Collection</h2>
-      <p class="lead">Pour que chaque annotation garde son auteur, la collection doit être dans une bibliothèque de groupe Zotero.</p>
+      <p class="lead">Pour que chaque annotation garde son auteur, la collection doit être dans une bibliothèque de groupe Zotero. La bibliothèque (groupe, utilisateur, clé) se règle sur la page <a href="/parametres" style="color:var(--accent)">⚙ Paramètres</a>.</p>
       <div class="grid">
         <div class="field wide">
           <label for="collection">Collection Zotero</label>
           <select id="collection"></select>
           <span class="help" id="collection-help">Chargement des collections…</span>
         </div>
-      </div>
-      <div class="toolbar" style="margin-top:12px">
-        <button id="btn-check" class="btn">Tester les connexions</button>
-        <span id="checks" class="muted" style="font-size:13px"></span>
       </div>
     </section>
 
@@ -143,6 +136,20 @@
         <div class="field wide"><label for="grid-intro">Introduction</label><textarea id="grid-intro" rows="3"></textarea></div>
         <div class="field wide"><label>Couleurs</label><div class="table-wrap" id="grid-table"></div></div>
         <div class="field"><label for="grid-tolerance">Tolérance de couleur (distance RVB)</label><input id="grid-tolerance" type="number" step="1"><span class="help">Écart accepté pour rattacher une couleur à la grille.</span></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>RAG Albert</h2>
+      <p class="lead">À chaque analyse, le texte des documents est déposé dans une collection privée d'Albert portant le nom de la collection Zotero, pour être interrogé dans l'onglet RAG. Un document en double n'est déposé qu'une fois ; la trace du dépôt est enregistrée (fichier JSON) sur l'item Omeka S du document.</p>
+      <div class="grid">
+        <div class="field"><label style="display:flex;gap:8px;align-items:center"><input id="r-enabled" type="checkbox" style="width:auto"> Indexer les documents dans Albert</label><span class="help">Envoie le texte des documents à l'API Albert.</span></div>
+        <div class="field"><label style="display:flex;gap:8px;align-items:center"><input id="r-all" type="checkbox" style="width:auto"> Aussi dans leurs autres collections</label><span class="help">Un document présent dans plusieurs collections Zotero est déposé dans chacune des collections Albert correspondantes.</span></div>
+        <div class="field"><label for="r-chunk">Taille des extraits (caractères)</label><input id="r-chunk" type="number" step="256" min="256"></div>
+        <div class="field"><label for="r-overlap">Chevauchement des extraits (caractères)</label><input id="r-overlap" type="number" step="50" min="0"></div>
+        <div class="field"><label for="r-limit">Extraits par question</label><input id="r-limit" type="number" step="1" min="1" max="100"></div>
+        <div class="field"><label for="r-method">Recherche</label><select id="r-method"><option value="hybrid">hybride (sens et mots)</option><option value="semantic">sémantique</option><option value="lexical">lexicale</option></select></div>
+        <div class="field wide"><label for="r-system">Instructions générales du modèle</label><textarea id="r-system" rows="3"></textarea></div>
       </div>
     </section>
 
@@ -189,6 +196,63 @@
   <!-- ======================= THÈMES ======================= -->
   <div id="tab-themes" class="hidden"><section class="card"><div id="themes" class="md muted">Aucun thème pour le moment.</div></section></div>
 
+  <!-- ======================= RAG ======================= -->
+  <div id="tab-rag" class="hidden">
+    <section class="card">
+      <h2>Interroger la collection</h2>
+      <p class="lead">La question est cherchée dans la collection Albert de la collection Zotero (même nom), puis le modèle répond à partir des extraits trouvés, selon le modèle de prompt choisi. Les modèles de prompt sont enregistrés dans Omeka S.</p>
+      <div class="grid">
+        <div class="field"><label for="rag-collection">Collection</label><select id="rag-collection"></select><span class="help" id="rag-status">—</span></div>
+        <div class="field"><label for="rag-prompt">Modèle de prompt</label><select id="rag-prompt"></select><span class="help" id="rag-prompt-desc"></span></div>
+        <div class="field" style="justify-content:flex-end"><div class="toolbar" style="margin:0">
+          <button id="rag-edit" class="btn">Modifier</button>
+          <button id="rag-new" class="btn">Nouveau modèle</button>
+          <button id="rag-defaults" class="btn hidden">Créer les modèles par défaut</button>
+        </div></div>
+        <div class="field wide"><label for="rag-question">Question</label><textarea id="rag-question" rows="3" placeholder="Ex. : Comment les auteurs définissent-ils l'attention ?"></textarea></div>
+        <div class="field"><label for="rag-limit">Extraits</label><input id="rag-limit" type="number" min="1" max="100" step="1"></div>
+        <div class="field"><label for="rag-method">Recherche</label><select id="rag-method"><option value="hybrid">hybride</option><option value="semantic">sémantique</option><option value="lexical">lexicale</option></select></div>
+        <div class="field"><label for="rag-model">Modèle de langage</label><input id="rag-model" list="rag-models" placeholder="modèle analytique (par défaut)"><datalist id="rag-models"></datalist></div>
+      </div>
+      <div class="toolbar" style="margin-top:12px">
+        <button id="rag-ask" class="btn primary">Interroger</button>
+        <span id="rag-busy" class="muted" style="font-size:13px"></span>
+      </div>
+    </section>
+
+    <section class="card hidden" id="rag-editor">
+      <h2 id="rag-editor-title">Modèle de prompt</h2>
+      <p class="lead">Variables : <code>{{question}}</code>, <code>{{extraits}}</code> (extraits numérotés trouvés par la recherche ; ajoutés à la fin s'ils ne sont pas placés), <code>{{collection}}</code>. Le modèle est enregistré dans Omeka S (type « Modèle de prompt RAG »).</p>
+      <div class="grid">
+        <div class="field"><label for="pe-title">Titre</label><input id="pe-title"></div>
+        <div class="field"><label for="pe-desc">Description</label><input id="pe-desc"></div>
+        <div class="field wide"><label for="pe-template">Gabarit</label><textarea id="pe-template" rows="8"></textarea></div>
+      </div>
+      <div class="toolbar" style="margin-top:12px">
+        <button id="pe-save" class="btn primary">Enregistrer dans Omeka S</button>
+        <button id="pe-cancel" class="btn">Annuler</button>
+      </div>
+    </section>
+
+    <section class="card hidden" id="rag-result">
+      <h2>Réponse</h2>
+      <div id="rag-answer" class="md"></div>
+      <p class="help" id="rag-cost"></p>
+      <div class="toolbar">
+        <button id="rag-save" class="btn primary">Enregistrer dans Omeka S</button>
+        <span id="rag-saved" class="muted" style="font-size:13px"></span>
+      </div>
+      <h2 style="margin-top:16px">Extraits utilisés</h2>
+      <div id="rag-sources"></div>
+      <details style="margin-top:10px"><summary class="muted" style="cursor:pointer;font-size:13px">Prompt envoyé au modèle</summary><pre id="rag-prompt-sent" style="white-space:pre-wrap;font-size:12.5px"></pre></details>
+    </section>
+
+    <section class="card">
+      <h2>Réponses enregistrées</h2>
+      <div id="rag-answers" class="muted">—</div>
+    </section>
+  </div>
+
   <!-- ======================= RAPPORT ======================= -->
   <div id="tab-report" class="hidden">
     <div class="toolbar" id="files"></div>
@@ -228,8 +292,9 @@ const personColor = (names, n) => PEOPLE_COLORS[names.indexOf(n) % PEOPLE_COLORS
 document.querySelectorAll("nav button").forEach(b => b.onclick = () => showTab(b.dataset.tab));
 function showTab(tab) {
   document.querySelectorAll("nav button").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
-  for (const t of ["grid", "run", "participation", "collab", "themes", "report"]) $(`#tab-${t}`).classList.toggle("hidden", t !== tab);
+  for (const t of ["grid", "run", "participation", "collab", "themes", "rag", "report"]) $(`#tab-${t}`).classList.toggle("hidden", t !== tab);
   if (["participation", "collab", "themes", "report"].includes(tab)) loadResults();
+  if (tab === "rag") loadRag();
 }
 
 // ==========================================
@@ -261,6 +326,13 @@ function renderSettings() {
   $("#a-dupes").checked = config.analysis.mergeDuplicates !== false;
   $("#t-count").value = config.themes.count;
   $("#t-max").value = config.themes.maxPassages;
+  $("#r-enabled").checked = config.rag.enabled !== false;
+  $("#r-all").checked = config.rag.allCollections !== false;
+  $("#r-chunk").value = config.rag.chunkSize;
+  $("#r-overlap").value = config.rag.chunkOverlap;
+  $("#r-limit").value = config.rag.limit;
+  $("#r-method").value = config.rag.method;
+  $("#r-system").value = config.rag.system;
   $("#config-file").textContent = `Modifications enregistrées dans ${settings.configFile}`;
   renderGridTable();
   refreshGuide();
@@ -275,14 +347,15 @@ bind("#a-kappa", v => config.analysis.minPassagesForKappa = v, true);
 $("#a-dupes").onchange = e => { config.analysis.mergeDuplicates = e.target.checked; };
 bind("#t-count", v => config.themes.count = v, true);
 bind("#t-max", v => config.themes.maxPassages = v, true);
+$("#r-enabled").onchange = e => { config.rag.enabled = e.target.checked; };
+$("#r-all").onchange = e => { config.rag.allCollections = e.target.checked; };
+bind("#r-chunk", v => config.rag.chunkSize = v, true);
+bind("#r-overlap", v => config.rag.chunkOverlap = v, true);
+bind("#r-limit", v => config.rag.limit = v, true);
+$("#r-method").onchange = e => { config.rag.method = e.target.value; };
+bind("#r-system", v => config.rag.system = v);
 $("#collection").onchange = e => { config.input.zoteroCollection = e.target.value; refreshGuide(); };
 
-// bibliothèque saisie dans le formulaire (groupe, utilisateur, nouvelle clé éventuelle), même non enregistrée
-const zoteroForm = () => ({
-  userId: $("#env-ZOTERO_USER_ID")?.value ?? undefined,
-  groupId: $("#env-ZOTERO_GROUP_ID")?.value ?? undefined,
-  apiKey: $("#env-ZOTERO_API_KEY")?.value || undefined,
-});
 let collectionsRequest = 0;
 // collection choisie dans chaque bibliothèque pendant la session (retour à une bibliothèque = retour à son choix)
 const choiceByLibrary = new Map();
@@ -292,7 +365,8 @@ async function loadCollections() {
   const request = ++collectionsRequest;
   help.textContent = "Chargement des collections…";
   try {
-    const res = await api("/api/zotero/collections", { method: "POST", body: zoteroForm() });
+    // bibliothèque enregistrée (page Paramètres)
+    const res = await api("/api/zotero/collections", { method: "POST", body: {} });
     // une saisie plus récente a relancé le chargement : on ignore cette réponse
     if (request !== collectionsRequest) return;
     collections = res.collections;
@@ -315,12 +389,13 @@ async function loadCollections() {
     const current = config.input.zoteroCollection;
     sel.replaceChildren(...opts); sel.value = current;
     help.textContent = `${collections.length} collection(s) dans la bibliothèque ${res.library}.`;
+    fillRagCollections();
   } catch (e) {
     if (request !== collectionsRequest) return;
     const current = config.input.zoteroCollection;
     collections = [];
     sel.replaceChildren(el("option", { value: current, textContent: current })); sel.value = current;
-    help.textContent = `Collections indisponibles (${e.message}) : vérifier l'identifiant du groupe, de l'utilisateur et la clé Zotero ci-dessus.`;
+    help.replaceChildren(`Collections indisponibles (${e.message}) : vérifier l'identifiant du groupe, de l'utilisateur et la clé Zotero sur la page `, el("a", { href: "/parametres", textContent: "Paramètres", style: "color:var(--accent)" }), ".");
   }
   refreshGuide();
 }
@@ -340,62 +415,29 @@ $("#btn-download").onclick = () => {
   a.click(); URL.revokeObjectURL(a.href);
 };
 
-// connexions (.env commun, surchargé par le fichier propre à ce serveur)
-function renderEnv() {
-  $("#env-lead").querySelector("code").textContent = ".env";
-  $("#env").replaceChildren(...settings.env.map(f => {
-    const input = el("input", {
-      id: `env-${f.key}`, type: f.secret ? "password" : "text", value: f.value, autocomplete: "off",
-      placeholder: f.secret ? (f.isSet ? "•••••••• (enregistrée)" : "non définie") : "",
-    });
-    return el("div", { className: "field" },
-      el("label", { htmlFor: input.id, textContent: f.label }), input,
-      el("span", { className: "help", textContent: `${f.group} · ${f.key}${f.inherited ? " · héritée de .env" : ""}${f.help ? " — " + f.help : ""}` }));
-  }));
-}
-const envValues = () => Object.fromEntries(settings.env.map(f => [f.key, { value: $(`#env-${f.key}`).value }]));
-
-// changement de bibliothèque Zotero (groupe, utilisateur, clé) : la liste des collections suit la saisie
-let zoteroTimer = null;
-function watchZoteroFields() {
-  for (const key of ["ZOTERO_GROUP_ID", "ZOTERO_USER_ID", "ZOTERO_API_KEY"]) {
-    const input = $(`#env-${key}`);
-    if (!input) continue;
-    input.addEventListener("input", () => { clearTimeout(zoteroTimer); zoteroTimer = setTimeout(loadCollections, 700); });
-    input.addEventListener("change", () => { clearTimeout(zoteroTimer); loadCollections(); });
-  }
-}
-
 async function loadSettings() {
   settings = await api("/api/settings");
   config = structuredClone(settings.config);
-  renderEnv();
-  watchZoteroFields();
   renderSettings();
   loadCollections();
 }
+// configuration seulement : les connexions sont enregistrées par la page Paramètres
 async function save(silent = false) {
-  await api("/api/settings", { method: "POST", body: { env: envValues(), config } });
-  // les secrets saisis ne sont pas réaffichés
-  const fresh = await api("/api/settings");
-  settings.env = fresh.env; renderEnv(); watchZoteroFields();
-  if (!silent) toast(`Paramètres enregistrés (${fresh.envFile}, ${fresh.configFile})`);
+  await api("/api/settings", { method: "POST", body: { config } });
+  if (!silent) toast(`Configuration enregistrée (${settings.configFile})`);
 }
+// retour depuis la page Paramètres (autre onglet) : la bibliothèque Zotero a pu changer
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState !== "visible" || !config) return;
+  loadCollections();
+  if (!$("#tab-rag").classList.contains("hidden")) { ragLoaded = false; loadRag(); }
+});
 $("#btn-save").onclick = () => save().catch(e => toast("Erreur : " + e.message));
 $("#btn-reset").onclick = () => {
   if (!confirm("Rétablir la grille et les paramètres d'analyse par défaut ? La collection choisie est conservée.")) return;
   const collection = config.input.zoteroCollection;
   config = structuredClone(settings.defaults); config.input.zoteroCollection = collection;
   renderSettings(); toast("Valeurs par défaut rétablies — enregistrer pour confirmer");
-};
-$("#btn-check").onclick = async () => {
-  $("#checks").textContent = "Vérification…";
-  try {
-    await save(true);
-    const r = await api("/api/check", { method: "POST" });
-    const names = { albert: "Albert", zotero: "Zotero", omeka: "Omeka S" };
-    $("#checks").replaceChildren(...Object.entries(r).map(([k, v]) => el("span", { className: v.ok ? "ok" : "ko", textContent: `${v.ok ? "✓" : "✗"} ${names[k]}  `, title: v.message })));
-  } catch (e) { $("#checks").textContent = "Erreur : " + e.message; }
 };
 
 // ==========================================
@@ -557,6 +599,144 @@ function renderCollab(c) {
       el("p", { className: "lead" }, "Cliquer sur un nœud pour afficher ses liens. ", el("a", { href: "/api/explo/file?name=reseau_collaborations.html&raw=1", target: "_blank", textContent: "Ouvrir en plein écran" })),
       el("iframe", { className: "frame", src: "/api/explo/file?name=reseau_collaborations.html&raw=1", sandbox: "allow-scripts allow-popups allow-popups-to-escape-sandbox" })) : null);
 }
+
+// ==========================================
+// RAG Albert : consultation de la collection avec un modèle de prompt enregistré dans Omeka S
+// ==========================================
+let ragLoaded = false, prompts = [], lastAnswer = null;
+const fmtNum = (v, d = 3) => Number(v ?? 0).toLocaleString("fr-FR", { maximumFractionDigits: d });
+
+// collections proposées : celles de la bibliothèque, collection de l'analyse par défaut
+function fillRagCollections() {
+  const sel = $("#rag-collection"), current = sel.value || config?.input.zoteroCollection;
+  const opts = [...$("#collection").options].map(o => el("option", { value: o.value, textContent: o.textContent }));
+  sel.replaceChildren(...opts);
+  if ([...sel.options].some(o => o.value === current)) sel.value = current;
+}
+$("#rag-collection").onchange = () => { ragStatus(); loadAnswers(); };
+
+async function ragStatus() {
+  const box = $("#rag-status"), key = $("#rag-collection").value;
+  if (!key) return;
+  box.className = "help"; box.textContent = "Collection Albert : vérification…";
+  try {
+    const r = await api(`/api/explo/rag/status?collection=${encodeURIComponent(key)}`);
+    box.className = r.albert ? "help ok" : "help ko";
+    box.textContent = r.albert
+      ? `✓ Collection Albert « ${r.collection.name} » (${r.albert.id})${r.albert.documents != null ? ` : ${r.albert.documents} document(s)` : ""}`
+      : `✗ « ${r.collection.name} » pas encore indexée : lancer une analyse avec le RAG activé (onglet Grille).`;
+  } catch (e) { box.className = "help ko"; box.textContent = `Albert indisponible : ${e.message}`; }
+}
+
+function renderPrompts(selectId) {
+  const sel = $("#rag-prompt"), keep = selectId ?? Number(sel.value);
+  sel.replaceChildren(...(prompts.length ? prompts.map(p => el("option", { value: p.id, textContent: p.title })) : [el("option", { value: "", textContent: "aucun modèle dans Omeka S" })]));
+  if (prompts.some(p => p.id === keep)) sel.value = keep;
+  $("#rag-defaults").classList.toggle("hidden", prompts.length > 0);
+  $("#rag-edit").disabled = !prompts.length;
+  $("#rag-ask").disabled = !prompts.length;
+  $("#rag-prompt-desc").textContent = prompts.find(p => p.id === Number(sel.value))?.description ?? "Créer un modèle pour interroger la collection.";
+}
+$("#rag-prompt").onchange = () => renderPrompts();
+
+async function loadPrompts(selectId) {
+  try { prompts = await api("/api/explo/rag/prompts"); }
+  catch (e) { prompts = []; toast("Modèles de prompt indisponibles : " + e.message); }
+  renderPrompts(selectId);
+}
+
+async function loadAnswers() {
+  const box = $("#rag-answers"), key = $("#rag-collection").value;
+  try {
+    const r = await api(`/api/explo/rag/answers?collection=${encodeURIComponent(key)}`);
+    if (!r.answers.length) { box.className = "muted"; box.textContent = "Aucune réponse enregistrée pour cette collection."; return; }
+    box.className = "";
+    box.replaceChildren(el("div", { className: "table-wrap" }, el("table", { className: "data" },
+      el("thead", {}, el("tr", {}, ["Date", "Question", "Tokens", "Coût estimé", ""].map(h => el("th", { textContent: h })))),
+      el("tbody", {}, r.answers.map(a => el("tr", {},
+        el("td", { textContent: a.date ? new Date(a.date).toLocaleString("fr-FR") : "—" }),
+        el("td", {}, el("details", {}, el("summary", { textContent: a.question || a.title, style: "cursor:pointer" }), el("div", { className: "md", innerHTML: md(a.answer ?? "") }))),
+        el("td", { className: "num", textContent: a.tokens?.total?.toLocaleString("fr-FR") ?? "—" }),
+        el("td", { className: "num", textContent: a.impact ? `${fmtNum(a.impact.energyWh)} Wh · ${fmtNum(a.impact.apiCost, 5)} ${a.impact.currency}` : "—" }),
+        el("td", {}, r.omekaAdmin ? el("a", { href: r.omekaAdmin + a.id, target: "_blank", textContent: "Omeka S", style: "color:var(--accent)" }) : null)))))));
+  } catch (e) { box.className = "muted"; box.textContent = `Réponses indisponibles : ${e.message}`; }
+}
+
+async function loadRag() {
+  if (!config) return;
+  if (!$("#rag-limit").value) { $("#rag-limit").value = config.rag.limit; $("#rag-method").value = config.rag.method; }
+  fillRagCollections();
+  if (ragLoaded) return ragStatus();
+  ragLoaded = true;
+  api("/api/albert/models").then(ms => $("#rag-models").replaceChildren(...ms.filter(m => /text-generation|image-text-to-text/.test(m.type ?? "text-generation")).map(m => el("option", { value: m.id })))).catch(() => {});
+  await Promise.all([ragStatus(), loadPrompts(), loadAnswers()]);
+}
+
+// éditeur de modèle de prompt (création ou modification)
+let editing = null;
+function openEditor(p) {
+  editing = p?.id ?? null;
+  $("#rag-editor-title").textContent = p ? `Modifier « ${p.title} »` : "Nouveau modèle de prompt";
+  $("#pe-title").value = p?.title ?? ""; $("#pe-desc").value = p?.description ?? "";
+  $("#pe-template").value = p?.template ?? "Question : {{question}}\n\nRéponds à partir des extraits de la collection « {{collection}} », en les citant.\n\nExtraits :\n{{extraits}}";
+  $("#rag-editor").classList.remove("hidden"); $("#pe-title").focus();
+}
+$("#rag-new").onclick = () => openEditor(null);
+$("#rag-edit").onclick = () => openEditor(prompts.find(p => p.id === Number($("#rag-prompt").value)));
+$("#pe-cancel").onclick = () => $("#rag-editor").classList.add("hidden");
+$("#pe-save").onclick = async () => {
+  try {
+    const saved = await api("/api/explo/rag/prompts", { method: "POST", body: { id: editing, title: $("#pe-title").value, description: $("#pe-desc").value, template: $("#pe-template").value } });
+    $("#rag-editor").classList.add("hidden");
+    await loadPrompts(saved.id);
+    toast(`Modèle « ${saved.title} » enregistré dans Omeka S (item ${saved.id})`);
+  } catch (e) { toast("Erreur : " + e.message); }
+};
+$("#rag-defaults").onclick = async () => {
+  if (!confirm(`Créer dans Omeka S les ${config.rag.defaultPrompts.length} modèles de prompt par défaut (${config.rag.defaultPrompts.map(p => p.title).join(", ")}) ?`)) return;
+  try { const created = await api("/api/explo/rag/prompts/defaults", { method: "POST" }); await loadPrompts(); toast(`${created.length} modèle(s) créé(s) dans Omeka S`); }
+  catch (e) { toast("Erreur : " + e.message); }
+};
+
+$("#rag-ask").onclick = async () => {
+  const question = $("#rag-question").value.trim();
+  if (!question) return toast("Saisir une question");
+  $("#rag-ask").disabled = true; $("#rag-busy").textContent = "Recherche dans Albert puis rédaction de la réponse…";
+  try {
+    lastAnswer = await api("/api/explo/rag/query", { method: "POST", body: {
+      collection: $("#rag-collection").value, promptId: Number($("#rag-prompt").value), question,
+      limit: Number($("#rag-limit").value) || undefined, method: $("#rag-method").value, model: $("#rag-model").value.trim() || undefined,
+    } });
+    renderAnswer(lastAnswer);
+    $("#rag-busy").textContent = `Réponse en ${fmtNum(lastAnswer.durationMs / 1000, 1)} s`;
+  } catch (e) { $("#rag-busy").textContent = ""; toast("Erreur : " + e.message); }
+  finally { $("#rag-ask").disabled = !prompts.length; }
+};
+
+function renderAnswer(a) {
+  $("#rag-result").classList.remove("hidden");
+  // citations [n] : lien vers l'extrait correspondant
+  $("#rag-answer").innerHTML = md(a.answer || "_(réponse vide)_").replace(/\[(\d+)\]/g, (m, n) => a.sources.some(s => s.n === Number(n)) ? `<a href="#src-${n}" style="color:var(--accent)">[${n}]</a>` : m);
+  const i = a.impact;
+  const declared = a.albert.cost || a.albert.kWh ? ` · déclaré par Albert : ${fmtNum(a.albert.cost, 5)} €, ${fmtNum(a.albert.kWh * 1000)} Wh, ${fmtNum(a.albert.kgCO2eq * 1000)} g CO₂e` : "";
+  $("#rag-cost").textContent = `Coût de la consultation : ${a.usage.totalTokens.toLocaleString("fr-FR")} tokens (${a.usage.entries.map(e => `${e.source} : ${e.totalTokens.toLocaleString("fr-FR")}${e.unknown ? " estimés" : ""}`).join(" ; ")}) · ${fmtNum(i.energyWh)} Wh · ${fmtNum(i.co2g)} g CO₂e · électricité ${fmtNum(i.electricityCost, 6)} ${i.currency} · équivalent API ${fmtNum(i.apiCost, 5)} ${i.currency} (estimation, hypothèses de la configuration)${declared} · modèle ${a.model}`;
+  $("#rag-saved").textContent = ""; $("#rag-save").disabled = false;
+  $("#rag-sources").replaceChildren(...(a.sources.length ? a.sources.map(s => el("div", { className: "quote", id: `src-${s.n}` },
+    el("div", { style: "font-weight:600", textContent: `[${s.n}] ${s.title}${s.creators || s.year ? ` (${[s.creators, s.year].filter(Boolean).join(", ")})` : ""}` }),
+    el("div", { style: "white-space:pre-wrap;font-size:13.5px", textContent: s.content.trim().slice(0, 1500) + (s.content.length > 1500 ? "…" : "") }),
+    el("div", { className: "who", textContent: `score ${fmtNum(s.score)} · document Albert ${s.albertDocumentId}${s.omekaId ? ` · item Omeka ${s.omekaId}` : ""}${s.zoteroKey ? ` · Zotero ${s.zoteroKey}` : ""}` })))
+    : [el("p", { className: "muted", textContent: "Aucun extrait trouvé." })]));
+  $("#rag-prompt-sent").textContent = a.filledPrompt;
+}
+$("#rag-save").onclick = async () => {
+  if (!lastAnswer) return;
+  $("#rag-save").disabled = true;
+  try {
+    const r = await api("/api/explo/rag/save", { method: "POST", body: { id: lastAnswer.id } });
+    $("#rag-saved").replaceChildren("Enregistrée : ", el("a", { href: r.adminUrl, target: "_blank", textContent: `item ${r.itemId}`, style: "color:var(--accent)" }));
+    loadAnswers();
+  } catch (e) { $("#rag-save").disabled = false; toast("Erreur : " + e.message); }
+};
 
 loadSettings().catch(e => toast("Erreur de chargement : " + e.message));
 // lien vers l'autre application (serveur et port distincts)

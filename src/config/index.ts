@@ -145,6 +145,8 @@ Consigne : synthèse et perspectives.`,
     models: [
       { model: "openai/gpt-oss-120b", activeParamsB: 5.1, inputPricePerM: 0.15, outputPricePerM: 0.6 },
       { model: "mistralai/Ministral-3-8B-Instruct-2512", activeParamsB: 8, inputPricePerM: 0.1, outputPricePerM: 0.1 },
+      // vectorisation des documents du RAG (exploZoteroAnno) : nombre de tokens estimé à partir du texte déposé
+      { model: "BAAI/bge-m3", activeParamsB: 0.57, inputPricePerM: 0.01, outputPricePerM: 0 },
     ],
     // modèle absent de la liste
     fallback: { activeParamsB: 10, inputPricePerM: 0.5, outputPricePerM: 1.5 },

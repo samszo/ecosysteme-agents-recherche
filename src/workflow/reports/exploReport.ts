@@ -10,7 +10,7 @@ const date = (d: string | null) => (d ? new Date(d).toLocaleDateString("fr-FR") 
 
 export function buildExploReport(ctx: {
   runId: string; status: string; startedAt: Date; endedAt: Date; collectionName: string;
-  participation: any; collaboration: any; themes: string; usage?: UsageSummary; impact?: ImpactSummary; error?: string;
+  participation: any; collaboration: any; themes: string; rag?: any; usage?: UsageSummary; impact?: ImpactSummary; error?: string;
 }): string {
   const { participation: p, collaboration: c } = ctx;
   const lines: string[] = [];
@@ -85,6 +85,26 @@ export function buildExploReport(ctx: {
   }
 
   if (ctx.themes) push("## Thèmes de discussion", "", ctx.themes.replace(/^#\s.*\n+/, ""), "");
+
+  // indexation des documents dans le RAG d'Albert
+  const r = ctx.rag;
+  if (r?.error) push("## RAG Albert", "", `> ⚠️ Indexation impossible : ${cell(r.error)}`, "");
+  else if (r?.collections) {
+    push(
+      "## RAG Albert",
+      "",
+      `**${r.documents}** document(s) avec texte : **${r.uploaded}** dépôt(s), ${r.alreadyIndexed} déjà présent(s)` +
+        `${r.duplicatesSkipped ? `, ${r.duplicatesSkipped} doublon(s) déposé(s) une seule fois` : ""}${r.withoutText ? `, ${r.withoutText} document(s) sans texte non indexé(s)` : ""}. ` +
+        `Vectorisation estimée à ≈ ${Number(r.estimatedTokens ?? 0).toLocaleString("fr-FR")} tokens (comptés dans le coût du traitement). ` +
+        `Trace de l'indexation enregistrée sur ${r.records} item(s) Omeka S (média « Indexation RAG Albert »).`,
+      "",
+      "| Collection (Zotero et Albert) | Collection Albert | Nouvelle | Documents déposés | Déjà présents |",
+      "|---|---|---|---|---|",
+      ...r.collections.map((c: any) => `| ${cell(c.name)} (\`${c.zoteroKey}\`) | ${c.albertId} | ${c.created ? "oui" : "non"} | ${c.added} | ${c.present} |`),
+      ""
+    );
+    if (r.errors?.length) push("Erreurs :", "", ...r.errors.map((e: string) => `- ${cell(e)}`), "");
+  }
   push(...usageReport(ctx.usage, ctx.impact));
   return lines.join("\n");
 }

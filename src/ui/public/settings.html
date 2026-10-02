@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Paramètres de connexion</title>
+<style>
+  :root {
+    --bg: #f6f5f1; --panel: #ffffff; --ink: #1d1f24; --muted: #6b6f78; --line: #e2e0d9;
+    --accent: #2f5d8a; --accent-ink: #ffffff; --ok: #2e7d4f; --warn: #b26a00; --err: #b3261e;
+    --shadow: 0 1px 2px rgba(0,0,0,.05), 0 4px 16px rgba(0,0,0,.04);
+  }
+  :root[data-app="explo"] { --accent: #6a4c93; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #15171b; --panel: #1d2026; --ink: #e8e9ec; --muted: #9aa0aa; --line: #2e323a;
+      --accent: #7fb0e0; --accent-ink: #0f1a26; --ok: #6cc28f; --warn: #e0a64a; --err: #f08a80; --shadow: none;
+    }
+    :root[data-app="explo"]:not([data-theme="light"]) { --accent: #b39ddb; --accent-ink: #1a1326; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { position: sticky; top: 0; z-index: 5; background: var(--panel); border-bottom: 1px solid var(--line); }
+  .bar { max-width: 980px; margin: 0 auto; padding: 12px 16px; display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+  h1 { font-size: 17px; margin: 0; font-weight: 650; }
+  h1 small { color: var(--muted); font-weight: 400; margin-left: 6px; }
+  .spacer { flex: 1; }
+  header a { color: var(--accent); font-size: 14px; }
+  main { max-width: 980px; margin: 0 auto; padding: 20px 16px 80px; }
+  section.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; margin-bottom: 16px; box-shadow: var(--shadow); }
+  section.card > h2 { font-size: 15px; margin: 0 0 4px; }
+  p.lead { color: var(--muted); margin: 0 0 12px; font-size: 13.5px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px 16px; }
+  .field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  label { font-size: 13px; font-weight: 600; }
+  .help { font-size: 12px; color: var(--muted); }
+  .inherited { font-size: 11.5px; color: var(--accent); border: 1px solid currentColor; border-radius: 999px; padding: 0 6px; margin-left: 6px; font-weight: 500; }
+  input { font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 7px 9px; width: 100%; min-width: 0; }
+  button.btn { font: inherit; border: 1px solid var(--line); background: var(--panel); color: var(--ink); border-radius: 6px; padding: 7px 14px; cursor: pointer; }
+  button.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+  button.btn:disabled { opacity: .5; cursor: default; }
+  .toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .checks { display: grid; gap: 6px; margin-top: 12px; font-size: 13.5px; }
+  .ok { color: var(--ok); } .ko { color: var(--err); } .muted { color: var(--muted); }
+  .library { font-size: 13px; margin-top: 8px; }
+  code { font-size: 12.5px; }
+  .toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 8px 16px; border-radius: 8px; font-size: 14px; opacity: 0; transition: opacity .2s; pointer-events: none; }
+  .toast.show { opacity: 1; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<header>
+  <div class="bar">
+    <h1>Paramètres <small id="app-label"></small></h1>
+    <div class="spacer"></div>
+    <a href="/">← Retour à l'application</a>
+    <a id="link-other" href="#" class="hidden"></a>
+    <a href="/docs/installation.html" target="_blank">Documentation</a>
+  </div>
+</header>
+
+<main>
+  <section class="card">
+    <h2>Connexions</h2>
+    <p class="lead" id="lead">Chargement…</p>
+    <div id="groups"></div>
+    <div class="toolbar" style="margin-top:14px">
+      <button id="btn-save" class="btn primary">Enregistrer</button>
+      <button id="btn-check" class="btn">Enregistrer et tester les connexions</button>
+      <span class="muted" style="font-size:13px" id="env-file"></span>
+    </div>
+    <div id="checks" class="checks"></div>
+  </section>
+</main>
+<div class="toast" id="toast"></div>
+
+<script type="module">
+const $ = s => document.querySelector(s);
+const el = (tag, props = {}, ...children) => {
+  const e = Object.assign(document.createElement(tag), props);
+  for (const c of children.flat()) if (c != null && c !== false) e.append(c);
+  return e;
+};
+const api = async (url, opts = {}) => {
+  const res = await fetch(url, { headers: { "Content-Type": "application/json" }, ...opts, body: opts.body && JSON.stringify(opts.body) });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+  return data;
+};
+function toast(msg) { const t = $("#toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove("show"), 2800); }
+
+let settings = null, apps = null;
+
+// champs groupés par service ; une valeur héritée du fichier commun est signalée
+function render() {
+  const groups = new Map();
+  for (const f of settings.env) { if (!groups.has(f.group)) groups.set(f.group, []); groups.get(f.group).push(f); }
+  $("#groups").replaceChildren(...[...groups].map(([group, fields]) => el("section", { className: "card", style: "box-shadow:none;margin:0 0 12px;padding:12px 14px" },
+    el("h2", { textContent: group }),
+    el("div", { className: "grid" }, fields.map(f => {
+      const input = el("input", {
+        id: `env-${f.key}`, type: f.secret ? "password" : "text", value: f.value, autocomplete: "off",
+        placeholder: f.secret ? (f.isSet ? "•••••••• (enregistrée)" : "non définie") : "",
+      });
+      return el("div", { className: "field" },
+        el("label", { htmlFor: input.id }, f.label, f.inherited ? el("span", { className: "inherited", textContent: "héritée de .env" }) : null),
+        input,
+        el("span", { className: "help", textContent: `${f.key}${f.help ? " — " + f.help : ""}` }));
+    })),
+    group === "Zotero" ? el("div", { className: "library muted", id: "library" }) : null)));
+  for (const key of ["ZOTERO_GROUP_ID", "ZOTERO_USER_ID", "ZOTERO_API_KEY"]) {
+    const input = $(`#env-${key}`);
+    input?.addEventListener("input", () => { clearTimeout(render.t); render.t = setTimeout(library, 700); });
+  }
+  library();
+}
+
+// bibliothèque Zotero correspondant à la saisie (avant enregistrement)
+let libraryRequest = 0;
+async function library() {
+  const box = $("#library");
+  if (!box) return;
+  const request = ++libraryRequest;
+  box.textContent = "Bibliothèque Zotero : vérification…";
+  try {
+    const r = await api("/api/zotero/collections", { method: "POST", body: {
+      userId: $("#env-ZOTERO_USER_ID")?.value, groupId: $("#env-ZOTERO_GROUP_ID")?.value, apiKey: $("#env-ZOTERO_API_KEY")?.value || undefined,
+    } });
+    if (request !== libraryRequest) return;
+    box.className = "library ok";
+    box.textContent = `✓ Bibliothèque ${r.library} : ${r.collections.length} collection(s).`;
+  } catch (e) {
+    if (request !== libraryRequest) return;
+    box.className = "library ko";
+    box.textContent = `✗ Bibliothèque Zotero inaccessible : ${e.message}`;
+  }
+}
+
+const envValues = () => Object.fromEntries(settings.env.map(f => [f.key, { value: $(`#env-${f.key}`).value }]));
+
+async function load() {
+  [settings, apps] = await Promise.all([api("/api/settings"), api("/api/apps")]);
+  const current = apps.apps[apps.current];
+  document.documentElement.dataset.app = apps.current;
+  document.title = `Paramètres – ${current.label}`;
+  $("#app-label").textContent = current.label;
+  const other = Object.entries(apps.apps).find(([k]) => k !== apps.current)?.[1];
+  if (other) { const a = $("#link-other"); a.href = `${other.url}/parametres`; a.textContent = `Paramètres de ${other.label.replace(/ \(.*\)$/, "")}`; a.classList.remove("hidden"); }
+  const files = apps.envFiles ?? [".env"];
+  $("#lead").innerHTML = "";
+  $("#lead").append(files.length > 1
+    ? `Connexions de cette application : le fichier commun ${files[0]} est surchargé par ${files[files.length - 1]}. Une valeur non modifiée reste celle de ${files[0]} (« héritée ») ; une valeur modifiée ici ne vaut que pour cette application.`
+    : `Connexions de cette application (fichier ${files[0]}).`,
+    " Les secrets ne sont jamais réaffichés : laisser vide pour conserver la valeur enregistrée.");
+  $("#env-file").textContent = `Enregistrement dans ${settings.envFile}`;
+  render();
+}
+
+async function save(silent = false) {
+  await api("/api/settings", { method: "POST", body: { env: envValues() } });
+  settings = await api("/api/settings");
+  render();
+  if (!silent) toast(`Connexions enregistrées (${settings.envFile})`);
+}
+$("#btn-save").onclick = () => save().catch(e => toast("Erreur : " + e.message));
+$("#btn-check").onclick = async () => {
+  const box = $("#checks"); box.textContent = "Vérification…";
+  try {
+    await save(true);
+    const r = await api("/api/check", { method: "POST" });
+    const names = { albert: "Albert", zotero: "Zotero", omeka: "Omeka S" };
+    box.replaceChildren(...Object.entries(r).map(([k, v]) => el("div", {}, el("span", { className: v.ok ? "ok" : "ko", textContent: v.ok ? "✓ " : "✗ " }), el("strong", { textContent: names[k] + " : " }), v.message)));
+  } catch (e) { box.textContent = "Erreur : " + e.message; }
+};
+
+load().catch(e => toast("Erreur de chargement : " + e.message));
+</script>
+</body>
+</html>

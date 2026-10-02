@@ -26,6 +26,18 @@ export async function importSynthesis(zoteroCollection: string, documents: Synth
 const refusedExtension = (msg: string) => /Cannot store files with the resolved extension/i.test(msg);
 const refusedMediaType = (msg: string) => /Cannot store files with the media type/i.test(msg);
 
+// dépôt d'un fichier comme média ; extension refusée mais type de contenu accepté : nouvel essai en .txt
+// (format d'origine dans dcterms:format, que l'appelant renseigne)
+export async function uploadWithFallback(omk: Awaited<ReturnType<typeof getOmk>>, itemId: number, file: { buffer: Buffer; fileName: string; type: string }, metadata: Record<string, any>) {
+  try {
+    return { media: await omk.uploadMedia(itemId, file, metadata), asText: false };
+  } catch (e) {
+    const msg = (e as Error).message;
+    if (!refusedExtension(msg) || refusedMediaType(msg)) throw e;
+    return { media: await omk.uploadMedia(itemId, { buffer: file.buffer, fileName: `${file.fileName}.txt`, type: "text/plain" }, metadata), asText: true };
+  }
+}
+
 // dépose chaque document comme média de l'item, daté et relié à la configuration de l'exécution
 export async function attachDocuments(itemId: number, documents: SynthesisDocument[], runId: string, configItemId: number | null) {
   const omk = await getOmk();
@@ -45,16 +57,8 @@ export async function attachDocuments(itemId: number, documents: SynthesisDocume
         // lien vers la configuration de l'exécution qui a produit le document
         ...(configItemId ? { "dcterms:relation": { rid: configItemId } } : {}),
       };
-      let media: any;
-      try {
-        media = await omk.uploadMedia(itemId, { buffer, fileName: base + ext, type }, metadata);
-      } catch (e) {
-        const msg = (e as Error).message;
-        // extension refusée mais type de contenu accepté : nouvel essai en .txt (format d'origine dans dcterms:format)
-        if (!refusedExtension(msg) || refusedMediaType(msg)) throw e;
-        media = await omk.uploadMedia(itemId, { buffer, fileName: `${base}${ext}.txt`, type: "text/plain" }, metadata);
-        console.log(`   ℹ️ Extension ${ext} non autorisée par Omeka S : ${doc.title} importé en .txt`);
-      }
+      const { media, asText } = await uploadWithFallback(omk, itemId, { buffer, fileName: base + ext, type }, metadata);
+      if (asText) console.log(`   ℹ️ Extension ${ext} non autorisée par Omeka S : ${doc.title} importé en .txt`);
       mediaIds.push(media["o:id"]);
       console.log(`   ✅ ${doc.title} importé (Media ID ${media["o:id"]})`);
     } catch (e) {

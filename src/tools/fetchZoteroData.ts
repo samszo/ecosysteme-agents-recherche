@@ -31,6 +31,19 @@ export interface ZoteroArticle {
   accessed: string | null;
   // autres exemplaires du même document dans la collection (fusionnés : annotations, notes et marqueurs cumulés)
   duplicates?: { zoteroKey: string; parentKey: string | null; title: string; annotations: number }[];
+  // toutes les collections Zotero du document (exemplaires en double compris)
+  collectionKeys: string[];
+  // référence courte (métadonnées des extraits du RAG)
+  creators?: string;
+  year?: string;
+}
+
+// auteurs d'une notice Zotero (« Nom, Nom et al. ») et année de publication
+function shortReference(data: any): { creators?: string; year?: string } {
+  const names = (data?.creators ?? []).map((c: any) => c.lastName || c.name).filter(Boolean);
+  const creators = names.length > 3 ? `${names.slice(0, 3).join(", ")} et al.` : names.join(", ");
+  const year = /\b(1[5-9]|20)\d{2}\b/.exec(data?.date ?? "")?.[0];
+  return { ...(creators ? { creators } : {}), ...(year ? { year } : {}) };
 }
 
 // fusionne des listes d'annotations (fichier, lecteur Zotero, notes Zotero) sans doublon
@@ -114,8 +127,15 @@ export const fetchZoteroData = new Tool({
         }
       }
       const title: string = parent?.data?.title || attachment.data.title;
-      // toutes les collections Zotero de l'item (portées par la notice parente, sinon par la pièce jointe)
-      const collectionKeys: string[] = [...new Set([collectionId, ...(parent?.data?.collections ?? attachment.data.collections ?? [])])];
+      // toutes les collections Zotero de l'item (portées par la notice parente, sinon par la pièce jointe),
+      // et celles de ses autres exemplaires : le document fusionné appartient à chacune
+      const collectionsOf = (att: any, par: any) => par?.data?.collections ?? att.data.collections ?? [];
+      const collectionKeys: string[] = [...new Set([
+        collectionId,
+        ...collectionsOf(attachment, parent),
+        ...group.duplicates.flatMap((d: any) => collectionsOf(d, parentOf(d))),
+      ])];
+      const reference = shortReference(parent?.data ?? attachment.data);
       const collectionItemIds: number[] = [];
       for (const key of collectionKeys) {
         try {
@@ -200,7 +220,7 @@ export const fetchZoteroData = new Tool({
             console.warn(`⚠️ [OMEKA] Mise à jour des métadonnées impossible pour ${title} :`, (e as Error).message);
           }
 
-          extractedArticles.push({ zoteroKey, parentKey: parentKey ?? null, title, format: contentType, text: cachedText, annotations: cachedAnnotations, tags, images: [], omekaItemId: cachedItem["o:id"], accessed, ...(duplicatesInfo.length ? { duplicates: duplicatesInfo } : {}) });
+          extractedArticles.push({ zoteroKey, parentKey: parentKey ?? null, title, format: contentType, text: cachedText, annotations: cachedAnnotations, tags, images: [], omekaItemId: cachedItem["o:id"], accessed, collectionKeys, ...reference, ...(duplicatesInfo.length ? { duplicates: duplicatesInfo } : {}) });
           continue;
         }
       } catch (e) {
@@ -238,7 +258,7 @@ export const fetchZoteroData = new Tool({
         const omekaItemId = createdItem["o:id"];
 
         const images: ZoteroArticle["images"] = (extracted?.images ?? []).map(({ page, width, height }) => ({ page, width, height }));
-        extractedArticles.push({ zoteroKey, parentKey: parentKey ?? null, title, format: extracted?.format ?? "link", text: extractedText, annotations, tags, images, omekaItemId, accessed: null, ...(duplicatesInfo.length ? { duplicates: duplicatesInfo } : {}) });
+        extractedArticles.push({ zoteroKey, parentKey: parentKey ?? null, title, format: extracted?.format ?? "link", text: extractedText, annotations, tags, images, omekaItemId, accessed: null, collectionKeys, ...reference, ...(duplicatesInfo.length ? { duplicates: duplicatesInfo } : {}) });
 
         // 3b. Création des annotations (oa:Annotation) qui ciblent l'item
         await saveAnnotations(omk, omekaItemId, annotations, title);

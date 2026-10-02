@@ -108,6 +108,9 @@ export const defaultExploConfig = {
 
 export type ExploConfig = typeof defaultExploConfig;
 
+// sous-dossier de outputDir où chaque analyse est archivée (un dossier par exécution)
+export const RUNS_DIR = "analyses";
+
 // configuration effective : défauts + surcharges de explo.config.json
 export const exploConfig: ExploConfig = mergeConfig(defaultExploConfig, readConfigOverride(EXPLO_CONFIG_FILE));
 

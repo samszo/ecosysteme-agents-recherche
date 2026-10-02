@@ -3,7 +3,7 @@ import "dotenv/config";
 import fs from "fs/promises";
 import path from "path";
 import { exploWorkflow } from "../workflow/exploWorkflow";
-import { exploConfig } from "../config/explo";
+import { exploConfig, RUNS_DIR } from "../config/explo";
 import { buildGuide } from "../workflow/reports/annotationGuide";
 import { buildExploReport } from "../workflow/reports/exploReport";
 import { saveWorkflowConfig, updateWorkflowStatus } from "../workflow/runs/saveWorkflowConfig";
@@ -31,7 +31,8 @@ async function main() {
   const run = await exploWorkflow.createRun();
   let configItemId: number | null = null;
   try {
-    configItemId = await saveWorkflowConfig(run.runId, input, { workflowId: exploConfig.workflowId, config: exploConfig });
+    // le nom de la collection accompagne la configuration : il identifie l'analyse dans la liste des analyses effectuées
+    configItemId = await saveWorkflowConfig(run.runId, input, { workflowId: exploConfig.workflowId, config: { ...exploConfig, collectionName } });
   } catch (e) {
     console.warn("⚠️ Configuration non enregistrée dans Omeka S :", (e as Error).message);
   }
@@ -85,6 +86,25 @@ async function main() {
   }));
   documents.push({ filePath: out("rapport_explo.md"), title: "Rapport de l'annotation collective" });
   console.log(`📋 Résultats écrits dans './${exploConfig.outputDir}/'`);
+
+  // archive locale de l'analyse (rechargée depuis l'onglet Analyses) : copie des fichiers et description de l'exécution
+  try {
+    const archive = path.join(outDir, RUNS_DIR, run.runId);
+    await fs.mkdir(archive, { recursive: true });
+    for (const d of documents) await fs.copyFile(d.filePath, path.join(archive, path.basename(d.filePath)));
+    await fs.writeFile(path.join(archive, "analyse.json"), JSON.stringify({
+      runId: run.runId, workflowId: exploConfig.workflowId, status: runResult.status,
+      startedAt: startedAt.toISOString(), endedAt: endedAt.toISOString(),
+      collection: { key: input.zoteroCollection, name: collectionName },
+      configItemId,
+      tokens: { calls: usage.calls, input: usage.inputTokens, output: usage.outputTokens, total: usage.totalTokens },
+      impact: { energyWh: impact.energyWh, co2g: impact.co2g, electricityCost: impact.electricityCost, apiCost: impact.apiCost, currency: impact.currency },
+      totals: participation?.totals ?? null,
+      config: exploConfig,
+    }, null, 2));
+  } catch (e) {
+    console.warn("⚠️ Archive locale de l'analyse non écrite :", (e as Error).message);
+  }
 
   // enregistrement dans Omeka S : statut, consommation et documents dans l'item de configuration
   if (configItemId) {

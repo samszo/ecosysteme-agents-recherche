@@ -432,7 +432,7 @@ Routes propres à l'Atelier d'articles :
 | `GET /api/results`, `GET /api/file?name=` | liste et contenu des résultats (liste blanche) |
 | `GET /api/history` | appels traités : historique local et configurations Omeka S, regroupés par appel |
 
-Routes propres à exploZoteroAnno : `GET` et `POST /api/explo/settings`, `POST /api/explo/guide` (guide d'annotation à partir de la grille), `GET /api/explo/results`, `GET /api/explo/file?name=`, et pour le RAG :
+Routes propres à exploZoteroAnno : `GET` et `POST /api/explo/settings`, `POST /api/explo/guide` (guide d'annotation à partir de la grille), `GET /api/explo/runs` (analyses déjà effectuées), `GET /api/explo/results?run=`, `GET /api/explo/file?name=&run=` (sans `run` : dernière analyse), et pour le RAG :
 
 | Méthode et route | Rôle |
 |---|---|
@@ -487,7 +487,11 @@ flowchart TD
 | `src/runners/explo.ts` | lancement (`npm run explo`), fichiers, Omeka, coût | `saveWorkflowConfig`, `updateWorkflowStatus`, `attachDocuments`, `generateGraphHtml`, `usageReport`, `estimateImpact` |
 | `src/workflow/reports/annotationGuide.ts` | guide d'annotation à partir de la grille | — |
 
-Fichiers produits dans `resultats/explo/` (réglage `outputDir`) : `guide_annotation.md`, `participation.json`, `collaborations.json`, `reseau_collaborations.html`, `themes_discussion.md`, `rapport_explo.md`, `rag_indexation.json` (bilan de l'indexation).
+Fichiers produits dans `resultats/explo/` (réglage `outputDir`) : `guide_annotation.md`, `participation.json`, `collaborations.json`, `reseau_collaborations.html`, `themes_discussion.md`, `rapport_explo.md`, `rag_indexation.json` (bilan de l'indexation). Ces fichiers sont ceux de la **dernière analyse** ; chaque analyse est aussi archivée dans `resultats/explo/analyses/<runId>/` (copie des fichiers et `analyse.json` : statut, dates, collection, item de configuration, tokens, coût, totaux, configuration).
+
+### Analyses déjà effectuées
+
+`GET /api/explo/runs` fusionne l'archive locale et les items de configuration d'Omeka S dont la description porte `workflowId = explo-zotero-anno` (l'historique de l'Atelier écarte ces items, et inversement). `GET /api/explo/results?run=` et `GET /api/explo/file?name=&run=` servent les fichiers d'une analyse : archive locale si elle existe, sinon médias de l'item de configuration (repérés par leur `dcterms:identifier` `<runId>/<fichier>`, lus par leur `o:original_url`). L'identifiant d'analyse est validé (`[\w-]`) et seuls les noms de fichiers connus sont servis. La page garde l'analyse affichée dans `currentRun` (`null` = dernière analyse) et ajoute `run=` à ses requêtes.
 
 ### RAG Albert
 

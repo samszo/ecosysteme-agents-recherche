@@ -105,6 +105,7 @@
   <nav>
     <button data-tab="grid" class="active">Grille</button>
     <button data-tab="run">Exécution</button>
+    <button data-tab="runs">Analyses</button>
     <button data-tab="participation">Participation</button>
     <button data-tab="collab">Collaborations</button>
     <button data-tab="themes">Thèmes</button>
@@ -114,6 +115,12 @@
 </header>
 
 <main>
+  <!-- analyse affichée dans les onglets de résultats, quand ce n'est pas la dernière -->
+  <div id="run-banner" class="toolbar hidden" style="background:var(--panel);border:1px solid var(--accent);border-radius:8px;padding:8px 12px">
+    <span id="run-banner-text"></span>
+    <div class="spacer"></div>
+    <button id="run-latest" class="btn">Revenir à la dernière analyse</button>
+  </div>
   <!-- ======================= GRILLE ======================= -->
   <div id="tab-grid">
     <section class="card">
@@ -185,6 +192,16 @@
   <div id="tab-run" class="hidden">
     <div class="toolbar"><span id="run-info" class="muted">Aucun traitement lancé depuis l'ouverture de l'application.</span></div>
     <pre id="log"></pre>
+  </div>
+
+  <!-- ======================= ANALYSES ======================= -->
+  <div id="tab-runs" class="hidden">
+    <section class="card">
+      <h2>Analyses déjà effectuées</h2>
+      <p class="lead">Chaque analyse est archivée localement et dans Omeka S (item de configuration et ses médias). <strong>Charger</strong> affiche ses résultats dans les onglets Participation, Collaborations, Thèmes et Rapport ; <strong>Reprendre les réglages</strong> recopie sa collection, sa grille et ses paramètres d'analyse dans l'onglet Grille.</p>
+      <div class="toolbar"><button id="runs-refresh" class="btn">Actualiser</button><span id="runs-info" class="muted" style="font-size:13px"></span></div>
+      <div id="runs" class="muted">Chargement…</div>
+    </section>
   </div>
 
   <!-- ======================= PARTICIPATION ======================= -->
@@ -292,8 +309,11 @@ const personColor = (names, n) => PEOPLE_COLORS[names.indexOf(n) % PEOPLE_COLORS
 document.querySelectorAll("nav button").forEach(b => b.onclick = () => showTab(b.dataset.tab));
 function showTab(tab) {
   document.querySelectorAll("nav button").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
-  for (const t of ["grid", "run", "participation", "collab", "themes", "rag", "report"]) $(`#tab-${t}`).classList.toggle("hidden", t !== tab);
-  if (["participation", "collab", "themes", "report"].includes(tab)) loadResults();
+  for (const t of ["grid", "run", "runs", "participation", "collab", "themes", "rag", "report"]) $(`#tab-${t}`).classList.toggle("hidden", t !== tab);
+  const results = ["participation", "collab", "themes", "report"].includes(tab);
+  $("#run-banner").classList.toggle("hidden", !(results && currentRun));
+  if (results) loadResults();
+  if (tab === "runs") loadRuns();
   if (tab === "rag") loadRag();
 }
 
@@ -466,7 +486,7 @@ es.addEventListener("status", e => {
   if (!first && s?.status === "running" && s.id !== lastState?.id) log.textContent = "";
   first = false;
   renderStatus(s);
-  if (s && s.status !== "running" && s.endedAt && Date.now() - s.endedAt < 3000) { toast(`Traitement ${STATUS_TEXT[s.status]}`); resultsLoaded = false; showTab("participation"); }
+  if (s && s.status !== "running" && s.endedAt && Date.now() - s.endedAt < 3000) { toast(`Traitement ${STATUS_TEXT[s.status]}`); currentRun = null; resultsLoaded = false; runsLoaded = false; showTab("participation"); }
 });
 es.addEventListener("log", e => { log.append(JSON.parse(e.data) + "\n"); log.scrollTop = log.scrollHeight; });
 $("#btn-run").onclick = async () => {
@@ -478,19 +498,81 @@ $("#btn-stop").onclick = async () => { if (confirm("Arrêter le traitement en co
 // ==========================================
 // Résultats
 // ==========================================
-let resultsLoaded = false, files = [];
+// currentRun : analyse archivée affichée (null = dernière analyse)
+let resultsLoaded = false, files = [], currentRun = null;
+const runQuery = () => (currentRun ? `&run=${encodeURIComponent(currentRun.runId)}` : "");
+const fileUrl = (name, raw = false) => `/api/explo/file?name=${encodeURIComponent(name)}${raw ? "&raw=1" : ""}${runQuery()}`;
 async function loadResults() {
   if (resultsLoaded) return;
-  files = await api("/api/explo/results");
+  try { files = await api(`/api/explo/results?${runQuery().slice(1)}`); }
+  catch (e) { files = []; toast("Résultats indisponibles : " + e.message); }
   resultsLoaded = true;
   const has = n => files.some(f => f.name === n);
-  const get = async n => has(n) ? (await fetch(`/api/explo/file?name=${encodeURIComponent(n)}`)).text() : null;
+  const get = async n => { if (!has(n)) return null; const r = await fetch(fileUrl(n)); return r.ok ? r.text() : null; };
   const [p, c, themes, report] = await Promise.all([get("participation.json"), get("collaborations.json"), get("themes_discussion.md"), get("rapport_explo.md")]);
-  if (p) renderParticipation(JSON.parse(p));
-  if (c) renderCollab(JSON.parse(c), p ? JSON.parse(p) : null);
-  if (themes) { $("#themes").className = "md"; $("#themes").innerHTML = md(themes); }
-  if (report) { $("#report").className = "md"; $("#report").innerHTML = md(report); }
-  $("#files").replaceChildren(...files.map(f => el("a", { href: `/api/explo/file?name=${encodeURIComponent(f.name)}${f.name.endsWith(".html") ? "&raw=1" : ""}`, target: "_blank", className: "chip", textContent: `${f.title} · ${new Date(f.mtime).toLocaleString("fr-FR")}` })));
+  // une analyse rechargée remplace tout l'affichage, y compris ce qu'elle ne contient pas
+  const empty = (sel, text) => { const b = $(sel); b.className = "empty"; b.textContent = text; };
+  if (p) renderParticipation(JSON.parse(p)); else empty("#participation", "Pas de données de participation pour cette analyse.");
+  if (c) renderCollab(JSON.parse(c), p ? JSON.parse(p) : null); else empty("#collab", "Pas de données de collaboration pour cette analyse.");
+  if (themes) { $("#themes").className = "md"; $("#themes").innerHTML = md(themes); } else { $("#themes").className = "md muted"; $("#themes").textContent = "Aucun thème pour cette analyse."; }
+  if (report) { $("#report").className = "md"; $("#report").innerHTML = md(report); } else { $("#report").className = "md muted"; $("#report").textContent = "Aucun rapport pour cette analyse."; }
+  $("#files").replaceChildren(...files.map(f => el("a", { href: fileUrl(f.name, f.name.endsWith(".html")), target: "_blank", className: "chip", textContent: `${f.title}${f.mtime ? ` · ${new Date(f.mtime).toLocaleString("fr-FR")}` : " · Omeka S"}` })));
+}
+
+// ==========================================
+// Analyses déjà effectuées
+// ==========================================
+let runsLoaded = false, runs = [];
+const collectionLabel = c => c?.name || collections.find(x => x.key === c?.key)?.name || c?.key || "—";
+const runLabel = r => `${collectionLabel(r.collection)} · ${r.startedAt ? new Date(r.startedAt).toLocaleString("fr-FR") : r.runId}`;
+async function loadRuns(force = false) {
+  if (runsLoaded && !force) return;
+  const box = $("#runs");
+  box.className = "muted"; box.textContent = "Chargement…";
+  let data;
+  try { data = await api("/api/explo/runs"); }
+  catch (e) { box.textContent = "Analyses indisponibles : " + e.message; return; }
+  runsLoaded = true; runs = data.runs;
+  $("#runs-info").textContent = `${runs.length} analyse(s)${data.omekaError ? ` — Omeka S indisponible (${data.omekaError}) : archive locale seulement` : ""}`;
+  if (!runs.length) { box.textContent = "Aucune analyse pour le moment."; return; }
+  const dur = r => { const s = Math.round((new Date(r.endedAt) - new Date(r.startedAt)) / 1000); return r.endedAt && s >= 0 ? (s >= 60 ? `${Math.floor(s / 60)} min ${s % 60} s` : `${s} s`) : "—"; };
+  box.className = "";
+  box.replaceChildren(el("div", { className: "table-wrap" }, el("table", { className: "data" },
+    el("thead", {}, el("tr", {}, ["Date", "Collection", "Statut", "Durée", "Participation", "Tokens", "Coût estimé", "Source", ""].map(h => el("th", { textContent: h })))),
+    el("tbody", {}, runs.map(r => el("tr", { style: currentRun?.runId === r.runId ? "background:color-mix(in srgb, var(--accent) 10%, transparent)" : "" },
+      el("td", { textContent: r.startedAt ? new Date(r.startedAt).toLocaleString("fr-FR") : "—" }),
+      el("td", { textContent: collectionLabel(r.collection), title: r.collection?.key ?? "" }),
+      el("td", {}, el("span", { className: `badge ${r.status === "success" ? "success" : r.status === "running" ? "running" : "failed"}`, textContent: STATUS_TEXT[r.status] ?? r.status })),
+      el("td", { className: "num", textContent: dur(r) }),
+      el("td", { textContent: r.totals ? `${r.totals.collaborators} pers. · ${r.totals.annotations} surl. · ${r.totals.notes} notes` : "—" }),
+      el("td", { className: "num", textContent: r.tokens?.total?.toLocaleString("fr-FR") ?? "—" }),
+      el("td", { className: "num", textContent: r.impact ? `${Number(r.impact.energyWh).toLocaleString("fr-FR", { maximumFractionDigits: 2 })} Wh · ${Number(r.impact.apiCost).toLocaleString("fr-FR", { maximumFractionDigits: 4 })} ${r.impact.currency}` : "—" }),
+      el("td", {}, r.source.includes("local") ? "archive locale" : "", r.source === "local+omeka" ? " · " : "",
+        r.configItemId && data.omekaAdmin ? el("a", { href: data.omekaAdmin + r.configItemId, target: "_blank", textContent: "Omeka S", style: "color:var(--accent)" }) : (r.source.includes("omeka") ? "Omeka S" : "")),
+      el("td", { style: "min-width:150px" },
+        el("button", { className: "btn primary", style: "margin:0 4px 4px 0", textContent: "Charger", onclick: () => openRun(r) }),
+        r.config?.grid ? el("button", { className: "btn", textContent: "Reprendre les réglages", onclick: () => reuseRun(r) }) : null)))))));
+}
+$("#runs-refresh").onclick = () => loadRuns(true);
+
+// affiche une analyse archivée dans les onglets de résultats
+function openRun(r) {
+  currentRun = r; resultsLoaded = false;
+  $("#run-banner-text").textContent = r ? `Analyse affichée : ${runLabel(r)} (${STATUS_TEXT[r.status] ?? r.status})` : "";
+  showTab("participation");
+  if (r) toast(`Analyse du ${new Date(r.startedAt).toLocaleString("fr-FR")} chargée`);
+}
+$("#run-latest").onclick = () => openRun(null);
+
+// recopie la collection, la grille et les paramètres d'une analyse dans l'onglet Grille (à enregistrer pour confirmer)
+function reuseRun(r) {
+  if (!confirm(`Reprendre la collection, la grille et les paramètres de l'analyse « ${runLabel(r)} » ? Les réglages affichés dans l'onglet Grille seront remplacés (rien n'est enregistré avant « Enregistrer »).`)) return;
+  for (const k of ["grid", "analysis", "themes"]) if (r.config[k]) config[k] = structuredClone({ ...config[k], ...r.config[k] });
+  if (r.collection?.key) {
+    if (collections.some(c => c.key === r.collection.key)) { config.input.zoteroCollection = r.collection.key; $("#collection").value = r.collection.key; }
+    else toast(`Collection ${collectionLabel(r.collection)} absente de la bibliothèque actuelle : collection inchangée`);
+  }
+  renderSettings(); showTab("grid");
 }
 
 // participation : chiffres clés, barres empilées par couleur de la grille, chronologie, documents
@@ -596,8 +678,8 @@ function renderCollab(c) {
     el("section", { className: "card" }, el("h2", { textContent: `Passages aux lectures divergentes (${c.divergent.length})` }), el("p", { className: "lead", textContent: "Même passage, significations différentes : ce sont les meilleurs points de départ d'une discussion." }), c.divergent.length ? quotes(c.divergent) : el("p", { className: "muted", textContent: "Aucun." })),
     el("section", { className: "card" }, el("h2", { textContent: `Passages convergents (${c.convergent.length})` }), c.convergent.length ? quotes(c.convergent) : el("p", { className: "muted", textContent: "Aucun." })),
     hasGraph ? el("section", { className: "card" }, el("h2", { textContent: "Réseau collaborateurs – documents" }),
-      el("p", { className: "lead" }, "Cliquer sur un nœud pour afficher ses liens. ", el("a", { href: "/api/explo/file?name=reseau_collaborations.html&raw=1", target: "_blank", textContent: "Ouvrir en plein écran" })),
-      el("iframe", { className: "frame", src: "/api/explo/file?name=reseau_collaborations.html&raw=1", sandbox: "allow-scripts allow-popups allow-popups-to-escape-sandbox" })) : null);
+      el("p", { className: "lead" }, "Cliquer sur un nœud pour afficher ses liens. ", el("a", { href: fileUrl("reseau_collaborations.html", true), target: "_blank", textContent: "Ouvrir en plein écran" })),
+      el("iframe", { className: "frame", src: fileUrl("reseau_collaborations.html", true), sandbox: "allow-scripts allow-popups allow-popups-to-escape-sandbox" })) : null);
 }
 
 // ==========================================

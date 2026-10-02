@@ -216,7 +216,7 @@ Seuls les documents nouveaux ou modifiés sont retraités : ceux dont l'extracti
 
 ## 3. exploZoteroAnno : animer une annotation collective
 
-**exploZoteroAnno** est la seconde application, avec son propre serveur : http://127.0.0.1:7273 (lien dans l'en-tête de l'Atelier d'articles). Elle peut analyser pendant qu'un traitement de l'Atelier est en cours. Elle comporte sept onglets : Grille, Exécution, Participation, Collaborations, Thèmes, RAG et Rapport ; ses connexions se règlent sur la page **⚙ Paramètres**. Elle accompagne un groupe qui annote ensemble une collection Zotero : elle fixe une grille de couleurs commune, mesure la participation de chacun, analyse les convergences et divergences de lecture, et propose des thèmes pour une séance de discussion. Tout est enregistré dans Omeka S.
+**exploZoteroAnno** est la seconde application, avec son propre serveur : http://127.0.0.1:7273 (lien dans l'en-tête de l'Atelier d'articles). Elle peut analyser pendant qu'un traitement de l'Atelier est en cours. Elle comporte huit onglets : Grille, Exécution, Analyses, Participation, Collaborations, Thèmes, RAG et Rapport ; ses connexions se règlent sur la page **⚙ Paramètres**. Elle accompagne un groupe qui annote ensemble une collection Zotero : elle fixe une grille de couleurs commune, mesure la participation de chacun, analyse les convergences et divergences de lecture, et propose des thèmes pour une séance de discussion. Tout est enregistré dans Omeka S.
 
 ```mermaid
 flowchart LR
@@ -243,6 +243,15 @@ flowchart LR
 ### Suivre le traitement (onglet Exécution)
 
 Le journal s'affiche en direct : documents lus, doublons fusionnés, annotations enregistrées, étapes de l'analyse. **Arrêter** interrompt le traitement ; les documents et annotations déjà enregistrés dans Omeka S y restent. Un seul traitement exploZoteroAnno à la fois, indépendamment de l'Atelier d'articles.
+
+### Recharger une analyse déjà effectuée (onglet Analyses)
+
+Les onglets de résultats affichent par défaut la **dernière analyse**. L'onglet **Analyses** liste toutes les analyses déjà effectuées (date, collection, statut, durée, participation, tokens, coût estimé) : celles de l'archive locale et celles enregistrées dans Omeka S, y compris les analyses lancées depuis une autre machine ou avant une réinstallation.
+
+- **Charger** affiche les résultats de l'analyse choisie dans les onglets Participation, Collaborations, Thèmes et Rapport. Un bandeau rappelle quelle analyse est affichée ; **Revenir à la dernière analyse** rétablit l'affichage courant. Rien n'est recalculé : les fichiers de l'analyse sont relus (archive locale, sinon médias de son item de configuration dans Omeka S).
+- **Reprendre les réglages** recopie la collection, la grille et les paramètres de cette analyse dans l'onglet Grille, pour la relancer à l'identique ou comparer ; rien n'est enregistré avant **Enregistrer**.
+
+Recharger des analyses successives d'une même collection permet de suivre l'évolution de l'annotation (participation, convergences) d'une séance à l'autre. À la fin d'un nouveau traitement, l'affichage revient à la dernière analyse.
 
 ### Visualiser la participation (onglet Participation)
 

@@ -90,7 +90,7 @@ Fichiers de données de chaque application (répertoire courant en local, `data/
 |---|---|---|
 | Connexions | `.env` | `.env`, surchargé par `.env.explo` |
 | Configuration | `workflow.config.json` | `explo.config.json` |
-| Historique | `workflow.history.json` | configurations dans Omeka S |
+| Historique | `workflow.history.json` | `resultats/explo/analyses/` et configurations dans Omeka S |
 | Résultats | `resultats/atelier/` | `resultats/explo/` |
 | Appels importés | `aap/` | — |
 

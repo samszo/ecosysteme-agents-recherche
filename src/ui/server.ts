@@ -8,11 +8,11 @@ import path from "path";
 import { spawn, type ChildProcess } from "child_process";
 import dotenv from "dotenv";
 import { defaultWorkflowConfig } from "../config";
-import { defaultExploConfig, EXPLO_CONFIG_FILE } from "../config/explo";
+import { defaultExploConfig, EXPLO_CONFIG_FILE, RUNS_DIR } from "../config/explo";
 import { buildGuide } from "../workflow/reports/annotationGuide";
 import { mergeConfig, readConfigOverride, writeConfigOverride, CONFIG_FILE } from "../config/store";
 import { Zotero } from "../lib/zotero/zotero";
-import { Omk } from "../lib/omeka/omk";
+import { Omk, containerUrl } from "../lib/omeka/omk";
 import crypto from "crypto";
 import { readHistory, type HistoryEntry } from "../workflow/runs/history";
 import { Albert } from "../lib/albert/albert";
@@ -277,6 +277,8 @@ async function omekaRuns(): Promise<{ runs: HistoryEntry[]; error?: string }> {
       let config: any = {};
       try { config = JSON.parse(val(it, "dcterms:description") ?? "{}"); } catch { /* description illisible */ }
       if (!config.input) continue;
+      // les analyses d'exploZoteroAnno ont leur propre liste (onglet Analyses de cette application)
+      if (config.workflowId && config.workflowId !== defaultWorkflowConfig.workflowId) continue;
       let data: any = null;
       try { data = JSON.parse(val(it, "curation:data") ?? "null"); } catch { /* pas de consommation */ }
       const tokens = data?.tokens ?? null;
@@ -352,24 +354,150 @@ async function zoteroCollection(key: string) {
 // réponses récentes, en attente d'un éventuel enregistrement dans Omeka S
 const ragAnswers = new Map<string, RagAnswer>();
 
-// fichiers produits par exploZoteroAnno (dossier outputDir)
-function exploResultFiles() {
-  const dir = path.join(ROOT, currentExploConfig().outputDir);
-  const known = [
-    { name: "rapport_explo.md", title: "Rapport" },
-    { name: "themes_discussion.md", title: "Thèmes de discussion" },
-    { name: "reseau_collaborations.html", title: "Réseau des collaborations" },
-    { name: "guide_annotation.md", title: "Guide d'annotation" },
-    { name: "participation.json", title: "Participation (données)" },
-    { name: "collaborations.json", title: "Collaborations (données)" },
-    { name: "rag_indexation.json", title: "Indexation RAG Albert (données)" },
-  ];
-  return known
+// fichiers produits par exploZoteroAnno
+const EXPLO_FILES = [
+  { name: "rapport_explo.md", title: "Rapport" },
+  { name: "themes_discussion.md", title: "Thèmes de discussion" },
+  { name: "reseau_collaborations.html", title: "Réseau des collaborations" },
+  { name: "guide_annotation.md", title: "Guide d'annotation" },
+  { name: "participation.json", title: "Participation (données)" },
+  { name: "collaborations.json", title: "Collaborations (données)" },
+  { name: "rag_indexation.json", title: "Indexation RAG Albert (données)" },
+];
+const validRunId = (id: string) => /^[\w-]{1,80}$/.test(id);
+// dossier de la dernière analyse (outputDir) ou archive d'une analyse (outputDir/analyses/<run>)
+const exploDir = (runId?: string | null) => path.join(ROOT, currentExploConfig().outputDir, ...(runId ? [RUNS_DIR, runId] : []));
+
+function localExploFiles(runId?: string | null) {
+  const dir = exploDir(runId);
+  return EXPLO_FILES
     .map(f => {
       const full = path.join(dir, f.name);
       return fs.existsSync(full) ? { ...f, size: fs.statSync(full).size, mtime: fs.statSync(full).mtimeMs } : null;
     })
-    .filter(Boolean);
+    .filter(Boolean) as { name: string; title: string; size: number; mtime: number }[];
+}
+
+// ==========================================
+// Analyses déjà effectuées (exploZoteroAnno) : archive locale + configurations d'exécution dans Omeka S
+// ==========================================
+
+interface ExploRun {
+  runId: string;
+  status: string;
+  startedAt: string;
+  endedAt: string;
+  collection: { key: string; name: string | null };
+  configItemId: number | null;
+  tokens: any;
+  impact: any;
+  totals: any;
+  // réglages de l'analyse (grille, analyse, thèmes) pour les reprendre
+  config: any;
+  source: string;
+}
+const runSettings = (c: any) => (c ? { grid: c.grid, analysis: c.analysis, themes: c.themes } : null);
+
+function localExploRuns(): ExploRun[] {
+  const dir = path.join(ROOT, currentExploConfig().outputDir, RUNS_DIR);
+  if (!fs.existsSync(dir)) return [];
+  const runs: ExploRun[] = [];
+  for (const id of fs.readdirSync(dir)) {
+    try {
+      const m = JSON.parse(fs.readFileSync(path.join(dir, id, "analyse.json"), "utf-8"));
+      runs.push({ runId: m.runId ?? id, status: m.status, startedAt: m.startedAt, endedAt: m.endedAt, collection: m.collection, configItemId: m.configItemId ?? null, tokens: m.tokens ?? null, impact: m.impact ?? null, totals: m.totals ?? null, config: runSettings(m.config), source: "local" });
+    } catch { /* dossier sans description : ignoré */ }
+  }
+  return runs;
+}
+
+async function omekaExploRuns(): Promise<{ runs: ExploRun[]; error?: string }> {
+  const env = readEnv();
+  if (!env.OMKS_API_URL) return { runs: [], error: "Omeka S non configuré" };
+  try {
+    const omk = new Omk({ api: env.OMKS_API_URL, ident: env.OMKS_KEY_IDENTITY ?? "", key: env.OMKS_KEY_CREDENTIAL ?? "", vocabs: [] });
+    const items = await omk.getAllItems("property[0][property]=dcterms:type&property[0][type]=eq&property[0][text]=Configuration de workflow&sort_by=created&sort_order=desc");
+    const val = (it: any, t: string) => it[t]?.[0]?.["@value"] ?? null;
+    const runs: ExploRun[] = [];
+    for (const it of items) {
+      let config: any = {};
+      try { config = JSON.parse(val(it, "dcterms:description") ?? "{}"); } catch { /* description illisible */ }
+      if (config.workflowId !== defaultExploConfig.workflowId || !config.input?.zoteroCollection) continue;
+      let data: any = null;
+      try { data = JSON.parse(val(it, "curation:data") ?? "null"); } catch { /* pas de consommation */ }
+      runs.push({
+        runId: val(it, "dcterms:identifier") ?? `omeka-${it["o:id"]}`,
+        status: val(it, "curation:status") ?? "inconnu",
+        startedAt: val(it, "curation:dateStart") ?? val(it, "dcterms:date") ?? it["o:created"]?.["@value"],
+        endedAt: val(it, "curation:dateEnd") ?? "",
+        collection: { key: config.input.zoteroCollection, name: config.collectionName ?? null },
+        configItemId: it["o:id"],
+        tokens: data?.tokens ?? null,
+        impact: data?.impact ?? null,
+        totals: null,
+        config: runSettings(config),
+        source: "omeka",
+      });
+    }
+    return { runs };
+  } catch (e) {
+    return { runs: [], error: (e as Error).message };
+  }
+}
+
+async function exploRuns() {
+  const [local, omeka] = [localExploRuns(), await omekaExploRuns()];
+  // l'archive locale est plus complète (nom de la collection, totaux) ; Omeka apporte les analyses faites ailleurs
+  const byRun = new Map<string, ExploRun>();
+  for (const r of omeka.runs) byRun.set(r.runId, r);
+  for (const r of local) {
+    const o = byRun.get(r.runId);
+    byRun.set(r.runId, { ...o, ...r, configItemId: r.configItemId ?? o?.configItemId ?? null, source: o ? "local+omeka" : "local" });
+  }
+  return {
+    runs: [...byRun.values()].sort((a, b) => String(b.startedAt).localeCompare(String(a.startedAt))),
+    omekaAdmin: readEnv().OMKS_API_URL?.replace(/\/api\/?$/, "/admin/item/") ?? "",
+    omekaError: omeka.error ?? null,
+  };
+}
+
+// médias d'une analyse dans Omeka S : nom du fichier (fin de dcterms:identifier « <run>/<fichier> ») → adresse du fichier
+const omekaRunMedia = new Map<string, Map<string, string>>();
+async function omekaExploFiles(runId: string) {
+  if (!omekaRunMedia.has(runId)) {
+    const omk = await serverOmk();
+    const item = (await omk.searchItemsByProp("dcterms:identifier", runId))[0];
+    if (!item) throw new Error(`Analyse ${runId} introuvable (ni archive locale, ni configuration dans Omeka S)`);
+    const files = new Map<string, string>();
+    for (const m of await omk.request(omk.url("media", { item_id: item["o:id"], per_page: 100 }))) {
+      const name = path.basename(String(m["dcterms:identifier"]?.[0]?.["@value"] ?? ""));
+      if (EXPLO_FILES.some(f => f.name === name) && m["o:original_url"]) files.set(name, m["o:original_url"]);
+    }
+    omekaRunMedia.set(runId, files);
+  }
+  return omekaRunMedia.get(runId)!;
+}
+
+// fichiers d'une analyse : dernière analyse (sans run), archive locale, sinon médias Omeka S
+async function exploResultFiles(runId?: string | null) {
+  if (!runId) return localExploFiles();
+  if (!validRunId(runId)) throw new Error("Identifiant d'analyse invalide");
+  if (fs.existsSync(exploDir(runId))) return localExploFiles(runId);
+  const media = await omekaExploFiles(runId);
+  return EXPLO_FILES.filter(f => media.has(f.name)).map(f => ({ ...f, size: null, mtime: null, omeka: true }));
+}
+
+async function readExploFile(name: string, runId?: string | null): Promise<Buffer> {
+  if (!EXPLO_FILES.some(f => f.name === name)) throw new Error("Fichier inconnu");
+  if (runId && !validRunId(runId)) throw new Error("Identifiant d'analyse invalide");
+  const local = path.join(exploDir(runId), name);
+  if (fs.existsSync(local)) return fs.readFileSync(local);
+  if (!runId) throw new Error("Fichier inconnu");
+  const url = (await omekaExploFiles(runId)).get(name);
+  if (!url) throw new Error("Fichier absent de cette analyse");
+  const r = await fetch(containerUrl(url));
+  if (!r.ok) throw new Error(`Omeka S ${r.status} sur le fichier de l'analyse`);
+  return Buffer.from(await r.arrayBuffer());
 }
 
 // ==========================================
@@ -554,7 +682,13 @@ const routes: Record<string, (req: http.IncomingMessage, res: http.ServerRespons
     res.end(buildGuide(mergeConfig(defaultExploConfig, config ?? {}), collectionName));
   },
 
-  "GET /api/explo/results": (_req, res) => sendJson(res, 200, exploResultFiles()),
+  "GET /api/explo/results": async (_req, res, url) => {
+    try { sendJson(res, 200, await exploResultFiles(url.searchParams.get("run"))); }
+    catch (e) { sendJson(res, 404, { error: (e as Error).message }); }
+  },
+
+  // analyses déjà effectuées (archive locale et Omeka S)
+  "GET /api/explo/runs": async (_req, res) => sendJson(res, 200, await exploRuns()),
 
   // collection Albert de la collection Zotero (même nom) : existence et nombre de documents
   "GET /api/explo/rag/status": async (_req, res, url) => {
@@ -632,14 +766,16 @@ const routes: Record<string, (req: http.IncomingMessage, res: http.ServerRespons
     }
   },
 
-  "GET /api/explo/file": (_req, res, url) => {
+  // run : analyse archivée (sinon la dernière analyse)
+  "GET /api/explo/file": async (_req, res, url) => {
     const name = url.searchParams.get("name") ?? "";
-    const file = exploResultFiles().find((f: any) => f.name === name);
-    if (!file) return sendJson(res, 404, { error: "Fichier inconnu" });
+    let content: Buffer;
+    try { content = await readExploFile(name, url.searchParams.get("run")); }
+    catch (e) { return sendJson(res, 404, { error: (e as Error).message }); }
     const raw = url.searchParams.get("raw") === "1" && name.endsWith(".html");
     const type = name.endsWith(".json") ? "application/json" : raw ? "text/html" : "text/plain";
     res.writeHead(200, { "Content-Type": `${type}; charset=utf-8` });
-    res.end(fs.readFileSync(path.join(ROOT, currentExploConfig().outputDir, name)));
+    res.end(content);
   },
 
   "POST /api/run/stop": (_req, res) => {
@@ -680,7 +816,7 @@ const routes: Record<string, (req: http.IncomingMessage, res: http.ServerRespons
 const APP_ONLY: Record<string, AppName> = {
   "POST /api/cfp-file": "paper", "GET /api/results": "paper", "GET /api/history": "paper", "GET /api/file": "paper",
   "GET /api/explo/settings": "explo", "POST /api/explo/settings": "explo", "POST /api/explo/guide": "explo",
-  "GET /api/explo/results": "explo", "GET /api/explo/file": "explo",
+  "GET /api/explo/results": "explo", "GET /api/explo/file": "explo", "GET /api/explo/runs": "explo",
   "GET /api/explo/rag/status": "explo", "GET /api/explo/rag/prompts": "explo", "POST /api/explo/rag/prompts": "explo",
   "POST /api/explo/rag/prompts/defaults": "explo", "POST /api/explo/rag/query": "explo", "POST /api/explo/rag/save": "explo",
   "GET /api/explo/rag/answers": "explo",

@@ -274,11 +274,28 @@
 <td>exploZoteroAnno : thèmes de discussion à partir des passages convergents et divergents</td>
 </tr>
 <tr>
-<td><code>librarianAgent</code>, <code>wikiArchitectAgent</code>, <code>ontologistAgent</code></td>
-<td>rapide / analytique</td>
-<td>agents outillés disponibles pour un usage conversationnel</td>
+<td><code>slideDescriberAgent</code></td>
+<td>vision (<code>models.vision</code>)</td>
+<td>chaoticumSeminario : titre, mots-clés et description d&#39;une diapo à partir de sa copie d&#39;écran (index des diapos, génération sans index)</td>
+</tr>
+<tr>
+<td><code>curatorAgent</code></td>
+<td>analytique</td>
+<td>chaoticumSeminario : requêtes de recherche dans les index RAG à partir du thème ; choix des citations et présentations les plus proches du thème</td>
+</tr>
+<tr>
+<td><code>seminarioAgent</code></td>
+<td>analytique</td>
+<td>chaoticumSeminario : choix des citations et diapos les plus cohérentes d&#39;une séquence, question courte, intention, diagramme (nœuds et liens) ; nouvelles propositions de l&#39;éditeur d&#39;écran</td>
+</tr>
+<tr>
+<td><code>editorAgent</code></td>
+<td>rapide</td>
+<td>chaoticumSeminario : raccourcit une question de plus de 15 mots</td>
 </tr>
 </tbody></table>
+<p>Les agents de chaoticumSeminario portent les consignes stables (rôle, style, contraintes) ; les étapes ne leur passent que les données et le schéma de sortie. Ils sont appelés par <code>askAgent</code> (<code>src/agents/ask.ts</code>) : modèle de la configuration passé par le contexte de requête (<code>requestContext.set(&quot;model&quot;, …)</code>, l&#39;agent le lit dans sa fonction <code>model</code>), sortie structurée (<code>structuredOutput: { schema }</code>, validée par zod) et comptage des tokens (<code>recordUsage</code>). Les appels envoyés à Albert sont identiques à un appel direct (consignes en message système, <code>response_format</code> JSON, images en <code>image_url</code>).
+| <code>librarianAgent</code>, <code>wikiArchitectAgent</code>, <code>ontologistAgent</code> | rapide / analytique | agents outillés disponibles pour un usage conversationnel |</p>
 <h3 id="outils-src-tools-et-bibliotheques-src-lib"><a class="anchor" href="#outils-src-tools-et-bibliotheques-src-lib">#</a>Outils (<code>src/tools/</code>) et bibliothèques (<code>src/lib/</code>)</h3>
 <p>Les <strong>outils</strong> (<code>fetchCfp</code>, <code>fetchZoteroData</code>, <code>buildLLMWiki</code>, <code>exportToOpenKnowledge</code>, <code>compileCollection</code>, <code>fetchOmekaAnnotations</code>, <code>calculateFleissKappa</code>, <code>computeParticipation</code>, <code>analyzeCollaboration</code>) sont des outils Mastra : appelables par les agents, ils sont exécutés directement par les étapes. Les autres modules sont des bibliothèques de <code>src/lib/</code>.</p>
 <table>

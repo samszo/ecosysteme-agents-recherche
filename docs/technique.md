@@ -147,6 +147,12 @@ Hors de `src/` : `docs/` (documentation, `grille_annotation.md`), `scripts/build
 | `epistemologistAgent` | analytique | relecture critique de PropAPP au regard d'AttenduAPP |
 | `kappaAnalystAgent` | analytique | bilan de l'accord inter-juges et recommandations de recalibrage |
 | `discussionAgent` | analytique | exploZoteroAnno : thèmes de discussion à partir des passages convergents et divergents |
+| `slideDescriberAgent` | vision (`models.vision`) | chaoticumSeminario : titre, mots-clés et description d'une diapo à partir de sa copie d'écran (index des diapos, génération sans index) |
+| `curatorAgent` | analytique | chaoticumSeminario : requêtes de recherche dans les index RAG à partir du thème ; choix des citations et présentations les plus proches du thème |
+| `seminarioAgent` | analytique | chaoticumSeminario : choix des citations et diapos les plus cohérentes d'une séquence, question courte, intention, diagramme (nœuds et liens) ; nouvelles propositions de l'éditeur d'écran |
+| `editorAgent` | rapide | chaoticumSeminario : raccourcit une question de plus de 15 mots |
+
+Les agents de chaoticumSeminario portent les consignes stables (rôle, style, contraintes) ; les étapes ne leur passent que les données et le schéma de sortie. Ils sont appelés par `askAgent` (`src/agents/ask.ts`) : modèle de la configuration passé par le contexte de requête (`requestContext.set("model", …)`, l'agent le lit dans sa fonction `model`), sortie structurée (`structuredOutput: { schema }`, validée par zod) et comptage des tokens (`recordUsage`). Les appels envoyés à Albert sont identiques à un appel direct (consignes en message système, `response_format` JSON, images en `image_url`).
 | `librarianAgent`, `wikiArchitectAgent`, `ontologistAgent` | rapide / analytique | agents outillés disponibles pour un usage conversationnel |
 
 ### Outils (`src/tools/`) et bibliothèques (`src/lib/`)

@@ -6,3 +6,7 @@ export { writerAgent } from "./writerAgent";
 export { epistemologistAgent } from "./epistemologistAgent";
 export { kappaAnalystAgent } from "./kappaAnalystAgent";
 export { discussionAgent } from "./discussionAgent";
+export { slideDescriberAgent } from "./slideDescriberAgent";
+export { curatorAgent } from "./curatorAgent";
+export { seminarioAgent } from "./seminarioAgent";
+export { editorAgent } from "./editorAgent";

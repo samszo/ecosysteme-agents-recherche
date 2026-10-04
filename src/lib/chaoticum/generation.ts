@@ -1,8 +1,7 @@
 // Éléments communs de génération : schéma du diagramme (nœuds et liens), questions courtes
-import { generateText } from "ai";
 import { z } from "zod";
-import { albertModel } from "../../config/models";
-import { recordUsage } from "../metrics/usage";
+import { editorAgent } from "../../agents/editorAgent";
+import { askAgent } from "../../agents/ask";
 
 export const diagramFields = {
   diagramTitle: z.string().describe("titre court du diagramme"),
@@ -19,12 +18,11 @@ export const diagramFields = {
 
 export const words = (s: string) => s.trim().split(/\s+/).filter(Boolean).length;
 
-// question trop longue pour un grand écran : reformulée en 15 mots au plus (modèle rapide)
+// question trop longue pour un grand écran : reformulée en 15 mots au plus (agent correcteur, modèle rapide)
 export async function shortenQuestion(question: string, model: string) {
   if (words(question) <= 15) return question;
   try {
-    const short = await generateText({ model: albertModel(model), prompt: `Raccourcis cette question à 15 mots au plus, sans en perdre le sens, et réponds uniquement par la question :\n${question}` });
-    recordUsage("Raccourcissement des questions", model, short.totalUsage ?? short.usage);
+    const short = await askAgent(editorAgent, { model, source: "Raccourcissement des questions (editorAgent)", prompt: question });
     const t = short.text.trim().replace(/^["«\s]+|["»\s]+$/g, "");
     return t && words(t) < words(question) ? t : question;
   } catch {

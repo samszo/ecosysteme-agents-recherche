@@ -1,10 +1,9 @@
 // Thème de la conférence (titre, description, programme) et choix des citations et des présentations qui s'en
 // rapprochent le plus (modèle analytique), le hasard départageant les candidats retenus
-import { generateObject } from "ai";
 import { z } from "zod";
-import { albertModel } from "../../config/models";
+import { curatorAgent } from "../../agents/curatorAgent";
+import { askAgent } from "../../agents/ask";
 import { extractAttachment } from "../extraction/attachmentExtract";
-import { recordUsage } from "../metrics/usage";
 import type { ChaoticumConfig } from "../../config/chaoticum";
 
 export interface Theme {
@@ -47,10 +46,9 @@ const Choice = z.object({ choix: z.array(z.number().int()).describe("numéros re
 export async function rankByTheme(theme: Theme, candidates: string[], n: number, what: string, model: string, source: string): Promise<number[]> {
   if (!candidates.length) return [];
   try {
-    const { object, usage } = await generateObject({
-      model: albertModel(model),
-      schema: Choice,
-      prompt: `Tu prépares une conférence-performance. Parmi les ${what} numérotés ci-dessous, choisis les ${n} plus en rapport avec le thème de la conférence, en variant les idées et les auteurs. Réponds uniquement avec leurs numéros.
+    const { object } = await askAgent(curatorAgent, {
+      model, source: `${source} (curatorAgent)`, schema: Choice,
+      prompt: `Parmi les ${what} numérotés ci-dessous, choisis les ${n} plus en rapport avec le thème de la conférence.
 
 ${themeBlock(theme)}
 
@@ -58,7 +56,6 @@ ${themeBlock(theme)}
 ${candidates.map((t, i) => `[${i + 1}] ${t}`).join("\n")}
 </candidats>`,
     });
-    recordUsage(source, model, usage);
     const seen = new Set<number>();
     return object.choix.map(i => i - 1).filter(i => i >= 0 && i < candidates.length && !seen.has(i) && (seen.add(i), true)).slice(0, n);
   } catch (e) {

@@ -4,10 +4,11 @@
 // d'image à la génération : les descriptions des diapos et leurs copies d'écran viennent de l'index.
 import fs from "fs";
 import path from "path";
-import { generateObject } from "ai";
 import { z } from "zod";
 import { Albert } from "../albert/albert";
-import { albertModel } from "../../config/models";
+import { curatorAgent } from "../../agents/curatorAgent";
+import { seminarioAgent } from "../../agents/seminarioAgent";
+import { askAgent } from "../../agents/ask";
 import { workflowConfig } from "../../config";
 import { recordUsage } from "../metrics/usage";
 import { zoteroWebUrl } from "../zotero/zotero";
@@ -55,12 +56,11 @@ export async function ragMaterial(o: { c: ChaoticumConfig; theme: Theme; screens
   let queries: string[] = [];
   if (themed) {
     try {
-      const { object, usage } = await generateObject({
-        model: albertModel(c.models.analytics),
+      const { object } = await askAgent(curatorAgent, {
+        model: c.models.analytics, source: "Requêtes RAG (curatorAgent)",
         schema: z.object({ requetes: z.array(z.string()).describe("requêtes de recherche, une par séquence, chacune sur une facette différente du thème") }),
-        prompt: `Une conférence-performance enchaîne ${cycles.length} séquences ; chacune confronte une citation de la bibliothèque du conférencier et une diapo de ses anciennes conférences. Propose ${cycles.length} requêtes de recherche (5 à 12 mots), chacune sur une facette différente du thème, de la plus générale à la plus singulière.\n\n${themeBlock(theme)}`,
+        prompt: `La conférence enchaîne ${cycles.length} séquences ; chacune confronte une citation de la bibliothèque et une diapo des anciennes conférences. Propose ${cycles.length} requêtes de recherche.\n\n${themeBlock(theme)}`,
       });
-      recordUsage("Requêtes RAG (thème)", c.models.analytics, usage);
       queries = object.requetes.map(q => q.trim()).filter(Boolean);
       console.log(`🧭 [RAG] Requêtes : ${queries.map((q, i) => `${i + 1}. ${q}`).join(" · ")}`);
     } catch (e) {
@@ -127,19 +127,17 @@ export async function ragMaterial(o: { c: ChaoticumConfig; theme: Theme; screens
     }
     let pickC: Cand[] = cits.slice(0, cScreens.length), pickD: SlideEntry[] = dias.slice(0, dScreens.length), gen: any = null;
     try {
-      const { object, usage } = await generateObject({
-        model: albertModel(c.models.analytics),
+      const { object } = await askAgent(seminarioAgent, {
+        model: c.models.analytics, source: "Cohérence, questions et diagrammes (seminarioAgent)",
         schema: z.object(fields),
-        prompt: `Tu composes la séquence ${cycle + 1} d'une conférence-performance participative, « ${theme.title} ».
-${cScreens.length ? `Choisis ${cScreens.length} citation(s) parmi [C…]` : ""}${cScreens.length && dScreens.length ? " et " : ""}${dScreens.length ? `${dScreens.length} diapo(s) parmi [D…]` : ""}${cScreens.length || dScreens.length ? ", les plus cohérentes avec la conférence et entre elles (rapprochement fécond, tension ou prolongement)." : ""}
-${genScreens.length ? "Formule ensuite une question ouverte, courte et percutante (une phrase de 15 mots au plus), et décris un diagramme (nœuds et liens) qui relie les idées retenues au thème." : ""}
-N'invente ni auteur ni référence. Réponds en français.
+        prompt: `Séquence ${cycle + 1} de la conférence « ${theme.title} ».
+${cScreens.length ? `Choisis ${cScreens.length} citation(s) parmi [C…]` : ""}${cScreens.length && dScreens.length ? " et " : ""}${dScreens.length ? `${dScreens.length} diapo(s) parmi [D…]` : ""}${cScreens.length || dScreens.length ? "." : ""}
+${genScreens.length ? "Formule ensuite la question, son intention et le diagramme de la séquence." : ""}
 ${themed ? `\n${themeBlock(theme)}\n` : ""}${query ? `\nRequête de la séquence : ${query}\n` : ""}
 ${cits.length ? `<citations>\n${cits.map((x, i) => `[C${i + 1}] « ${clip(x.a.text || x.a.comment, 400)} »${x.a.comment && x.a.text ? ` (commentaire : ${clip(x.a.comment, 200)})` : ""} — ${[x.r.creators, x.r.year, x.r.title].filter(Boolean).join(", ")}`).join("\n")}\n</citations>` : ""}
 ${dias.length ? `<diapos>\n${dias.map((e, i) => `[D${i + 1}] ${e.name}, diapo ${e.diapo} : ${e.title}. ${e.description}`).join("\n")}\n</diapos>` : ""}
 ${!cScreens.length && !dScreens.length && (previous.citations.length || previous.diapos.length) ? `<elements_de_la_sequence>\n${previous.citations.map(ci => `« ${ci.text} » — ${ci.source.creators || ci.source.title}`).join("\n")}\n${previous.diapos.map(d => `${d.name}, diapo ${d.diapo} : ${d.title}. ${d.description}`).join("\n")}\n</elements_de_la_sequence>` : ""}`,
       });
-      recordUsage("Cohérence, questions et diagrammes (RAG)", c.models.analytics, usage);
       const o2 = object as any;
       const pick = <T>(list: T[], idx: number[] | undefined, n: number) => {
         const seen = new Set<number>(), out: T[] = [];

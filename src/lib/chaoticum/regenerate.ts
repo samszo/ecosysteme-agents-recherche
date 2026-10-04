@@ -1,8 +1,8 @@
 // Nouvelle proposition de question ou de diagramme pour un écran d'une partition (éditeur d'écran), à partir de la
 // matière de son cycle (citations, descriptions des diapos) et du thème de la conférence
-import { generateObject } from "ai";
 import { z } from "zod";
-import { albertModel } from "../../config/models";
+import { seminarioAgent } from "../../agents/seminarioAgent";
+import { askAgent } from "../../agents/ask";
 import { workflowConfig } from "../../config";
 import { estimateImpact } from "../metrics/impact";
 import type { UsageEntry, UsageSummary } from "../metrics/usage";
@@ -20,13 +20,11 @@ export async function regenerate(p: Partition, index: number, what: "question" |
     ? z.object({ question: z.string().describe("question ouverte posée au public : une seule phrase courte, 15 mots au plus"), intention: z.string().describe("en une phrase : ce que la question met en tension") })
     : z.object(diagramFields);
   const current = what === "question" ? s.question?.text : s.diagramme?.title;
-  const { object, usage } = await generateObject({
-    model: albertModel(c.models.analytics),
-    schema,
-    prompt: `Tu prépares une séquence d'une conférence-performance participative, « ${p.title} ».${p.description ? `\nDescription : ${p.description}` : ""}
-${what === "question" ? "Propose une autre question ouverte, courte et percutante (une phrase de 15 mots au plus), qui confronte les éléments ci-dessous et les rattache au thème." : "Décris un autre diagramme (nœuds et liens) qui relie les idées des éléments ci-dessous au thème."}
-${current ? `Proposition actuelle, à renouveler : ${current}\n` : ""}${hint ? `Consigne de l'animateur : ${hint}\n` : ""}N'invente ni auteur ni référence. Réponds en français.
-
+  const { object, usage } = await askAgent(seminarioAgent, {
+    model: c.models.analytics, source: `Éditeur : ${what} (seminarioAgent)`, schema: schema as z.ZodTypeAny,
+    prompt: `Séquence de la conférence « ${p.title} ».${p.description ? `\nDescription : ${p.description}` : ""}
+${what === "question" ? "Propose une autre question et son intention, à partir des éléments ci-dessous et du thème." : "Décris un autre diagramme (nœuds et liens) qui relie les idées des éléments ci-dessous au thème."}
+${current ? `Proposition actuelle, à renouveler : ${current}\n` : ""}${hint ? `Consigne de l'animateur : ${hint}\n` : ""}
 <citations>
 ${citations.map((ci, i) => `[C${i + 1}] « ${ci.text} » — ${[ci.source.creators, ci.source.year, ci.source.title].filter(Boolean).join(", ")}`).join("\n") || "(aucune)"}
 </citations>

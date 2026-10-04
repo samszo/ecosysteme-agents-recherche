@@ -3,10 +3,10 @@
 // L'indexation est incrémentale : les diapos déjà indexées sont sautées, `slidesPerRun` borne une exécution.
 import fs from "fs";
 import path from "path";
-import { generateObject } from "ai";
 import { z } from "zod";
 import { Albert, chunkMetadata } from "../../albert/albert";
-import { albertModel } from "../../../config/models";
+import { slideDescriberAgent } from "../../../agents/slideDescriberAgent";
+import { askAgent } from "../../../agents/ask";
 import { workflowConfig } from "../../../config";
 import { recordUsage } from "../../metrics/usage";
 import { diapoUrl, listSlides, openBrowser, slideText } from "../slides";
@@ -44,15 +44,13 @@ export async function indexSlides(c: ChaoticumConfig, limit = c.rag.slidesPerRun
   const describe = async (slide: { path: string; name: string }, n: number, max: number, png: Buffer, file: string, context: string) => {
     const key = `${slide.path}#${n}`;
     try {
-      const { object, usage } = await generateObject({
-        model: albertModel(c.models.vision),
-        schema: VisionSchema,
-        messages: [{ role: "user", content: [
-          { type: "text", text: `Diapositive ${n} de la présentation « ${slide.name} » (conférences de recherche). Décris-la en français sans inventer ce qui n'est pas visible.` },
+      const { object } = await askAgent(slideDescriberAgent, {
+        model: c.models.vision, source: "Index des diapos : description (slideDescriberAgent)", schema: VisionSchema,
+        prompt: [{ role: "user", content: [
+          { type: "text", text: `Diapositive ${n} de la présentation « ${slide.name} ».` },
           { type: "file", data: png, mediaType: "image/png", filename: path.basename(file) },
         ] }],
       });
-      recordUsage("Index des diapos : description (vision)", c.models.vision, usage);
       const url = diapoUrl(c.slides, slide.path, n);
       const content = `# ${slide.name} — diapo ${n} : ${object.titre}\n\nMots-clés : ${object.motsCles.join(" ; ")}\n\n${object.description}\n\nPrésentation « ${slide.name} » : ${context}\n\n${url}\n`;
       const previous = store.items[key]?.docId;

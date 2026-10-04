@@ -11,12 +11,14 @@
     --shadow: 0 1px 2px rgba(0,0,0,.05), 0 4px 16px rgba(0,0,0,.04);
   }
   :root[data-app="explo"] { --accent: #6a4c93; }
+  :root[data-app="chaoticum"] { --accent: #a23b62; }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
       --bg: #15171b; --panel: #1d2026; --ink: #e8e9ec; --muted: #9aa0aa; --line: #2e323a;
       --accent: #7fb0e0; --accent-ink: #0f1a26; --ok: #6cc28f; --warn: #e0a64a; --err: #f08a80; --shadow: none;
     }
     :root[data-app="explo"]:not([data-theme="light"]) { --accent: #b39ddb; --accent-ink: #1a1326; }
+    :root[data-app="chaoticum"]:not([data-theme="light"]) { --accent: #e48bad; --accent-ink: #2a0f1a; }
   }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
@@ -55,7 +57,7 @@
     <h1>Paramètres <small id="app-label"></small></h1>
     <div class="spacer"></div>
     <a href="/">← Retour à l'application</a>
-    <a id="link-other" href="#" class="hidden"></a>
+    <span id="link-others"></span>
     <a href="/docs/installation.html" target="_blank">Documentation</a>
   </div>
 </header>
@@ -145,8 +147,8 @@ async function load() {
   document.documentElement.dataset.app = apps.current;
   document.title = `Paramètres – ${current.label}`;
   $("#app-label").textContent = current.label;
-  const other = Object.entries(apps.apps).find(([k]) => k !== apps.current)?.[1];
-  if (other) { const a = $("#link-other"); a.href = `${other.url}/parametres`; a.textContent = `Paramètres de ${other.label.replace(/ \(.*\)$/, "")}`; a.classList.remove("hidden"); }
+  $("#link-others").replaceChildren(...Object.entries(apps.apps).filter(([k]) => k !== apps.current)
+    .map(([, x]) => el("a", { href: `${x.url}/parametres`, textContent: `Paramètres de ${x.label.replace(/ \(.*\)$/, "")}`, style: "margin-right:14px" })));
   const files = apps.envFiles ?? [".env"];
   $("#lead").innerHTML = "";
   $("#lead").append(files.length > 1

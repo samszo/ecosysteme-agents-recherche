@@ -47,7 +47,7 @@
 <main>
 <h1 id="documentation-technique"><a class="anchor" href="#documentation-technique">#</a>Documentation technique</h1>
 <p>Écosystème d&#39;agents IA pour la production d&#39;articles scientifiques (Laboratoire Paragraphe, Université Paris 8). Le projet est écrit en <strong>TypeScript</strong>, exécuté par <strong>tsx</strong> sous <strong>Node.js 22+</strong>, et orchestré par des workflows <strong>Mastra</strong>. Les modèles de langage sont ceux de l&#39;<strong>API Albert</strong> (compatible OpenAI), les sources viennent de <strong>Zotero</strong> et les résultats sont archivés dans <strong>Omeka S</strong>.</p>
-<p>Deux applications partagent ce socle, chacune avec son workflow, son lanceur, sa page et son serveur :</p>
+<p>Trois applications partagent ce socle, chacune avec son workflow, son lanceur, sa page et son serveur :</p>
 <table>
 <thead>
 <tr>
@@ -75,8 +75,16 @@
 <td><code>EXPLO_PORT</code> 7273</td>
 <td>12</td>
 </tr>
+<tr>
+<td>chaoticumSeminario</td>
+<td><code>chaoticumWorkflow</code> (<code>src/workflow/chaoticumWorkflow.ts</code>)</td>
+<td><code>src/runners/chaoticum.ts</code></td>
+<td><code>chaoticum.html</code>, <code>jouer.html</code></td>
+<td><code>CHAOTICUM_PORT</code> 7276</td>
+<td>13</td>
+</tr>
 </tbody></table>
-<p>Elles partagent l&#39;étape <code>fetch-literature</code> (lecture de la collection Zotero et enregistrement dans Omeka S), les bibliothèques de <code>src/lib/</code>, le comptage des tokens et l&#39;estimation du coût, l&#39;enregistrement des configurations d&#39;exécution et le serveur <code>src/ui/server.ts</code>.</p>
+<p>Elles partagent (l&#39;Atelier et exploZoteroAnno) l&#39;étape <code>fetch-literature</code> (lecture de la collection Zotero et enregistrement dans Omeka S), les bibliothèques de <code>src/lib/</code>, le comptage des tokens et l&#39;estimation du coût, l&#39;enregistrement des configurations d&#39;exécution et le serveur <code>src/ui/server.ts</code>.</p>
 <h2 id="1-architecture"><a class="anchor" href="#1-architecture">#</a>1. Architecture</h2>
 <pre class="mermaid">flowchart LR
     subgraph Client
@@ -200,9 +208,11 @@
 ├── config/
 │   ├── index.ts              configuration de l'Atelier (defaultWorkflowConfig, workflowConfig, outputPath)
 │   ├── explo.ts              configuration d'exploZoteroAnno (defaultExploConfig, exploConfig, exploGrid)
+│   ├── chaoticum.ts          configuration de chaoticumSeminario (defaultChaoticumConfig, chaoticumConfig, SCREEN_TYPES)
 │   ├── models.ts             modèles Albert (analytique, rapide)
 │   └── store.ts              fusion avec workflow.config.json / explo.config.json
 ├── lib/                      fonctions et clients utilisés par les outils et les étapes (hors outils Mastra)
+│   ├── chaoticum/            slides (présentations, #numSlide-max, copies d'écran), citations, partition, grist, random
 │   ├── analysis/             cleanGraph, annotationPositions (grille de couleurs), codebook (grille kappa)
 │   ├── extraction/           pdfExtract, attachmentExtract, zip, chunkText
 │   ├── metrics/              usage (tokens), impact (énergie, carbone, argent)
@@ -215,17 +225,20 @@
 ├── workflow/
 │   ├── paperProductionWorkflow.ts   assemblage de l'Atelier d'articles
 │   ├── exploWorkflow.ts             assemblage d'exploZoteroAnno
+│   ├── chaoticumWorkflow.ts         assemblage de chaoticumSeminario
 │   ├── steps/
 │   │   ├── common/           fetchLiteratureStep (partagée)
 │   │   ├── paper/            analyzeCfp, buildWiki, kappaAnalysis, normalizeOkf, draftPaper, reviewPaper
-│   │   └── explo/            participation, collaboration, ragIndex, themes
-│   ├── reports/              paperReport, exploReport, annotationGuide
+│   │   ├── explo/            participation, collaboration, ragIndex, themes
+│   │   └── chaoticum/        material (citations, diapos, copies d'écran), compose (vision, questions, diagrammes)
+│   ├── reports/              paperReport, exploReport, chaoticumReport, annotationGuide
 │   └── runs/                 saveWorkflowConfig (item Omeka), importSynthesis (médias), history (historique local)
-├── runners/                  lanceurs : paper.ts (npm start), explo.ts (npm run explo)
+├── runners/                  lanceurs : paper.ts (npm start), explo.ts (npm run explo), chaoticum.ts (npm run chaoticum)
 └── ui/
-    ├── server.ts             serveur d'une application (npm run ui / npm run ui:explo)
-    └── public/               paper.html, explo.html, settings.html (page Paramètres commune)</code></pre>
-<p>Hors de <code>src/</code> : <code>docs/</code> (documentation, <code>grille_annotation.md</code>), <code>scripts/build-docs.ts</code>, <code>docker/entrypoint.sh</code>, <code>.vscode/launch.json</code> (configurations de débogage des deux workflows et des deux serveurs), <code>install/</code> (instance Omeka S préparée, distribuée à part). Les fichiers produits vont dans <code>resultats/atelier/</code> et <code>resultats/explo/</code> (réglages <code>outputDir</code>), dans le répertoire de données : la racine du projet en local, le volume <code>data/</code> avec Docker.</p>
+    ├── server.ts             serveur d'une application (npm run ui / ui:explo / ui:chaoticum)
+    ├── chaoticumRoutes.ts    routes de chaoticumSeminario (partitions, lecteur, contributions, séances)
+    └── public/               paper.html, explo.html, chaoticum.html, jouer.html (lecteur), settings.html (page Paramètres commune)</code></pre>
+<p>Hors de <code>src/</code> : <code>docs/</code> (documentation, <code>grille_annotation.md</code>), <code>scripts/build-docs.ts</code>, <code>docker/entrypoint.sh</code>, <code>.vscode/launch.json</code> (configurations de débogage des workflows et des serveurs), <code>install/</code> (instance Omeka S préparée, distribuée à part). Les fichiers produits vont dans <code>resultats/atelier/</code>, <code>resultats/explo/</code> et <code>resultats/chaoticum/</code> (réglages <code>outputDir</code>), dans le répertoire de données : la racine du projet en local, le volume <code>data/</code> avec Docker.</p>
 <h3 id="agents-src-agents"><a class="anchor" href="#agents-src-agents">#</a>Agents (<code>src/agents/</code>)</h3>
 <table>
 <thead>
@@ -906,62 +919,193 @@
 <th></th>
 <th>Atelier d&#39;articles (<code>paper</code>)</th>
 <th>exploZoteroAnno (<code>explo</code>)</th>
+<th>chaoticumSeminario (<code>chaoticum</code>)</th>
 </tr>
 </thead>
 <tbody><tr>
 <td>Lancement</td>
 <td><code>npm run ui</code></td>
 <td><code>npm run ui:explo</code></td>
+<td><code>npm run ui:chaoticum</code></td>
 </tr>
 <tr>
 <td>Port / adresse d&#39;écoute</td>
 <td><code>PORT</code> (7272) / <code>HOST</code></td>
 <td><code>EXPLO_PORT</code> (7273) / <code>EXPLO_HOST</code> (ou <code>HOST</code>)</td>
+<td><code>CHAOTICUM_PORT</code> (7276) / <code>CHAOTICUM_HOST</code> (ou <code>HOST</code>)</td>
 </tr>
 <tr>
 <td>Connexions</td>
 <td><code>.env</code></td>
 <td><code>.env</code> surchargé par <code>.env.explo</code> (<code>EXPLO_ENV_FILE</code>)</td>
+<td><code>.env</code> surchargé par <code>.env.chaoticum</code> (<code>CHAOTICUM_ENV_FILE</code>)</td>
 </tr>
 <tr>
 <td>Configuration</td>
 <td><code>workflow.config.json</code></td>
 <td><code>explo.config.json</code></td>
+<td><code>chaoticum.config.json</code></td>
 </tr>
 <tr>
 <td>Workflow lancé</td>
 <td><code>src/runners/paper.ts</code></td>
 <td><code>src/runners/explo.ts</code></td>
+<td><code>src/runners/chaoticum.ts</code></td>
 </tr>
 <tr>
 <td>Page</td>
 <td><code>paper.html</code></td>
 <td><code>explo.html</code></td>
+<td><code>chaoticum.html</code> (et <code>/jouer</code> : <code>jouer.html</code>)</td>
 </tr>
 </tbody></table>
-<p>Chaque serveur a son propre traitement en cours (les deux applications peuvent traiter simultanément) et son propre flux de journal. Routes communes : <code>/api/settings</code> (connexions et configuration de l&#39;application du serveur ; un secret vide est conservé, une valeur identique à la valeur héritée n&#39;est pas recopiée dans <code>.env.explo</code>), <code>/api/check</code>, <code>/api/zotero/collections</code>, <code>/api/albert/models</code>, <code>/api/run*</code>, <code>/docs/</code>, et <code>GET /api/apps</code> (adresses des deux applications, <code>PAPER_URL</code> / <code>EXPLO_URL</code> ou port local, pour les liens entre elles). Les routes propres à l&#39;autre application répondent 404 ; l&#39;ancienne adresse <code>/explo</code> de l&#39;Atelier redirige vers le serveur d&#39;exploZoteroAnno.</p>
-<h2 id="13-documentation-et-conteneur"><a class="anchor" href="#13-documentation-et-conteneur">#</a>13. Documentation et conteneur</h2>
+<p>Chaque serveur a son propre traitement en cours (les applications peuvent traiter simultanément) et son propre flux de journal. Routes communes : <code>/api/settings</code> (connexions et configuration de l&#39;application du serveur ; un secret vide est conservé, une valeur identique à la valeur héritée n&#39;est pas recopiée dans <code>.env.explo</code>), <code>/api/check</code>, <code>/api/zotero/collections</code>, <code>/api/albert/models</code>, <code>/api/run*</code>, <code>/docs/</code>, et <code>GET /api/apps</code> (adresses des applications, <code>PAPER_URL</code> / <code>EXPLO_URL</code> / <code>CHAOTICUM_URL</code> ou port local, pour les liens entre elles). Les routes propres aux autres applications répondent 404 ; l&#39;ancienne adresse <code>/explo</code> de l&#39;Atelier redirige vers le serveur d&#39;exploZoteroAnno.</p>
+<h2 id="13-workflow-chaoticumseminario"><a class="anchor" href="#13-workflow-chaoticumseminario">#</a>13. Workflow chaoticumSeminario</h2>
+<p>Troisième workflow (<code>src/workflow/chaoticumWorkflow.ts</code>, étapes dans <code>src/workflow/steps/chaoticum/</code>, bibliothèques dans <code>src/lib/chaoticum/</code>) : il génère la <strong>partition</strong> d&#39;une conférence ; le lecteur <code>jouer.html</code> la joue et enregistre les <strong>séances</strong>. Configuration : <code>defaultChaoticumConfig</code> (<code>src/config/chaoticum.ts</code>), surcharges dans <code>chaoticum.config.json</code>.</p>
+<pre class="mermaid">flowchart TD
+    IN([graine]) --&gt; M
+    subgraph M[material]
+        PL[planScreens&lt;br/&gt;types, cycles, durées] --&gt; CI[CitationPicker&lt;br/&gt;annotations et notes Zotero]
+        PL --&gt; SL[listSlides → présentation au hasard&lt;br/&gt;#numSlide-max → diapo au hasard&lt;br/&gt;copie d'écran Playwright]
+    end
+    M --&gt; C
+    subgraph C[compose]
+        VI[description des copies d'écran&lt;br/&gt;modèle de vision] --&gt; GE[question + diagramme Mermaid&lt;br/&gt;par cycle, modèle analytique]
+    end
+    C --&gt; OUT([partition.json, rapport,&lt;br/&gt;copies d'écran → Omeka S])
+    OUT --&gt; J[jouer.html&lt;br/&gt;chronomètre, navigation, contributions Grist]
+    J --&gt; P([séance → Omeka S&lt;br/&gt;bibo:Performance]) --&gt; RJ[rejeu]</pre>
+<table>
+<thead>
+<tr>
+<th>Élément</th>
+<th>Rôle</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>loadTheme</code>, <code>rankByTheme</code> (<code>theme.ts</code>)</td>
+<td>thème de la conférence : titre, description, texte du programme (<code>programUrl</code>, page web ou PDF lu par <code>extractAttachment</code>) ; avec <code>selection.byTheme</code>, le modèle analytique choisit les citations (parmi <code>selection.citationCandidates</code> tirées au hasard) et les présentations (<code>selection.slideShortlist</code>, d&#39;après les textes de leur SVG, <code>slideText</code>) les plus proches du thème ; le hasard départage et complète si le choix échoue</td>
+</tr>
+<tr>
+<td>index RAG (<code>src/lib/chaoticum/index/</code>)</td>
+<td><code>slidesIndex</code> : collection Albert <code>rag.slidesCollection</code>, un document par diapo (titre, mots-clés et description par le modèle de vision, <code>generateObject</code> avec l&#39;image ; métadonnées <code>kind</code>, <code>path</code>, <code>diapo</code>, <code>max</code>) ; chaque présentation est chargée une fois et ses diapos capturées en fixant le <code>viewBox</code> du SVG (<code>slides[keys[n]]</code>, sans transition, environ 0,4 s par diapo) ; descriptions et dépôts en parallèle (4) ; reprise incrémentale, <code>rag.slidesPerRun</code> par exécution. <code>zoteroIndex</code> : collection <code>rag.zoteroCollection</code>, un document par notice, lu en quatre requêtes paginées (notices, pièces jointes, notes, annotations) ; mots-clés répétés <code>rag.keywordsWeight</code> fois et notes <code>rag.notesWeight</code> fois en tête, passages surlignés marqués <code>[[CLÉ]]</code> ; empreinte du contenu pour ne redéposer que les références modifiées, références supprimées retirées. État local : <code>resultats/chaoticum/index/diapos.json</code> et <code>bibliotheque.json</code> (+ copies d&#39;écran dans <code>index/diapos/</code>). Lancement : `npm run chaoticum:index -- diapos</td>
+</tr>
+<tr>
+<td><code>ragMaterial</code> (<code>ragSelect.ts</code>)</td>
+<td>génération à partir des index : une requête par cycle tirée du thème (<code>generateObject</code>), recherche hybride dans les deux collections (filtre <code>collections</code> sur la collection Zotero choisie), citations retrouvées par leurs marqueurs <code>[[CLÉ]]</code> dans les extraits, candidats complétés au hasard (graine) ; puis un appel par cycle qui choisit les citations et diapos les plus cohérentes avec la conférence et rédige question et diagramme (nœuds, liens). Copies d&#39;écran recopiées depuis l&#39;index ; l&#39;étape <code>compose</code> ne fait plus que ce qui manque. Repli sur le tirage direct si les index sont vides ou désactivés (<code>rag.enabled</code>)</td>
+</tr>
+<tr>
+<td><code>planScreens</code> (<code>partition.ts</code>)</td>
+<td>types d&#39;écran (<code>pattern</code> répété jusqu&#39;à <code>screens</code>), cycles (un par répétition), durées (<code>durationMinutes</code> réparti selon <code>weights</code>, arrondi reporté sur le dernier écran)</td>
+</tr>
+<tr>
+<td><code>seededRandom</code> (<code>random.ts</code>)</td>
+<td>tirage reproductible (mulberry32 initialisé par l&#39;empreinte de la graine) ; la graine est enregistrée dans la partition</td>
+</tr>
+<tr>
+<td><code>CitationPicker</code> (<code>citations.ts</code>)</td>
+<td>collection : annotations des pièces jointes (<code>/items/&lt;clé&gt;/children?itemType=annotation</code>) et notes, tirage sans remise ; bibliothèque : tirage d&#39;un rang au hasard parmi toutes les annotations (et notes), un item par requête (<code>limit=1&amp;start=&lt;rang&gt;</code>), sans tout charger ; référence remontée annotation → pièce jointe → notice</td>
+</tr>
+<tr>
+<td><code>listSlides</code>, <code>maxFromPage</code>, <code>screenshot</code> (<code>slides.ts</code>)</td>
+<td>présentations : sous-dossiers de <code>slides.localDir</code> contenant <code>slide.html</code>, sinon arborescence du dépôt GitHub ; nombre de diapos lu dans <code>#numSlide-max</code> de la page rendue (Chromium), à défaut compté dans le SVG (rectangles <code>slide_*</code> distincts moins un) ; copie d&#39;écran de <code>slide.html?diapo=&lt;n&gt;</code> après <code>settleMs</code></td>
+</tr>
+<tr>
+<td><code>composeStep</code></td>
+<td>vision : <code>generateText</code> avec l&#39;image (modèle <code>models.vision</code>) ; puis par cycle contenant une question ou un diagramme, <code>generateObject</code> (question, intention, titre, nœuds et liens du diagramme) avec les citations et descriptions du cycle (à défaut, des cycles précédents) ; le code Mermaid est construit par <code>buildMermaid</code> (<code>mermaid.ts</code> : identifiants renumérotés, libellés entre guillemets et nettoyés), donc toujours valide ; une question de plus de 15 mots est reformulée par le modèle rapide. <code>repairMermaid</code> corrige les diagrammes écrits directement par un modèle (partitions antérieures : <code>A --&gt; B:::classe &quot;libellé&quot;</code>, <code>classDef</code>, libellés sans guillemets) ; le lecteur l&#39;applique si le diagramme enregistré ne s&#39;affiche pas, et l&#39;éditeur propose « Réparer automatiquement »</td>
+</tr>
+<tr>
+<td><code>src/runners/chaoticum.ts</code></td>
+<td>item de configuration, exécution, <code>partition.json</code> et <code>rapport_chaoticum.md</code> dans <code>resultats/chaoticum/partitions/&lt;runId&gt;/</code>, médias Omeka (partition, rapport, PNG), coût</td>
+</tr>
+<tr>
+<td><code>readContributions</code>, <code>updateContribution</code>, <code>deleteContribution</code> (<code>grist.ts</code>)</td>
+<td>lecture par l&#39;API des enregistrements de Grist (document et table déduits du lien de la table : identifiant <code>grist-&lt;ligne&gt;</code>, dates converties), à défaut export CSV (identifiant = empreinte de la ligne) ; modification de l&#39;URL (<code>PATCH …/records</code>) et suppression (<code>POST …/data/delete</code>) avec <code>GRIST_API_KEY</code></td>
+</tr>
+<tr>
+<td><code>frameable</code> (<code>grist.ts</code>)</td>
+<td>une URL proposée peut-elle s&#39;afficher dans un iframe (X-Frame-Options, CSP <code>frame-ancestors</code>) ; chaque redirection est suivie à la main et les adresses locales ou privées sont refusées (protection contre les requêtes vers le réseau interne)</td>
+</tr>
+</tbody></table>
+<p><strong>Lecteur</strong> (<code>jouer.html</code>, route <code>/jouer?run=&lt;partition&gt;</code>) : lien de retour vers la liste, QR code de participation sur chaque écran, zoom et déplacement des diagrammes (transformation CSS, molette, glisser, ajustement), chronomètre par écran (<code>timer.warning</code> et <code>timer.danger</code> × durée prévue), temps de séance et écart à la partition, navigation (précédent, suivant, début, fin, aller à, revenir, barre des écrans, raccourcis clavier), rendu par type (iframe de la diapo, Mermaid, QR code du formulaire). Les réponses Grist sont lues toutes les <code>grist.pollSeconds</code> secondes ; les lignes présentes au démarrage forment la référence, les nouvelles sont des contributions de la séance, rattachées à l&#39;écran affiché à leur arrivée ; avec <code>grist.moderation</code>, l&#39;animateur choisit l&#39;URL affichée. Il peut modifier ou supprimer une contribution (<code>POST /api/chaoticum/contribution</code>) : appliqué dans Grist si <code>GRIST_API_KEY</code> le permet et si la réponse a un identifiant de ligne, sinon pour la séance ; la séance garde ces modifications (<code>overrides</code>, <code>edits</code>, <code>deletedAt</code>), que le rejeu applique à l&#39;instant rejoué. Un brouillon de la séance est gardé dans le stockage local du navigateur (reprise après fermeture).</p>
+<p><strong>Rejeu public</strong> : chaque séance reçoit un jeton aléatoire de 128 bits (<code>shareToken</code>, aussi dans <code>curation:data</code> de son item Omeka sous <code>share</code>). <code>GET /public/rejeu?t=&lt;jeton&gt;</code> sert le lecteur en mode public (lecture seule : ni QR code de participation, ni enregistrement, ni modification de contributions, ni lien vers l&#39;application) ; <code>GET /public/api/rejeu?t=</code> renvoie la partition et la séance sans adresses du formulaire Grist, item de configuration ni jeton ; <code>GET /public/api/rejeu/file?t=&amp;name=diapo_n.png</code> sert les copies d&#39;écran. Le jeton est cherché dans l&#39;archive locale, sinon dans Omeka S. Aucune route publique n&#39;écrit ni ne consulte d&#39;URL externe (l&#39;autorisation d&#39;affichage des contributions est enregistrée pendant la séance, <code>frameable</code>). <code>POST /api/chaoticum/participation/share</code> crée le lien d&#39;une séance plus ancienne. Le proxy n&#39;exempte de l&#39;authentification que <code>/public/</code>.</p>
+<p><strong>Séance</strong> (<code>POST /api/chaoticum/participation</code>) : <code>events</code> (écran, type, entrée, sortie, secondes, durée prévue, statut <code>ok</code> / <code>warning</code> / <code>danger</code>) et <code>contributions</code> (nom, URL, date Grist, réception, écran, affichages) ; archivée dans <code>resultats/chaoticum/partitions/&lt;runId&gt;/participations/&lt;id&gt;.json</code> et dans Omeka S (item <code>omeka.participationClass</code>, <code>dcterms:type</code> <code>omeka.participationType</code>, <code>dcterms:relation</code> vers la partition, résumé dans <code>curation:data</code>, JSON complet en média). <strong>Rejeu</strong> (<code>/jouer?run=&lt;partition&gt;&amp;replay=&lt;séance&gt;</code>) : horloge virtuelle qui parcourt les <code>events</code> à la vitesse choisie ; les contributions reçues et affichées avant l&#39;instant rejoué sont reconstituées.</p>
+<table>
+<thead>
+<tr>
+<th>Clé de configuration</th>
+<th>Rôle</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>title</code>, <code>description</code>, <code>programUrl</code></td>
+<td>conférence (thème)</td>
+</tr>
+<tr>
+<td><code>rag.enabled</code>, <code>rag.slidesCollection</code>, <code>rag.zoteroCollection</code>, <code>rag.slidesPerRun</code>, <code>rag.keywordsWeight</code>, <code>rag.notesWeight</code>, <code>rag.searchLimit</code>, <code>rag.chunkSize</code>, <code>rag.chunkOverlap</code></td>
+<td>index RAG</td>
+</tr>
+<tr>
+<td><code>selection.byTheme</code>, <code>selection.citationCandidates</code>, <code>selection.slideShortlist</code></td>
+<td>choix orienté par le thème</td>
+</tr>
+<tr>
+<td><code>screens</code>, <code>durationMinutes</code>, <code>pattern</code>, <code>weights</code>, <code>seed</code></td>
+<td>partition</td>
+</tr>
+<tr>
+<td><code>timer.warning</code>, <code>timer.danger</code></td>
+<td>seuils du chronomètre (× durée prévue)</td>
+</tr>
+<tr>
+<td><code>citations.scope</code>, <code>citations.collection</code>, <code>includeNotes</code>, <code>minLength</code>, <code>maxLength</code></td>
+<td>citations Zotero</td>
+</tr>
+<tr>
+<td><code>slides.siteUrl</code>, <code>localDir</code>, <code>repo</code>, <code>docsPath</code>, <code>exclude</code>, <code>viewport</code>, <code>settleMs</code></td>
+<td>diapos ConfErrance</td>
+</tr>
+<tr>
+<td><code>grist.formUrl</code>, <code>responsesUrl</code>, <code>urlColumn</code>, <code>nameColumn</code>, <code>dateColumn</code>, <code>pollSeconds</code>, <code>moderation</code></td>
+<td>contributions</td>
+</tr>
+<tr>
+<td><code>models.vision</code>, <code>models.analytics</code></td>
+<td>modèles Albert</td>
+</tr>
+<tr>
+<td><code>omeka.participationClass</code>, <code>omeka.participationType</code></td>
+<td>séances dans Omeka S</td>
+</tr>
+<tr>
+<td><code>outputDir</code></td>
+<td><code>resultats/chaoticum</code></td>
+</tr>
+</tbody></table>
+<p>Routes propres au serveur chaoticumSeminario (<code>src/ui/chaoticumRoutes.ts</code>) : <code>GET /jouer</code>, <code>GET /api/chaoticum/partitions</code>, <code>GET /api/chaoticum/partition?run=</code>, <code>GET /api/chaoticum/file?run=&amp;name=</code> (partition, rapport, copies d&#39;écran : archive locale, sinon médias Omeka S), <code>GET /api/chaoticum/contributions?run=</code>, <code>POST /api/chaoticum/contribution</code> (<code>{ run, rowId, url }</code> ou <code>{ run, rowId, remove: true }</code>), <code>POST /api/chaoticum/partition/screen</code> (<code>{ run, index, changes }</code> : durée, citation, diapo, question, diagramme ; nouveau média <code>partition.json</code> dans Omeka S, l&#39;ancien est supprimé), <code>GET /api/chaoticum/slides</code>, <code>GET /api/chaoticum/index</code> (état des index RAG), <code>GET /api/chaoticum/frameable?url=</code>, <code>POST /api/chaoticum/participation</code>, <code>GET /api/chaoticum/participations?run=</code>, <code>GET /api/chaoticum/participation?run=&amp;id=</code>.</p>
+<h2 id="14-documentation-et-conteneur"><a class="anchor" href="#14-documentation-et-conteneur">#</a>14. Documentation et conteneur</h2>
 <ul>
 <li><code>npm run docs</code> convertit <code>docs/*.md</code> en <code>docs/html/*.html</code> (script <code>scripts/build-docs.ts</code>, bibliothèque <strong>marked</strong> ; les diagrammes <strong>Mermaid</strong> sont rendus dans le navigateur).</li>
-<li><code>Dockerfile</code> : image <code>node:22-bookworm-slim</code>, code dans <code>/app</code>, données dans le volume <code>/data</code>, commandes <code>workflow-ui</code> (serveur de l&#39;application <code>WORKFLOW_APP</code>), <code>workflow</code> et <code>workflow-explo</code> (lignes de commande).</li>
-<li><code>docker-compose.yml</code> : deux services à partir de la même image, <code>workflow</code> (Atelier, 7272) et <code>explo</code> (exploZoteroAnno, 7273), publiés sur <code>127.0.0.1</code> et partageant <code>./data</code>.</li>
+<li><code>Dockerfile</code> : image <code>node:22-bookworm-slim</code>, code dans <code>/app</code>, données dans le volume <code>/data</code>, Chromium de Playwright (<code>PLAYWRIGHT_BROWSERS_PATH=/ms-playwright</code>, avec ses bibliothèques système), commandes <code>workflow-ui</code> (serveur de l&#39;application <code>WORKFLOW_APP</code>), <code>workflow</code>, <code>workflow-explo</code> et <code>workflow-chaoticum</code> (lignes de commande).</li>
+<li><code>docker-compose.yml</code> : trois services à partir de la même image, <code>workflow</code> (Atelier, 7272), <code>explo</code> (exploZoteroAnno, 7273) et <code>chaoticum</code> (chaoticumSeminario, 7276), publiés sur <code>127.0.0.1</code> et partageant <code>./data</code>.</li>
 <li><code>docker/entrypoint.sh</code> : le conteneur démarre en root, rétablit si besoin la propriété de <code>/data</code> pour l&#39;utilisateur <code>node</code> (uid 1000), puis exécute la commande sous <code>node</code> avec <code>setpriv</code>. Les commandes <code>workflow</code>, <code>workflow-explo</code> et <code>workflow-ui</code> lancées par <code>docker compose exec</code> (en root) passent aussi par ce point d&#39;entrée.</li>
 <li><code>docker-compose.yml</code> (suite) : volume <code>./data:/data</code> commun, <code>host.docker.internal</code> pour un Omeka S local ; le contrôle de santé interroge le port de l&#39;application du conteneur (<code>WORKFLOW_APP</code>).</li>
-<li><code>.vscode/launch.json</code> : débogage des deux workflows sans interface, des deux serveurs sur 7282 et 7283 (avec suivi du workflow lancé en processus enfant) et du fichier courant.</li>
+<li><code>.vscode/launch.json</code> : débogage des trois workflows sans interface, des trois serveurs sur 7282, 7283 et 7286 (avec suivi du workflow lancé en processus enfant) et du fichier courant.</li>
 </ul>
-<h2 id="14-limites-connues"><a class="anchor" href="#14-limites-connues">#</a>14. Limites connues</h2>
+<h2 id="15-limites-connues"><a class="anchor" href="#15-limites-connues">#</a>15. Limites connues</h2>
 <ul>
 <li><code>tsc --noEmit</code> signale des erreurs de typage liées à la configuration TypeScript (CommonJS avec <code>verbatimModuleSyntax</code>) et aux types Mastra (étapes sans schéma) ; l&#39;exécution par tsx n&#39;est pas affectée.</li>
 <li>La reconstruction des passages surlignés d&#39;un PDF est une approximation proportionnelle à la largeur des blocs de texte.</li>
 <li>Les sites protégés contre les robots ne peuvent pas être téléchargés : utiliser un fichier local.</li>
 <li>Le contexte des modèles limite la taille des textes transmis (appel très long, plan très détaillé).</li>
 <li>exploZoteroAnno : le repli « même titre et même année » peut fusionner deux documents distincts au titre identique (comptes rendus, éditions successives) ; la fusion se désactive par <code>analysis.mergeDuplicates</code>. Un doublon déjà enregistré dans Omeka S par une exécution antérieure n&#39;est pas supprimé (avertissement dans le journal).</li>
+<li>chaoticumSeminario : les iframes de diapos et de contributions dépendent de la disponibilité des sites ; une URL proposée par le public n&#39;est affichée qu&#39;après vérification de son autorisation d&#39;intégration, et la modération est recommandée en public. Les contributions sont rattachées à l&#39;écran affiché au moment de leur lecture (décalage possible de <code>pollSeconds</code>). Le diagramme est produit par Albert (Mermaid) : l&#39;API NotebookLM n&#39;offre pas de génération de diagramme.</li>
 <li>RAG : seul le texte extrait des documents est indexé (pas les annotations ni les notes) ; un document modifié après son indexation n&#39;est pas redéposé (supprimer le document dans Albert pour forcer un nouveau dépôt) ; renommer une collection Zotero crée une nouvelle collection Albert à la prochaine analyse.</li>
 <li>exploZoteroAnno : les annotations sans auteur (bibliothèque personnelle, PDF annotés hors Zotero) ne peuvent pas être attribuées et sont regroupées sous <code>analysis.unassignedLabel</code>.</li>
 </ul>
 
 </main>
-<nav class="toc"><strong>Sur cette page</strong><a class="l2" href="#1-architecture">1. Architecture</a><a class="l2" href="#2-le-workflow-de-l-39-atelier-d-39-articles">2. Le workflow de l&#39;Atelier d&#39;articles</a><a class="l2" href="#3-organisation-du-code">3. Organisation du code</a><a class="l3" href="#agents-src-agents">Agents (src/agents/)</a><a class="l3" href="#outils-src-tools-et-bibliotheques-src-lib">Outils (src/tools/) et bibliothèques (src/lib/)</a><a class="l3" href="#comptage-des-tokens-src-lib-metrics-usage-ts">Comptage des tokens (src/lib/metrics/usage.ts)</a><a class="l3" href="#estimation-du-cout-src-lib-metrics-impact-ts">Estimation du coût (src/lib/metrics/impact.ts)</a><a class="l3" href="#historique-des-executions-src-workflow-runs-history-ts">Historique des exécutions (src/workflow/runs/history.ts)</a><a class="l2" href="#4-extraction-des-documents">4. Extraction des documents</a><a class="l2" href="#5-graphe-de-concepts">5. Graphe de concepts</a><a class="l2" href="#6-accord-inter-juges">6. Accord inter-juges</a><a class="l2" href="#7-proposition-d-39-article-propapp">7. Proposition d&#39;article (PropAPP)</a><a class="l2" href="#8-modele-de-donnees-omeka-s">8. Modèle de données Omeka S</a><a class="l2" href="#9-configuration">9. Configuration</a><a class="l2" href="#10-api-de-l-39-interface">10. API de l&#39;interface</a><a class="l2" href="#11-etendre-le-projet">11. Étendre le projet</a><a class="l2" href="#12-workflow-explozoteroanno">12. Workflow exploZoteroAnno</a><a class="l3" href="#analyses-deja-effectuees">Analyses déjà effectuées</a><a class="l3" href="#rag-albert">RAG Albert</a><a class="l3" href="#un-serveur-par-application">Un serveur par application</a><a class="l2" href="#13-documentation-et-conteneur">13. Documentation et conteneur</a><a class="l2" href="#14-limites-connues">14. Limites connues</a></nav>
+<nav class="toc"><strong>Sur cette page</strong><a class="l2" href="#1-architecture">1. Architecture</a><a class="l2" href="#2-le-workflow-de-l-39-atelier-d-39-articles">2. Le workflow de l&#39;Atelier d&#39;articles</a><a class="l2" href="#3-organisation-du-code">3. Organisation du code</a><a class="l3" href="#agents-src-agents">Agents (src/agents/)</a><a class="l3" href="#outils-src-tools-et-bibliotheques-src-lib">Outils (src/tools/) et bibliothèques (src/lib/)</a><a class="l3" href="#comptage-des-tokens-src-lib-metrics-usage-ts">Comptage des tokens (src/lib/metrics/usage.ts)</a><a class="l3" href="#estimation-du-cout-src-lib-metrics-impact-ts">Estimation du coût (src/lib/metrics/impact.ts)</a><a class="l3" href="#historique-des-executions-src-workflow-runs-history-ts">Historique des exécutions (src/workflow/runs/history.ts)</a><a class="l2" href="#4-extraction-des-documents">4. Extraction des documents</a><a class="l2" href="#5-graphe-de-concepts">5. Graphe de concepts</a><a class="l2" href="#6-accord-inter-juges">6. Accord inter-juges</a><a class="l2" href="#7-proposition-d-39-article-propapp">7. Proposition d&#39;article (PropAPP)</a><a class="l2" href="#8-modele-de-donnees-omeka-s">8. Modèle de données Omeka S</a><a class="l2" href="#9-configuration">9. Configuration</a><a class="l2" href="#10-api-de-l-39-interface">10. API de l&#39;interface</a><a class="l2" href="#11-etendre-le-projet">11. Étendre le projet</a><a class="l2" href="#12-workflow-explozoteroanno">12. Workflow exploZoteroAnno</a><a class="l3" href="#analyses-deja-effectuees">Analyses déjà effectuées</a><a class="l3" href="#rag-albert">RAG Albert</a><a class="l3" href="#un-serveur-par-application">Un serveur par application</a><a class="l2" href="#13-workflow-chaoticumseminario">13. Workflow chaoticumSeminario</a><a class="l2" href="#14-documentation-et-conteneur">14. Documentation et conteneur</a><a class="l2" href="#15-limites-connues">15. Limites connues</a></nav>
 </div>
 <script type="module">
 import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";

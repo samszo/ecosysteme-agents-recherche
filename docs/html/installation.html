@@ -46,7 +46,7 @@
 <div class="layout">
 <main>
 <h1 id="documentation-d-39-installation"><a class="anchor" href="#documentation-d-39-installation">#</a>Documentation d&#39;installation</h1>
-<p>Ce guide explique comment installer l&#39;écosystème d&#39;agents et ses deux applications, l&#39;<strong>Atelier d&#39;articles</strong> (réponse à un appel à propositions, port 7272) et <strong>exploZoteroAnno</strong> (annotation collective, port 7273), soit <strong>en local avec Node.js</strong>, soit <strong>dans un conteneur Docker</strong>, puis comment préparer les trois services dont il dépend : l&#39;API <strong>Albert</strong>, <strong>Zotero</strong> et <strong>Omeka S</strong>. Pour débuter rapidement, une <strong>instance Omeka S préparée</strong> (application et base de données) est fournie, et la section 8 décrit l&#39;installation complète sur un <strong>serveur Debian / Apache / Let&#39;s Encrypt</strong>.</p>
+<p>Ce guide explique comment installer l&#39;écosystème d&#39;agents et ses trois applications, l&#39;<strong>Atelier d&#39;articles</strong> (réponse à un appel à propositions, port 7272), <strong>exploZoteroAnno</strong> (annotation collective, port 7273) et <strong>chaoticumSeminario</strong> (partition de conférence, port 7276), soit <strong>en local avec Node.js</strong>, soit <strong>dans un conteneur Docker</strong>, puis comment préparer les trois services dont il dépend : l&#39;API <strong>Albert</strong>, <strong>Zotero</strong> et <strong>Omeka S</strong>. Pour débuter rapidement, une <strong>instance Omeka S préparée</strong> (application et base de données) est fournie, et la section 8 décrit l&#39;installation complète sur un <strong>serveur Debian / Apache / Let&#39;s Encrypt</strong>.</p>
 <pre class="mermaid">flowchart TD
     A([Début]) --&gt; B{Docker disponible ?}
     B -- oui --&gt; C[Installation Docker&lt;br/&gt;docker compose up -d]
@@ -60,7 +60,7 @@
     P --&gt; S[Sécuriser : nouveau compte,&lt;br/&gt;nouvelle clé, compte de démo supprimé]
     S --&gt; H
     G --&gt; H[Préparer Zotero&lt;br/&gt;clé API, bibliothèque de groupe]
-    H --&gt; I[Ouvrir les interfaces&lt;br/&gt;Atelier 127.0.0.1:7272&lt;br/&gt;exploZoteroAnno 127.0.0.1:7273]
+    H --&gt; I[Ouvrir les interfaces&lt;br/&gt;Atelier 127.0.0.1:7272&lt;br/&gt;exploZoteroAnno 127.0.0.1:7273&lt;br/&gt;chaoticumSeminario 127.0.0.1:7276]
     I --&gt; J[Tester les connexions]
     J -- toutes vertes --&gt; K([Prêt : lancer un traitement])
     J -- erreur --&gt; L[Voir la section Dépannage]
@@ -96,6 +96,10 @@
 <tr>
 <td>Omeka S</td>
 <td>une instance accessible, une clé d&#39;API avec droits d&#39;écriture, les vocabulaires listés plus bas</td>
+</tr>
+<tr>
+<td>Chromium (Playwright)</td>
+<td>chaoticumSeminario : copies d&#39;écran des diapos. En local : <code>npx playwright install chromium</code> ; inclus dans l&#39;image Docker</td>
 </tr>
 <tr>
 <td>Accès internet</td>
@@ -158,6 +162,16 @@
 <td>Port d&#39;exploZoteroAnno (7273 par défaut)</td>
 </tr>
 <tr>
+<td><code>CHAOTICUM_PORT</code>, <code>CHAOTICUM_HOST</code>, <code>CHAOTICUM_URL</code></td>
+<td>non</td>
+<td>Port (7276 par défaut), adresse d&#39;écoute et adresse publique de chaoticumSeminario</td>
+</tr>
+<tr>
+<td><code>GRIST_API_KEY</code></td>
+<td>non</td>
+<td>chaoticumSeminario : clé Grist, pour lire une table de réponses privée et pour modifier ou supprimer des contributions dans Grist depuis le lecteur (droit d&#39;écriture sur le document)</td>
+</tr>
+<tr>
 <td><code>HOST</code>, <code>EXPLO_HOST</code></td>
 <td>non</td>
 <td>Adresse d&#39;écoute de chaque serveur (<code>127.0.0.1</code> par défaut)</td>
@@ -173,14 +187,14 @@
 <td>Application servie par <code>src/ui/server.ts</code> sans argument : <code>paper</code> (défaut) ou <code>explo</code> (utilisé par Docker)</td>
 </tr>
 <tr>
-<td><code>EXPLO_ENV_FILE</code></td>
+<td><code>EXPLO_ENV_FILE</code>, <code>CHAOTICUM_ENV_FILE</code></td>
 <td>non</td>
-<td>Fichier de connexions propre à exploZoteroAnno (<code>.env.explo</code> par défaut)</td>
+<td>Fichiers de connexions propres à exploZoteroAnno (<code>.env.explo</code>) et chaoticumSeminario (<code>.env.chaoticum</code>)</td>
 </tr>
 <tr>
-<td><code>WORKFLOW_CONFIG_FILE</code>, <code>EXPLO_CONFIG_FILE</code></td>
+<td><code>WORKFLOW_CONFIG_FILE</code>, <code>EXPLO_CONFIG_FILE</code>, <code>CHAOTICUM_CONFIG_FILE</code></td>
 <td>non</td>
-<td>Fichiers de configuration de chaque application (<code>workflow.config.json</code>, <code>explo.config.json</code>)</td>
+<td>Fichiers de configuration de chaque application (<code>workflow.config.json</code>, <code>explo.config.json</code>, <code>chaoticum.config.json</code>)</td>
 </tr>
 <tr>
 <td><code>WORKFLOW_HISTORY_FILE</code></td>
@@ -198,7 +212,9 @@ cd ecosysteme-agents-recherche
 npm ci
 cp .env.example .env    # puis renseigner les valeurs
 npm run ui              # Atelier d'articles : http://127.0.0.1:7272
-npm run ui:explo        # exploZoteroAnno (autre terminal) : http://127.0.0.1:7273</code></pre>
+npm run ui:explo        # exploZoteroAnno (autre terminal) : http://127.0.0.1:7273
+npx playwright install chromium   # une fois : navigateur des copies d'écran (chaoticumSeminario)
+npm run ui:chaoticum    # chaoticumSeminario (autre terminal) : http://127.0.0.1:7276</code></pre>
 <p>Commandes disponibles :</p>
 <table>
 <thead>
@@ -214,6 +230,18 @@ npm run ui:explo        # exploZoteroAnno (autre terminal) : http://127.0.0.1:72
 <tr>
 <td><code>npm run ui:explo</code></td>
 <td>Serveur d&#39;exploZoteroAnno (port <code>EXPLO_PORT</code>, 7273)</td>
+</tr>
+<tr>
+<td><code>npm run ui:chaoticum</code></td>
+<td>Serveur de chaoticumSeminario (port <code>CHAOTICUM_PORT</code>, 7276) : configuration, génération, lecteur de partition</td>
+</tr>
+<tr>
+<td><code>npm run chaoticum</code></td>
+<td>Génère une partition chaoticumSeminario en ligne de commande</td>
+</tr>
+<tr>
+<td><code>npm run chaoticum:index -- diapos</code> (ou <code>bibliotheque</code>, <code>tout</code>)</td>
+<td>Indexe les diapos ou la bibliothèque dans les collections RAG Albert de chaoticumSeminario (incrémental)</td>
 </tr>
 <tr>
 <td><code>npm start</code></td>
@@ -236,31 +264,37 @@ npm run ui:explo        # exploZoteroAnno (autre terminal) : http://127.0.0.1:72
 <th></th>
 <th>Atelier d&#39;articles</th>
 <th>exploZoteroAnno</th>
+<th>chaoticumSeminario</th>
 </tr>
 </thead>
 <tbody><tr>
 <td>Connexions</td>
 <td><code>.env</code></td>
 <td><code>.env</code>, surchargé par <code>.env.explo</code></td>
+<td><code>.env</code>, surchargé par <code>.env.chaoticum</code></td>
 </tr>
 <tr>
 <td>Configuration</td>
 <td><code>workflow.config.json</code></td>
 <td><code>explo.config.json</code></td>
+<td><code>chaoticum.config.json</code></td>
 </tr>
 <tr>
 <td>Historique</td>
 <td><code>workflow.history.json</code></td>
 <td><code>resultats/explo/analyses/</code> et configurations dans Omeka S</td>
+<td>partitions et séances dans <code>resultats/chaoticum/partitions/</code> et Omeka S</td>
 </tr>
 <tr>
 <td>Résultats</td>
 <td><code>resultats/atelier/</code></td>
 <td><code>resultats/explo/</code></td>
+<td><code>resultats/chaoticum/partitions/&lt;partition&gt;/</code></td>
 </tr>
 <tr>
 <td>Appels importés</td>
 <td><code>aap/</code></td>
+<td>—</td>
 <td>—</td>
 </tr>
 </tbody></table>
@@ -290,17 +324,21 @@ npm run ui:explo        # exploZoteroAnno (autre terminal) : http://127.0.0.1:72
 <td>idem pour exploZoteroAnno</td>
 </tr>
 <tr>
-<td><em>Interfaces : Atelier + exploZoteroAnno</em></td>
-<td>les deux serveurs en même temps, liens entre eux fonctionnels</td>
+<td><em>Workflow : chaoticumSeminario</em>, <em>Interface : chaoticumSeminario (7286)</em></td>
+<td>idem pour chaoticumSeminario</td>
+</tr>
+<tr>
+<td><em>Interfaces : les trois applications</em></td>
+<td>les trois serveurs en même temps, liens entre eux fonctionnels</td>
 </tr>
 <tr>
 <td><em>Fichier courant (tsx)</em></td>
 <td>le fichier <code>.ts</code> ouvert dans l&#39;éditeur</td>
 </tr>
 </tbody></table>
-<p>Les interfaces de débogage écoutent sur 7282 et 7283 pour ne pas entrer en conflit avec les conteneurs Docker (7272, 7273). Ces lancements utilisent les mêmes fichiers de données que <code>npm run ui</code> : un traitement lancé en débogage écrit réellement dans Omeka S et consomme des tokens Albert.</p>
+<p>Les interfaces de débogage écoutent sur 7282, 7283 et 7286 pour ne pas entrer en conflit avec les conteneurs Docker (7272, 7273, 7276). Ces lancements utilisent les mêmes fichiers de données que <code>npm run ui</code> : un traitement lancé en débogage écrit réellement dans Omeka S et consomme des tokens Albert.</p>
 <h2 id="4-installation-docker"><a class="anchor" href="#4-installation-docker">#</a>4. Installation Docker</h2>
-<p>L&#39;image contient le code dans <code>/app</code> ; les <strong>données</strong> (<code>.env</code>, <code>.env.explo</code>, <code>workflow.config.json</code>, <code>explo.config.json</code>, historique, résultats, fichiers d&#39;appels importés) sont dans le volume <code>/data</code>, monté depuis le dossier <code>data/</code> du projet. <code>docker-compose.yml</code> démarre <strong>deux services</strong> à partir de la même image, un par application (variable <code>WORKFLOW_APP</code>) :</p>
+<p>L&#39;image contient le code dans <code>/app</code> ; les <strong>données</strong> (<code>.env</code>, <code>.env.explo</code>, <code>.env.chaoticum</code>, fichiers de configuration, historique, résultats, partitions, fichiers d&#39;appels importés) sont dans le volume <code>/data</code>, monté depuis le dossier <code>data/</code> du projet. L&#39;image contient aussi Chromium (Playwright, dans <code>/ms-playwright</code>) pour les copies d&#39;écran de chaoticumSeminario. <code>docker-compose.yml</code> démarre <strong>trois services</strong> à partir de la même image, un par application (variable <code>WORKFLOW_APP</code>) :</p>
 <table>
 <thead>
 <tr>
@@ -322,10 +360,16 @@ npm run ui:explo        # exploZoteroAnno (autre terminal) : http://127.0.0.1:72
 <td>exploZoteroAnno (<code>WORKFLOW_APP=explo</code>)</td>
 <td><a href="http://127.0.0.1:7273" target="_blank" rel="noopener">http://127.0.0.1:7273</a></td>
 </tr>
+<tr>
+<td><code>chaoticum</code></td>
+<td><code>ecosysteme-agents-recherche-chaoticum</code></td>
+<td>chaoticumSeminario (<code>WORKFLOW_APP=chaoticum</code>)</td>
+<td><a href="http://127.0.0.1:7276" target="_blank" rel="noopener">http://127.0.0.1:7276</a></td>
+</tr>
 </tbody></table>
 <pre class="mermaid">flowchart LR
     subgraph Hôte
-        B[Navigateur&lt;br/&gt;127.0.0.1:7272 et :7273]
+        B[Navigateur&lt;br/&gt;127.0.0.1:7272, :7273, :7276]
         D[(dossier data/&lt;br/&gt;.env, .env.explo,&lt;br/&gt;configurations, resultats/)]
         O[Omeka S local&lt;br/&gt;optionnel]
     end
@@ -335,22 +379,28 @@ npm run ui:explo        # exploZoteroAnno (autre terminal) : http://127.0.0.1:72
     subgraph C2[&quot;Service explo (7273)&quot;]
         UI2[Interface exploZoteroAnno&lt;br/&gt;workflow-ui] --&gt; WF2[runners/explo.ts&lt;br/&gt;processus enfant]
     end
+    subgraph C3[&quot;Service chaoticum (7276)&quot;]
+        UI3[Interface et lecteur&lt;br/&gt;chaoticumSeminario] --&gt; WF3[runners/chaoticum.ts&lt;br/&gt;+ Chromium]
+    end
     B -- ports publiés sur 127.0.0.1 --&gt; UI1
     B --&gt; UI2
+    B --&gt; UI3
+    D &lt;-- volume /data --&gt; C3
     D &lt;-- volume /data --&gt; C1
     D &lt;-- volume /data --&gt; C2
     WF1 &amp; WF2 -- host.docker.internal --&gt; O
     WF1 &amp; WF2 --&gt; EXT[(API Albert,&lt;br/&gt;API Zotero)]</pre>
 <pre><code class="language-bash">mkdir -p data
 cp .env.example data/.env      # puis renseigner les valeurs
-docker compose up -d --build   # construit l'image et démarre les deux interfaces
+docker compose up -d --build   # construit l'image et démarre les trois interfaces
 docker compose logs -f         # suivre le démarrage</code></pre>
-<p>L&#39;Atelier d&#39;articles est disponible sur <a href="http://127.0.0.1:7272" target="_blank" rel="noopener">http://127.0.0.1:7272</a> et exploZoteroAnno sur <a href="http://127.0.0.1:7273" target="_blank" rel="noopener">http://127.0.0.1:7273</a> (les ports ne sont publiés que sur la machine hôte). Pour ne démarrer qu&#39;une application : <code>docker compose up -d workflow</code> ou <code>docker compose up -d explo</code>.</p>
+<p>L&#39;Atelier d&#39;articles est disponible sur <a href="http://127.0.0.1:7272" target="_blank" rel="noopener">http://127.0.0.1:7272</a>, exploZoteroAnno sur <a href="http://127.0.0.1:7273" target="_blank" rel="noopener">http://127.0.0.1:7273</a> et chaoticumSeminario sur <a href="http://127.0.0.1:7276" target="_blank" rel="noopener">http://127.0.0.1:7276</a> (les ports ne sont publiés que sur la machine hôte). Pour ne démarrer qu&#39;une application : <code>docker compose up -d workflow</code> (ou <code>explo</code>, <code>chaoticum</code>).</p>
 <p>Le conteneur démarre en root le temps de vérifier le volume : si le dossier <code>data/</code> ou ses fichiers n&#39;appartiennent pas à l&#39;utilisateur <code>node</code> du conteneur (uid 1000), c&#39;est le cas quand ils ont été créés par root sur un serveur Linux, leur propriétaire est rétabli (<code>🔧 Droits du volume /data attribués à l&#39;utilisateur node</code> dans le journal). L&#39;interface et le workflow s&#39;exécutent ensuite sans les droits root. Sur l&#39;hôte, <code>data/</code> appartient donc à l&#39;uid 1000 : l&#39;éditer avec <code>sudo</code> ou avec l&#39;utilisateur d&#39;uid 1000.</p>
 <p>Autres commandes utiles :</p>
 <pre><code class="language-bash">docker compose exec workflow workflow        # workflow de l'Atelier en ligne de commande dans le conteneur
 docker compose exec explo workflow-explo     # workflow exploZoteroAnno en ligne de commande
-docker compose restart                       # redémarrer les deux services (après une modification du .env)
+docker compose exec chaoticum workflow-chaoticum  # génération d'une partition en ligne de commande
+docker compose restart                       # redémarrer les trois services (après une modification du .env)
 docker compose restart explo                 # redémarrer un seul service
 docker compose down                          # arrêter
 docker compose build --no-cache              # reconstruire après une mise à jour du code</code></pre>
@@ -625,7 +675,7 @@ cd /opt/ecosysteme-agents-recherche
 mkdir -p data &amp;&amp; cp .env.example data/.env &amp;&amp; chmod 600 data/.env
 nano data/.env        # OMKS_API_URL=https://omeka.example.org/api et la nouvelle clé d'API
 docker compose up -d --build</code></pre>
-<p>Le fichier <code>docker-compose.yml</code> démarre <strong>deux services</strong> à partir de la même image : <code>workflow</code> (Atelier d&#39;articles, port 7272) et <code>explo</code> (exploZoteroAnno, port 7273), qui partagent le dossier <code>data/</code> (connexions propres à exploZoteroAnno dans <code>data/.env.explo</code>).</p>
+<p>Le fichier <code>docker-compose.yml</code> démarre <strong>trois services</strong> à partir de la même image : <code>workflow</code> (Atelier d&#39;articles, port 7272), <code>explo</code> (exploZoteroAnno, port 7273) et <code>chaoticum</code> (chaoticumSeminario, port 7276), qui partagent le dossier <code>data/</code> (connexions propres dans <code>data/.env.explo</code> et <code>data/.env.chaoticum</code>).</p>
 <p>Sans Docker : installer Node.js 22 (paquets NodeSource), puis <code>npm ci</code> dans <code>/opt/ecosysteme-agents-recherche</code> et créer un service systemd par application, par exemple <code>/etc/systemd/system/workflow-ui.service</code> :</p>
 <pre><code class="language-ini">[Unit]
 Description=Interface du workflow academic-paper-factory
@@ -644,14 +694,18 @@ WantedBy=multi-user.target</code></pre>
 <pre><code class="language-ini">Description=Interface exploZoteroAnno
 ExecStart=/opt/ecosysteme-agents-recherche/node_modules/.bin/tsx src/ui/server.ts explo
 Environment=HOST=127.0.0.1 EXPLO_PORT=7273</code></pre>
+<p>et <code>/etc/systemd/system/workflow-chaoticum.service</code> (installer d&#39;abord Chromium et ses bibliothèques : <code>sudo npx playwright install --with-deps chromium</code>, en tant que l&#39;utilisateur <code>workflow</code> pour le navigateur) :</p>
+<pre><code class="language-ini">Description=Interface chaoticumSeminario
+ExecStart=/opt/ecosysteme-agents-recherche/node_modules/.bin/tsx src/ui/server.ts chaoticum
+Environment=HOST=127.0.0.1 CHAOTICUM_PORT=7276</code></pre>
 <pre><code class="language-bash">useradd --system --home /opt/ecosysteme-agents-recherche workflow
 chown -R workflow:workflow /opt/ecosysteme-agents-recherche
 systemctl daemon-reload &amp;&amp; systemctl enable --now workflow-ui workflow-explo</code></pre>
 <h3 id="8-9-acces-a-l-39-interface"><a class="anchor" href="#8-9-acces-a-l-39-interface">#</a>8.9 Accès à l&#39;interface</h3>
-<p>Les interfaces manipulent les clés d&#39;API : elles n&#39;écoutent que sur <code>127.0.0.1</code> et <strong>ne doivent jamais être exposées sans authentification</strong>. Deux possibilités (pour exploZoteroAnno, remplacer 7272 par 7273) :</p>
+<p>Les interfaces manipulent les clés d&#39;API : elles n&#39;écoutent que sur <code>127.0.0.1</code> et <strong>ne doivent jamais être exposées sans authentification</strong>. Deux possibilités (pour exploZoteroAnno, remplacer 7272 par 7273 ; pour chaoticumSeminario, par 7276) :</p>
 <p><strong>Tunnel SSH</strong> (le plus simple, rien à exposer) :</p>
-<pre><code class="language-bash">ssh -L 7272:127.0.0.1:7272 -L 7273:127.0.0.1:7273 utilisateur@serveur</code></pre>
-<p>puis ouvrir <a href="http://127.0.0.1:7272" target="_blank" rel="noopener">http://127.0.0.1:7272</a> et <a href="http://127.0.0.1:7273" target="_blank" rel="noopener">http://127.0.0.1:7273</a> sur le poste local.</p>
+<pre><code class="language-bash">ssh -L 7272:127.0.0.1:7272 -L 7273:127.0.0.1:7273 -L 7276:127.0.0.1:7276 utilisateur@serveur</code></pre>
+<p>puis ouvrir <a href="http://127.0.0.1:7272" target="_blank" rel="noopener">http://127.0.0.1:7272</a>, <a href="http://127.0.0.1:7273" target="_blank" rel="noopener">http://127.0.0.1:7273</a> et <a href="http://127.0.0.1:7276" target="_blank" rel="noopener">http://127.0.0.1:7276</a> sur le poste local.</p>
 <p><strong>Proxy Apache avec authentification</strong>, sur un sous-domaine en HTTPS :</p>
 <pre><code class="language-bash">htpasswd -c /etc/apache2/.htpasswd-workflow chercheur</code></pre>
 <p>Fichier <code>/etc/apache2/sites-available/workflow.conf</code> :</p>
@@ -674,7 +728,12 @@ systemctl daemon-reload &amp;&amp; systemctl enable --now workflow-ui workflow-e
 &lt;/VirtualHost&gt;</code></pre>
 <pre><code class="language-bash">a2ensite workflow &amp;&amp; systemctl reload apache2
 certbot --apache -d workflow.example.org --redirect</code></pre>
-<p>Pour exploZoteroAnno, créer de la même façon un hôte virtuel <code>explo.example.org</code> (même authentification) qui renvoie vers <code>http://127.0.0.1:7273</code>, puis indiquer les adresses publiques dans <code>.env</code> pour les liens entre les applications : <code>PAPER_URL=https://workflow.example.org</code> et <code>EXPLO_URL=https://explo.example.org</code>.</p>
+<p>Pour exploZoteroAnno, créer de la même façon un hôte virtuel <code>explo.example.org</code> (même authentification) qui renvoie vers <code>http://127.0.0.1:7273</code>, et pour chaoticumSeminario un hôte <code>chaoticum.example.org</code> vers <code>http://127.0.0.1:7276</code>, puis indiquer les adresses publiques dans <code>.env</code> pour les liens entre les applications : <code>PAPER_URL=https://workflow.example.org</code>, <code>EXPLO_URL=https://explo.example.org</code> et <code>CHAOTICUM_URL=https://chaoticum.example.org</code>. Le lecteur de partition (<code>/jouer</code>) est protégé par la même authentification : l&#39;ouvrir sur le poste de présentation avant la séance ; le public n&#39;y accède pas (il contribue par le formulaire Grist).</p>
+<p><strong>Rejeu public de chaoticumSeminario</strong> : le QR code de fin de séance ouvre un rejeu en lecture seule sous <code>/public/</code> (page <code>/public/rejeu?t=&lt;jeton&gt;</code> et deux routes de lecture, sans aucune écriture). Pour le rendre accessible sans mot de passe, ajouter dans l&#39;hôte virtuel HTTPS de chaoticumSeminario, <strong>après</strong> le bloc <code>&lt;Location /&gt;</code> :</p>
+<pre><code class="language-apache">    &lt;LocationMatch &quot;^/public/&quot;&gt;
+        Require all granted
+    &lt;/LocationMatch&gt;</code></pre>
+<p>Le reste de l&#39;application reste protégé. Renseigner aussi <code>CHAOTICUM_URL=https://chaoticum.example.org</code> dans <code>.env</code> pour que le QR code contienne l&#39;adresse publique (sinon, l&#39;adresse de la page du lecteur est utilisée).</p>
 <h3 id="8-10-sauvegardes-et-mises-a-jour"><a class="anchor" href="#8-10-sauvegardes-et-mises-a-jour">#</a>8.10 Sauvegardes et mises à jour</h3>
 <ul>
 <li><p><strong>Base Omeka S</strong> : sauvegarde quotidienne, par exemple dans <code>/etc/cron.daily/omeka-backup</code> :</p>
@@ -682,7 +741,7 @@ certbot --apache -d workflow.example.org --redirect</code></pre>
 mysqldump --single-transaction omeka | gzip &gt; /var/backups/omeka-$(date +%F).sql.gz
 find /var/backups -name &quot;omeka-*.sql.gz&quot; -mtime +30 -delete</code></pre>
 </li>
-<li><p><strong>Fichiers</strong> : sauvegarder <code>/var/www/omeka/files</code> et le dossier <code>data/</code> des applications (<code>.env</code>, <code>.env.explo</code>, <code>workflow.config.json</code>, <code>explo.config.json</code>, <code>workflow.history.json</code>, <code>aap/</code>, <code>resultats/</code>).</p>
+<li><p><strong>Fichiers</strong> : sauvegarder <code>/var/www/omeka/files</code> et le dossier <code>data/</code> des applications (<code>.env</code>, <code>.env.explo</code>, <code>.env.chaoticum</code>, <code>workflow.config.json</code>, <code>explo.config.json</code>, <code>chaoticum.config.json</code>, <code>workflow.history.json</code>, <code>aap/</code>, <code>resultats/</code>).</p>
 </li>
 <li><p><strong>Système</strong> : <code>apt update &amp;&amp; apt upgrade</code> régulièrement (ou le paquet <code>unattended-upgrades</code>).</p>
 </li>
@@ -747,6 +806,26 @@ find /var/backups -name &quot;omeka-*.sql.gz&quot; -mtime +30 -delete</code></pr
 <td>exploZoteroAnno : deux documents différents fusionnés</td>
 <td>même titre et même année (critère de repli)</td>
 <td>décocher <em>Fusionner les documents en double</em>, ou corriger le titre ou la date dans Zotero</td>
+</tr>
+<tr>
+<td>chaoticumSeminario : « Navigateur indisponible » dans le journal</td>
+<td>Chromium de Playwright non installé (installation locale)</td>
+<td><code>npx playwright install chromium</code> ; sans navigateur, le nombre de diapos est lu dans le SVG et aucune copie d&#39;écran n&#39;est décrite</td>
+</tr>
+<tr>
+<td>chaoticumSeminario : « Aucune annotation ni note »</td>
+<td>collection sans surlignage, ou citations trop courtes</td>
+<td>choisir une autre collection, la bibliothèque entière, ou baisser la longueur minimale</td>
+</tr>
+<tr>
+<td>chaoticumSeminario : contributions « Grist 401/403 »</td>
+<td>table des réponses privée</td>
+<td>rendre la table publique en lecture, ou renseigner <code>GRIST_API_KEY</code> sur la page Paramètres</td>
+</tr>
+<tr>
+<td>chaoticumSeminario : une URL proposée ne s&#39;affiche pas</td>
+<td>le site refuse l&#39;affichage dans un iframe (X-Frame-Options, CSP) ou adresse locale refusée</td>
+<td>le lecteur affiche alors un lien à ouvrir dans un nouvel onglet</td>
 </tr>
 <tr>
 <td>exploZoteroAnno : « pas encore indexée » dans l&#39;onglet RAG</td>

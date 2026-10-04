@@ -145,12 +145,13 @@ export class Albert {
   // Recherche et complétion
   // ==========================================
 
-  async search(options: { collectionIds: number[]; query: string; limit?: number; method?: "hybrid" | "semantic" | "lexical"; scoreThreshold?: number }): Promise<{ data: AlbertSearchResult[]; usage: AlbertUsage | null }> {
+  async search(options: { collectionIds: number[]; query: string; limit?: number; method?: "hybrid" | "semantic" | "lexical"; scoreThreshold?: number; metadataFilter?: { key: string; type: "eq" | "sw" | "ew" | "co"; value: string | number } }): Promise<{ data: AlbertSearchResult[]; usage: AlbertUsage | null }> {
     const res = await this.json("/search", "POST", {
       collection_ids: options.collectionIds,
       query: options.query,
       limit: options.limit ?? 10,
       method: options.method ?? "hybrid",
+      ...(options.metadataFilter ? { metadata_filters: options.metadataFilter } : {}),
       // le seuil ne s'applique qu'à la recherche sémantique
       ...(options.method === "semantic" && options.scoreThreshold ? { score_threshold: options.scoreThreshold } : {}),
     });

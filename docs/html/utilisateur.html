@@ -46,7 +46,7 @@
 <div class="layout">
 <main>
 <h1 id="documentation-utilisateur"><a class="anchor" href="#documentation-utilisateur">#</a>Documentation utilisateur</h1>
-<p>L&#39;écosystème d&#39;agents propose deux applications, qui travaillent sur une <strong>collection Zotero</strong> annotée et archivent leurs résultats dans <strong>Omeka S</strong> :</p>
+<p>L&#39;écosystème d&#39;agents propose trois applications, qui travaillent sur une <strong>collection Zotero</strong> annotée et archivent leurs résultats dans <strong>Omeka S</strong> :</p>
 <table>
 <thead>
 <tr>
@@ -67,6 +67,12 @@
 <td><a href="http://127.0.0.1:7273" target="_blank" rel="noopener">http://127.0.0.1:7273</a></td>
 <td>pour <strong>animer une annotation collective</strong> : grille de couleurs commune, participation de chacun, convergences et divergences de lecture, thèmes de discussion</td>
 <td>3</td>
+</tr>
+<tr>
+<td><strong>chaoticumSeminario</strong></td>
+<td><a href="http://127.0.0.1:7276" target="_blank" rel="noopener">http://127.0.0.1:7276</a></td>
+<td>pour <strong>préparer et jouer une conférence participative</strong> : partition d&#39;écrans (citations, diapos, questions, contributions du public, diagrammes), chronomètre, séances enregistrées et rejouables</td>
+<td>4</td>
 </tr>
 </tbody></table>
 <h3 id="la-page-parametres-connexions"><a class="anchor" href="#la-page-parametres-connexions">#</a>La page Paramètres (connexions)</h3>
@@ -446,7 +452,103 @@ Consigne : mobiliser les concepts du graphe et les références de la collection
 <p><strong>Coût</strong> : l&#39;indexation compte la vectorisation du texte déposé (estimation, environ 4 caractères par token, modèle <code>bge-m3</code>) dans le coût de l&#39;analyse ; chaque consultation affiche son propre coût. Albert ne facturant pas ces appels, il s&#39;agit d&#39;estimations faites avec les hypothèses de la configuration (voir <em>Le coût du traitement</em>).</p>
 <h3 id="rapport-et-enregistrement-onglet-rapport"><a class="anchor" href="#rapport-et-enregistrement-onglet-rapport">#</a>Rapport et enregistrement (onglet Rapport)</h3>
 <p>Le rapport reprend participation (dont les documents en double fusionnés), collaborations, thèmes et indexation RAG (collections Albert, documents déposés ou déjà présents), ainsi que les tokens consommés et le coût estimé (énergie, carbone, argent). Chaque analyse crée dans Omeka S un item « Configuration explo-zotero-anno » (classe <code>dcterms:MethodOfInstruction</code>) avec la grille et les paramètres, son statut, sa consommation et, en médias : guide d&#39;annotation, rapport, thèmes, réseau, données de participation et de collaborations. Les documents et annotations de la collection sont enregistrés comme dans l&#39;Atelier d&#39;articles (<code>oa:Annotation</code> avec auteur, couleur, date).</p>
-<h2 id="4-ce-qui-est-enregistre-dans-omeka-s"><a class="anchor" href="#4-ce-qui-est-enregistre-dans-omeka-s">#</a>4. Ce qui est enregistré dans Omeka S</h2>
+<h2 id="4-chaoticumseminario-jouer-une-conference-participative"><a class="anchor" href="#4-chaoticumseminario-jouer-une-conference-participative">#</a>4. chaoticumSeminario : jouer une conférence participative</h2>
+<p><strong>chaoticumSeminario</strong> génère la <strong>partition</strong> d&#39;une conférence, puis la joue. Une partition est une suite d&#39;écrans, calculée pour un <strong>nombre d&#39;écrans</strong> et une <strong>durée</strong> donnés, à partir de cinq types d&#39;écran :</p>
+<table>
+<thead>
+<tr>
+<th>Écran</th>
+<th>Contenu</th>
+<th>Source</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Citation</strong></td>
+<td>un passage surligné ou une note, avec sa référence</td>
+<td>Zotero : toute la bibliothèque ou une collection, tirage au hasard</td>
+</tr>
+<tr>
+<td><strong>Diapo</strong></td>
+<td>une diapo d&#39;une ancienne conférence, affichée dans un iframe</td>
+<td>site <a href="https://samszo.github.io/ConfErrance/" target="_blank" rel="noopener">ConfErrance</a> : présentation au hasard, puis diapo au hasard entre 0 et son nombre de diapos</td>
+</tr>
+<tr>
+<td><strong>Question</strong></td>
+<td>une question ouverte posée au public</td>
+<td>agent Albert, à partir des citations et des copies d&#39;écran des diapos du cycle</td>
+</tr>
+<tr>
+<td><strong>Contributions</strong></td>
+<td>le QR code du formulaire Grist et, dans un iframe, les URL proposées par le public</td>
+<td>formulaire et table des réponses Grist</td>
+</tr>
+<tr>
+<td><strong>Diagramme</strong></td>
+<td>un diagramme qui relie les idées du cycle</td>
+<td>agent Albert (Mermaid), à partir des mêmes citations et diapos</td>
+</tr>
+</tbody></table>
+<pre class="mermaid">flowchart LR
+    subgraph Préparer[&quot;1. Générer la partition&quot;]
+        C[Citations Zotero] --&gt; Q
+        D[Diapos ConfErrance&lt;br/&gt;copies d'écran] --&gt; V[Description&lt;br/&gt;modèle de vision] --&gt; Q[Question et diagramme&lt;br/&gt;modèle analytique]
+    end
+    subgraph Jouer[&quot;2. Jouer la séance&quot;]
+        L[Lecteur plein écran&lt;br/&gt;chronomètre, navigation] --&gt; G[Contributions&lt;br/&gt;QR code Grist]
+    end
+    subgraph Garder[&quot;3. Garder&quot;]
+        O[(Omeka S&lt;br/&gt;partition, séances)] --&gt; RJ[Rejouer une séance]
+    end
+    Préparer --&gt; Jouer --&gt; Garder</pre>
+<h3 id="indexer-les-sources-index-rag"><a class="anchor" href="#indexer-les-sources-index-rag">#</a>Indexer les sources (index RAG)</h3>
+<p>Pour que la génération soit rapide, les deux sources sont <strong>indexées à l&#39;avance</strong> dans deux collections privées Albert (carte <strong>Index RAG</strong> de l&#39;onglet Partition) :</p>
+<ul>
+<li><strong>Indexer la bibliothèque</strong> : un document par référence Zotero (notice), avec ses mots-clés et ses notes placés en tête et répétés (poids réglables), puis ses passages surlignés et son résumé. Quelques secondes ; à relancer après avoir annoté de nouveaux documents (seules les références modifiées sont redéposées).</li>
+<li><strong>Indexer les diapos</strong> : chaque présentation du site est ouverte une fois, ses diapos sont capturées une à une et décrites par le modèle de vision (titre, mots-clés, description), un document par diapo. C&#39;est le traitement long : il est fait par lots (<em>Diapos décrites par indexation</em>, 150 par défaut) et reprend où il s&#39;est arrêté ; le relancer jusqu&#39;à ce que toutes les présentations soient ouvertes.</li>
+</ul>
+<p>La carte indique l&#39;état des deux index. Les indexations sont suivies dans l&#39;onglet Exécution et comptées dans le coût.</p>
+<p><strong>Avec les index</strong> (<em>Générer à partir des index RAG</em>, activé par défaut), la génération ne parcourt plus Zotero et n&#39;analyse plus d&#39;image : le modèle formule une requête par séquence à partir du thème de la conférence, le RAG renvoie les citations et les diapos candidates, puis un seul appel par séquence choisit les plus <strong>cohérentes avec la conférence</strong> et entre elles et rédige la question et le diagramme. Sans index (ou index vides), la génération revient au tirage direct, plus lent.</p>
+<h3 id="regler-la-partition-onglet-partition"><a class="anchor" href="#regler-la-partition-onglet-partition">#</a>Régler la partition (onglet Partition)</h3>
+<ul>
+<li><strong>Conférence</strong> : titre, <strong>description</strong> et <strong>lien vers le programme des conférences</strong> (page web ou PDF, dont le texte est lu à la génération). Avec <strong>Choisir les citations et les diapos d&#39;après le thème de la conférence</strong> (activé par défaut), le modèle retient, parmi des citations candidates tirées au hasard, celles qui se rapprochent le plus du titre, de la description et du programme, et fait de même pour les présentations (d&#39;après les textes de leurs diapos) ; le hasard départage les candidats retenus. Les questions sont aussi rattachées au thème.</li>
+<li><strong>Déroulé</strong> : nombre d&#39;écrans, durée totale, <strong>suite des écrans d&#39;un cycle</strong> (par défaut citation → diapo → question → contributions → diagramme, répétée jusqu&#39;au nombre d&#39;écrans) et <strong>poids</strong> de chaque type : la durée totale est répartie selon ces poids. L&#39;aperçu montre les écrans et leur durée. Dans chaque cycle, la question et le diagramme sont tirés de la citation et de la diapo qui les précèdent.</li>
+<li><strong>Graine du tirage</strong> : vide, chaque génération tire de nouvelles citations et diapos ; reprendre la graine d&#39;une partition (bouton dans la liste des partitions) redonne le même tirage.</li>
+<li><strong>Chronomètre</strong> : vert tant que la durée prévue de l&#39;écran est respectée, orange au-delà (par défaut dès qu&#39;elle est dépassée), rouge quand elle est très dépassée (par défaut au-delà de 125 %).</li>
+<li><strong>Citations</strong> : une collection ou toute la bibliothèque Zotero (celle de la page Paramètres), notes comprises ou non, longueur minimale et maximale.</li>
+<li><strong>Diapos</strong> : adresse du site, dossier local des présentations (à défaut, le dépôt GitHub), présentations écartées.</li>
+<li><strong>Contributions</strong> : lien du formulaire Grist (son QR code s&#39;affiche), lien de la table des réponses (CSV), colonnes de l&#39;URL, du nom et de la date, fréquence de lecture et <strong>validation par l&#39;animateur</strong> (recommandée en public : une URL n&#39;est affichée qu&#39;après un clic). <strong>Lire la table des réponses</strong> vérifie la connexion.</li>
+<li><strong>Modèles Albert</strong> : modèle de vision (description des copies d&#39;écran) et modèle analytique (questions, diagrammes).</li>
+</ul>
+<p>Les <strong>questions</strong> sont courtes (une phrase de 15 mots au plus), pour être lues d&#39;un coup d&#39;œil sur un grand écran.</p>
+<p><strong>Enregistrer et générer</strong> lance le workflow (onglet Exécution) : lecture du programme, choix des citations, rendu des présentations et copie d&#39;écran des diapos tirées, description des copies d&#39;écran, puis question et diagramme de chaque cycle. La partition, son rapport et les copies d&#39;écran sont enregistrés localement et dans Omeka S, avec le coût de la génération (tokens, énergie, carbone, argent).</p>
+<h3 id="jouer-la-partition-lecteur"><a class="anchor" href="#jouer-la-partition-lecteur">#</a>Jouer la partition (lecteur)</h3>
+<h3 id="modifier-une-etape-de-la-partition"><a class="anchor" href="#modifier-une-etape-de-la-partition">#</a>Modifier une étape de la partition</h3>
+<p>Dans <strong>Partitions et séances</strong>, <strong>Séances</strong> affiche le <strong>déroulé</strong> de la partition : chaque étape peut être modifiée (<strong>Modifier</strong>) avant de la jouer :</p>
+<ul>
+<li>durée de l&#39;étape (les débuts des étapes suivantes et la durée totale sont recalculés) ;</li>
+<li>citation : texte, commentaire, auteurs, année, titre, page ;</li>
+<li>diapo : présentation et numéro de diapo, avec un aperçu (la copie d&#39;écran et sa description ne correspondant plus, elles sont effacées) ;</li>
+<li>question : texte et intention ;</li>
+<li>diagramme : titre et code Mermaid, avec un aperçu en direct (un diagramme invalide peut être réparé automatiquement).</li>
+</ul>
+<p>La partition modifiée est enregistrée localement et remplace la précédente dans Omeka S.</p>
+<h3 id="jouer-la-partition-lecteur"><a class="anchor" href="#jouer-la-partition-lecteur">#</a>Jouer la partition (lecteur)</h3>
+<p>Dans l&#39;onglet <strong>Partitions et séances</strong>, <strong>Jouer</strong> ouvre le lecteur dans un nouvel onglet (à passer en plein écran sur l&#39;écran de projection).</p>
+<ul>
+<li><strong>Démarrer la séance</strong> lance l&#39;enregistrement ; <strong>Parcourir sans enregistrer</strong> permet de répéter. Le lien <strong>← Partitions</strong> ramène à la liste des partitions.</li>
+<li><strong>QR code de participation</strong> : il reste affiché dans un coin de chaque écran (clic ou touche Q pour le réduire) ; sur les écrans « Contributions », il est affiché en grand.</li>
+<li><strong>Chronomètre</strong> : temps passé sur l&#39;écran / durée prévue, en vert, orange puis rouge ; à côté, le temps de la séance et l&#39;avance ou le retard sur la partition.</li>
+<li><strong>Navigation</strong> : écran précédent ou suivant (← →), début et fin, aller à un écran (numéro, touche G), <strong>revenir</strong> à l&#39;écran affiché avant le dernier saut (↩, touche R), plein écran (F) ; la barre colorée du bas montre tous les écrans (clic pour y aller).</li>
+<li><strong>Contributions</strong> : le public flashe le QR code et propose une adresse web dans le formulaire Grist ; les réponses sont lues toutes les quelques secondes. Chaque contribution est rattachée à l&#39;écran affiché quand elle arrive. Sur un écran « Contributions », l&#39;animateur choisit l&#39;URL à afficher (<strong>Afficher</strong>) ; un site qui refuse l&#39;affichage intégré est remplacé par un lien. Il peut aussi <strong>modifier</strong> l&#39;adresse (pour un lien de redirection Google, l&#39;adresse de destination est proposée) ou <strong>supprimer</strong> la contribution : dans la table Grist si une clé Grist avec droit d&#39;écriture est renseignée (<code>GRIST_API_KEY</code>, page Paramètres), sinon pour la séance seulement ; les modifications sont enregistrées avec la séance et reproduites au rejeu.</li>
+<li><strong>Diagrammes</strong> : zoom à la molette ou avec les boutons + et −, déplacement en faisant glisser, ⟲ pour ajuster le diagramme à l&#39;écran.</li>
+<li><strong>Terminer et enregistrer</strong> enregistre la séance dans Omeka S : écrans parcourus (heure, temps passé, durée prévue, couleur du chronomètre) et contributions (reçues, affichées). Une séance interrompue (onglet fermé) est proposée à la reprise à la prochaine ouverture du lecteur.</li>
+</ul>
+<h3 id="partager-le-rejeu-qr-code-de-fin-de-seance"><a class="anchor" href="#partager-le-rejeu-qr-code-de-fin-de-seance">#</a>Partager le rejeu (QR code de fin de séance)</h3>
+<p>À la fin de la séance (<strong>Terminer et enregistrer</strong>), le lecteur affiche le <strong>QR code d&#39;un lien public</strong> qui ouvre directement le rejeu de cette séance : le public peut le flasher pour revoir la conférence. Ce lien est en <strong>lecture seule</strong> : on peut parcourir et rejouer la séance, mais plus participer (pas de QR code du formulaire) ni modifier ou supprimer les contributions, et il ne donne accès à rien d&#39;autre de l&#39;application. Pour une séance déjà enregistrée, le bouton <strong>Lien public</strong> de la liste des séances affiche le même QR code.</p>
+<p>Le lien contient un jeton aléatoire propre à la séance. Pour qu&#39;il soit accessible sans mot de passe, le chemin <code>/public/</code> doit être exempté de l&#39;authentification du serveur (voir la documentation d&#39;installation, section 8.9), et l&#39;adresse publique de l&#39;application renseignée (<code>CHAOTICUM_URL</code>).</p>
+<h3 id="rejouer-une-seance"><a class="anchor" href="#rejouer-une-seance">#</a>Rejouer une séance</h3>
+<p><strong>Séances</strong> (dans la liste des partitions) affiche les séances jouées, leur rapport et la partition ; <strong>Rejouer</strong> ouvre le lecteur en mode rejeu : les écrans défilent selon les temps enregistrés, à la vitesse choisie (×1 à ×30), et les contributions apparaissent au moment où elles ont été reçues et affichées. Lecture et pause : bouton ⏯ ou barre d&#39;espace.</p>
+<h2 id="5-ce-qui-est-enregistre-dans-omeka-s"><a class="anchor" href="#5-ce-qui-est-enregistre-dans-omeka-s">#</a>5. Ce qui est enregistré dans Omeka S</h2>
 <pre class="mermaid">flowchart TD
     COL[Collection Zotero&lt;br/&gt;bibo:Collection] --- CFG[Configuration d'exécution&lt;br/&gt;dcterms:MethodOfInstruction]
     AAP[Appel à propositions&lt;br/&gt;bibo:CallForPapers] -- dcterms:relation --&gt; COL
@@ -468,9 +570,10 @@ Consigne : mobiliser les concepts du graphe et les références de la collection
 <li>Chaque <strong>annotation</strong> porte le passage, votre commentaire, la couleur et le positionnement, les marqueurs (liés aux concepts), le code de la grille, son auteur et sa date (<code>dcterms:created</code>).</li>
 <li>Un <strong>concept</strong> n&#39;est jamais créé en double : avant de le créer, le workflow cherche un concept de même identifiant ou de même titre.</li>
 <li>exploZoteroAnno ajoute les <strong>modèles de prompt RAG</strong> (titre, description, gabarit) et les <strong>réponses RAG</strong> enregistrées (question, réponse, documents cités, modèle de prompt, coût et extraits dans <code>curation:data</code>, réponse complète en Markdown en média), ainsi que la trace JSON de l&#39;indexation sur chaque document.</li>
+<li>chaoticumSeminario ajoute les <strong>partitions</strong> (item de configuration avec la partition JSON, son rapport et les copies d&#39;écran des diapos) et les <strong>séances</strong> (item <code>bibo:Performance</code> « Participation chaoticumSeminario », relié à la partition, avec le fichier JSON complet de la séance).</li>
 <li>Chaque <strong>exécution</strong>, de l&#39;une ou l&#39;autre application, crée un item de configuration (« Configuration academic-paper-factory » ou « Configuration explo-zotero-anno ») : configuration (sans les clés d&#39;API), statut, tokens consommés, coût estimé et, en médias, ses documents de fin d&#39;analyse.</li>
 </ul>
-<h2 id="5-questions-frequentes"><a class="anchor" href="#5-questions-frequentes">#</a>5. Questions fréquentes</h2>
+<h2 id="6-questions-frequentes"><a class="anchor" href="#6-questions-frequentes">#</a>6. Questions fréquentes</h2>
 <p><strong>Puis-je modifier le plan de la proposition ?</strong> Oui, dans <em>Paramètres › Proposition d&#39;article › Plan de la proposition</em>. Les titres et leur ordre sont respectés par le rédacteur.</p>
 <p><strong>Pourquoi un document n&#39;est-il pas retraité ?</strong> Son extraction est déjà faite (<code>curation:access</code>). Pour la relancer, vider cette propriété sur l&#39;item du document dans Omeka S.</p>
 <p><strong>Une nouvelle note Zotero est-elle prise en compte ?</strong> Oui : elle est ajoutée aux annotations du document dans Omeka S, et ses marqueurs deviennent des concepts, sans relancer l&#39;extraction du document.</p>
@@ -480,10 +583,12 @@ Consigne : mobiliser les concepts du graphe et les références de la collection
 <p><strong>exploZoteroAnno : pourquoi le RAG ne trouve-t-il rien ?</strong> La collection n&#39;est pas encore indexée (lancer une analyse avec <em>Indexer les documents dans Albert</em>), ou ses documents sont des liens sans texte. L&#39;indexation par Albert peut aussi prendre quelques instants après le dépôt.</p>
 <p><strong>exploZoteroAnno : que voit Albert ?</strong> Le texte extrait des documents de la collection, envoyé à l&#39;API Albert (plateforme de l&#39;État) dans des collections privées propres à la clé d&#39;API. Décocher <em>Indexer les documents dans Albert</em> pour ne rien envoyer.</p>
 <p><strong>exploZoteroAnno : comment sont repérés les documents en double ?</strong> Même fichier, même DOI, même URL, ou même titre (assez long) et même année. Un seul exemplaire est enregistré dans Omeka S, de préférence le PDF ; les annotations, notes et marqueurs de tous les exemplaires y sont cumulés. Pour désactiver la fusion : <em>Grille › Analyse › Fusionner les documents en double</em>.</p>
+<p><strong>chaoticumSeminario : pourquoi une diapo n&#39;est-elle pas décrite ?</strong> La copie d&#39;écran demande Chromium (Playwright) : sans lui, la diapo est tirée et affichée, mais la question et le diagramme ne s&#39;appuient que sur les citations.</p>
+<p><strong>chaoticumSeminario : le public voit-il le lecteur ?</strong> Non : le lecteur reste sur le poste de l&#39;animateur (derrière l&#39;authentification) ; le public contribue uniquement par le formulaire Grist.</p>
 <p><strong>Le rédacteur peut-il inventer des références ?</strong> Il ne reçoit que les clés BibTeX de la collection et doit citer uniquement celles-ci (syntaxe Pandoc <code>[@clé, p. 12]</code>) ; la relecture épistémologique vérifie l&#39;usage des références.</p>
 
 </main>
-<nav class="toc"><strong>Sur cette page</strong><a class="l3" href="#la-page-parametres-connexions">La page Paramètres (connexions)</a><a class="l2" href="#1-preparer-le-corpus-dans-zotero">1. Préparer le corpus dans Zotero</a><a class="l3" href="#la-collection">La collection</a><a class="l3" href="#surligner-avec-une-couleur-qui-indique-votre-positionnement">Surligner avec une couleur qui indique votre positionnement</a><a class="l3" href="#notes-et-marqueurs">Notes et marqueurs</a><a class="l3" href="#coder-les-phrases-pour-l-39-accord-inter-juges">Coder les phrases pour l&#39;accord inter-juges</a><a class="l2" href="#2-atelier-d-39-articles-utiliser-l-39-interface">2. Atelier d&#39;articles : utiliser l&#39;interface</a><a class="l3" href="#configuration">Configuration</a><a class="l3" href="#execution">Exécution</a><a class="l3" href="#resultats">Résultats</a><a class="l3" href="#appels-traites">Appels traités</a><a class="l2" href="#3-explozoteroanno-animer-une-annotation-collective">3. exploZoteroAnno : animer une annotation collective</a><a class="l3" href="#parametrer-la-grille-onglet-grille">Paramétrer la grille (onglet Grille)</a><a class="l3" href="#suivre-le-traitement-onglet-execution">Suivre le traitement (onglet Exécution)</a><a class="l3" href="#recharger-une-analyse-deja-effectuee-onglet-analyses">Recharger une analyse déjà effectuée (onglet Analyses)</a><a class="l3" href="#visualiser-la-participation-onglet-participation">Visualiser la participation (onglet Participation)</a><a class="l3" href="#analyser-les-collaborations-onglet-collaborations">Analyser les collaborations (onglet Collaborations)</a><a class="l3" href="#generer-des-themes-de-discussion-onglet-themes">Générer des thèmes de discussion (onglet Thèmes)</a><a class="l3" href="#interroger-la-collection-onglet-rag">Interroger la collection (onglet RAG)</a><a class="l3" href="#rapport-et-enregistrement-onglet-rapport">Rapport et enregistrement (onglet Rapport)</a><a class="l2" href="#4-ce-qui-est-enregistre-dans-omeka-s">4. Ce qui est enregistré dans Omeka S</a><a class="l2" href="#5-questions-frequentes">5. Questions fréquentes</a></nav>
+<nav class="toc"><strong>Sur cette page</strong><a class="l3" href="#la-page-parametres-connexions">La page Paramètres (connexions)</a><a class="l2" href="#1-preparer-le-corpus-dans-zotero">1. Préparer le corpus dans Zotero</a><a class="l3" href="#la-collection">La collection</a><a class="l3" href="#surligner-avec-une-couleur-qui-indique-votre-positionnement">Surligner avec une couleur qui indique votre positionnement</a><a class="l3" href="#notes-et-marqueurs">Notes et marqueurs</a><a class="l3" href="#coder-les-phrases-pour-l-39-accord-inter-juges">Coder les phrases pour l&#39;accord inter-juges</a><a class="l2" href="#2-atelier-d-39-articles-utiliser-l-39-interface">2. Atelier d&#39;articles : utiliser l&#39;interface</a><a class="l3" href="#configuration">Configuration</a><a class="l3" href="#execution">Exécution</a><a class="l3" href="#resultats">Résultats</a><a class="l3" href="#appels-traites">Appels traités</a><a class="l2" href="#3-explozoteroanno-animer-une-annotation-collective">3. exploZoteroAnno : animer une annotation collective</a><a class="l3" href="#parametrer-la-grille-onglet-grille">Paramétrer la grille (onglet Grille)</a><a class="l3" href="#suivre-le-traitement-onglet-execution">Suivre le traitement (onglet Exécution)</a><a class="l3" href="#recharger-une-analyse-deja-effectuee-onglet-analyses">Recharger une analyse déjà effectuée (onglet Analyses)</a><a class="l3" href="#visualiser-la-participation-onglet-participation">Visualiser la participation (onglet Participation)</a><a class="l3" href="#analyser-les-collaborations-onglet-collaborations">Analyser les collaborations (onglet Collaborations)</a><a class="l3" href="#generer-des-themes-de-discussion-onglet-themes">Générer des thèmes de discussion (onglet Thèmes)</a><a class="l3" href="#interroger-la-collection-onglet-rag">Interroger la collection (onglet RAG)</a><a class="l3" href="#rapport-et-enregistrement-onglet-rapport">Rapport et enregistrement (onglet Rapport)</a><a class="l2" href="#4-chaoticumseminario-jouer-une-conference-participative">4. chaoticumSeminario : jouer une conférence participative</a><a class="l3" href="#indexer-les-sources-index-rag">Indexer les sources (index RAG)</a><a class="l3" href="#regler-la-partition-onglet-partition">Régler la partition (onglet Partition)</a><a class="l3" href="#jouer-la-partition-lecteur">Jouer la partition (lecteur)</a><a class="l3" href="#modifier-une-etape-de-la-partition">Modifier une étape de la partition</a><a class="l3" href="#jouer-la-partition-lecteur">Jouer la partition (lecteur)</a><a class="l3" href="#partager-le-rejeu-qr-code-de-fin-de-seance">Partager le rejeu (QR code de fin de séance)</a><a class="l3" href="#rejouer-une-seance">Rejouer une séance</a><a class="l2" href="#5-ce-qui-est-enregistre-dans-omeka-s">5. Ce qui est enregistré dans Omeka S</a><a class="l2" href="#6-questions-frequentes">6. Questions fréquentes</a></nav>
 </div>
 <script type="module">
 import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";

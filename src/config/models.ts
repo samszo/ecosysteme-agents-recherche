@@ -11,3 +11,6 @@ const albertProvider = createOpenAI({
 // 2. Utilisez explicitement .chat() au lieu de l'appel direct au provider
 export const ALBERT_MODEL_ANALYTICS = albertProvider.chat(workflowConfig.models.analytics);
 export const ALBERT_MODEL_FAST = albertProvider.chat(workflowConfig.models.fast);
+
+// modèle Albert désigné par son identifiant (ex. modèle de vision choisi dans la configuration d'un workflow)
+export const albertModel = (id: string) => albertProvider.chat(id);

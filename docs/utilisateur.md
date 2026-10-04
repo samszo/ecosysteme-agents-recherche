@@ -1,11 +1,12 @@
 # Documentation utilisateur
 
-L'écosystème d'agents propose deux applications, qui travaillent sur une **collection Zotero** annotée et archivent leurs résultats dans **Omeka S** :
+L'écosystème d'agents propose trois applications, qui travaillent sur une **collection Zotero** annotée et archivent leurs résultats dans **Omeka S** :
 
 | Application | Adresse | Quand l'utiliser | Section |
 |---|---|---|---|
 | **Atelier d'articles** | http://127.0.0.1:7272 | pour **répondre à un appel à propositions (AAP)** : analyse des attendus de l'appel, concepts de la collection, accord entre annotateurs, **proposition d'article** avec références, citations et mots-clés | 2 |
 | **exploZoteroAnno** | http://127.0.0.1:7273 | pour **animer une annotation collective** : grille de couleurs commune, participation de chacun, convergences et divergences de lecture, thèmes de discussion | 3 |
+| **chaoticumSeminario** | http://127.0.0.1:7276 | pour **préparer et jouer une conférence participative** : partition d'écrans (citations, diapos, questions, contributions du public, diagrammes), chronomètre, séances enregistrées et rejouables | 4 |
 
 ### La page Paramètres (connexions)
 
@@ -312,7 +313,96 @@ flowchart LR
 
 Le rapport reprend participation (dont les documents en double fusionnés), collaborations, thèmes et indexation RAG (collections Albert, documents déposés ou déjà présents), ainsi que les tokens consommés et le coût estimé (énergie, carbone, argent). Chaque analyse crée dans Omeka S un item « Configuration explo-zotero-anno » (classe `dcterms:MethodOfInstruction`) avec la grille et les paramètres, son statut, sa consommation et, en médias : guide d'annotation, rapport, thèmes, réseau, données de participation et de collaborations. Les documents et annotations de la collection sont enregistrés comme dans l'Atelier d'articles (`oa:Annotation` avec auteur, couleur, date).
 
-## 4. Ce qui est enregistré dans Omeka S
+## 4. chaoticumSeminario : jouer une conférence participative
+
+**chaoticumSeminario** génère la **partition** d'une conférence, puis la joue. Une partition est une suite d'écrans, calculée pour un **nombre d'écrans** et une **durée** donnés, à partir de cinq types d'écran :
+
+| Écran | Contenu | Source |
+|---|---|---|
+| **Citation** | un passage surligné ou une note, avec sa référence | Zotero : toute la bibliothèque ou une collection, tirage au hasard |
+| **Diapo** | une diapo d'une ancienne conférence, affichée dans un iframe | site [ConfErrance](https://samszo.github.io/ConfErrance/) : présentation au hasard, puis diapo au hasard entre 0 et son nombre de diapos |
+| **Question** | une question ouverte posée au public | agent Albert, à partir des citations et des copies d'écran des diapos du cycle |
+| **Contributions** | le QR code du formulaire Grist et, dans un iframe, les URL proposées par le public | formulaire et table des réponses Grist |
+| **Diagramme** | un diagramme qui relie les idées du cycle | agent Albert (Mermaid), à partir des mêmes citations et diapos |
+
+```mermaid
+flowchart LR
+    subgraph Préparer["1. Générer la partition"]
+        C[Citations Zotero] --> Q
+        D[Diapos ConfErrance<br/>copies d'écran] --> V[Description<br/>modèle de vision] --> Q[Question et diagramme<br/>modèle analytique]
+    end
+    subgraph Jouer["2. Jouer la séance"]
+        L[Lecteur plein écran<br/>chronomètre, navigation] --> G[Contributions<br/>QR code Grist]
+    end
+    subgraph Garder["3. Garder"]
+        O[(Omeka S<br/>partition, séances)] --> RJ[Rejouer une séance]
+    end
+    Préparer --> Jouer --> Garder
+```
+
+### Indexer les sources (index RAG)
+
+Pour que la génération soit rapide, les deux sources sont **indexées à l'avance** dans deux collections privées Albert (carte **Index RAG** de l'onglet Partition) :
+
+- **Indexer la bibliothèque** : un document par référence Zotero (notice), avec ses mots-clés et ses notes placés en tête et répétés (poids réglables), puis ses passages surlignés et son résumé. Quelques secondes ; à relancer après avoir annoté de nouveaux documents (seules les références modifiées sont redéposées).
+- **Indexer les diapos** : chaque présentation du site est ouverte une fois, ses diapos sont capturées une à une et décrites par le modèle de vision (titre, mots-clés, description), un document par diapo. C'est le traitement long : il est fait par lots (*Diapos décrites par indexation*, 150 par défaut) et reprend où il s'est arrêté ; le relancer jusqu'à ce que toutes les présentations soient ouvertes.
+
+La carte indique l'état des deux index. Les indexations sont suivies dans l'onglet Exécution et comptées dans le coût.
+
+**Avec les index** (*Générer à partir des index RAG*, activé par défaut), la génération ne parcourt plus Zotero et n'analyse plus d'image : le modèle formule une requête par séquence à partir du thème de la conférence, le RAG renvoie les citations et les diapos candidates, puis un seul appel par séquence choisit les plus **cohérentes avec la conférence** et entre elles et rédige la question et le diagramme. Sans index (ou index vides), la génération revient au tirage direct, plus lent.
+
+### Régler la partition (onglet Partition)
+
+- **Conférence** : titre, **description** et **lien vers le programme des conférences** (page web ou PDF, dont le texte est lu à la génération). Avec **Choisir les citations et les diapos d'après le thème de la conférence** (activé par défaut), le modèle retient, parmi des citations candidates tirées au hasard, celles qui se rapprochent le plus du titre, de la description et du programme, et fait de même pour les présentations (d'après les textes de leurs diapos) ; le hasard départage les candidats retenus. Les questions sont aussi rattachées au thème.
+- **Déroulé** : nombre d'écrans, durée totale, **suite des écrans d'un cycle** (par défaut citation → diapo → question → contributions → diagramme, répétée jusqu'au nombre d'écrans) et **poids** de chaque type : la durée totale est répartie selon ces poids. L'aperçu montre les écrans et leur durée. Dans chaque cycle, la question et le diagramme sont tirés de la citation et de la diapo qui les précèdent.
+- **Graine du tirage** : vide, chaque génération tire de nouvelles citations et diapos ; reprendre la graine d'une partition (bouton dans la liste des partitions) redonne le même tirage.
+- **Chronomètre** : vert tant que la durée prévue de l'écran est respectée, orange au-delà (par défaut dès qu'elle est dépassée), rouge quand elle est très dépassée (par défaut au-delà de 125 %).
+- **Citations** : une collection ou toute la bibliothèque Zotero (celle de la page Paramètres), notes comprises ou non, longueur minimale et maximale.
+- **Diapos** : adresse du site, dossier local des présentations (à défaut, le dépôt GitHub), présentations écartées.
+- **Contributions** : lien du formulaire Grist (son QR code s'affiche), lien de la table des réponses (CSV), colonnes de l'URL, du nom et de la date, fréquence de lecture et **validation par l'animateur** (recommandée en public : une URL n'est affichée qu'après un clic). **Lire la table des réponses** vérifie la connexion.
+- **Modèles Albert** : modèle de vision (description des copies d'écran) et modèle analytique (questions, diagrammes).
+
+Les **questions** sont courtes (une phrase de 15 mots au plus), pour être lues d'un coup d'œil sur un grand écran.
+
+**Enregistrer et générer** lance le workflow (onglet Exécution) : lecture du programme, choix des citations, rendu des présentations et copie d'écran des diapos tirées, description des copies d'écran, puis question et diagramme de chaque cycle. La partition, son rapport et les copies d'écran sont enregistrés localement et dans Omeka S, avec le coût de la génération (tokens, énergie, carbone, argent).
+
+### Jouer la partition (lecteur)
+
+### Modifier une étape de la partition
+
+Dans **Partitions et séances**, **Séances** affiche le **déroulé** de la partition : chaque étape peut être modifiée (**Modifier**) avant de la jouer :
+
+- durée de l'étape (les débuts des étapes suivantes et la durée totale sont recalculés) ;
+- citation : texte, commentaire, auteurs, année, titre, page ;
+- diapo : présentation et numéro de diapo, avec un aperçu (la copie d'écran et sa description ne correspondant plus, elles sont effacées) ;
+- question : texte et intention ;
+- diagramme : titre et code Mermaid, avec un aperçu en direct (un diagramme invalide peut être réparé automatiquement).
+
+La partition modifiée est enregistrée localement et remplace la précédente dans Omeka S.
+
+### Jouer la partition (lecteur)
+
+Dans l'onglet **Partitions et séances**, **Jouer** ouvre le lecteur dans un nouvel onglet (à passer en plein écran sur l'écran de projection).
+
+- **Démarrer la séance** lance l'enregistrement ; **Parcourir sans enregistrer** permet de répéter. Le lien **← Partitions** ramène à la liste des partitions.
+- **QR code de participation** : il reste affiché dans un coin de chaque écran (clic ou touche Q pour le réduire) ; sur les écrans « Contributions », il est affiché en grand.
+- **Chronomètre** : temps passé sur l'écran / durée prévue, en vert, orange puis rouge ; à côté, le temps de la séance et l'avance ou le retard sur la partition.
+- **Navigation** : écran précédent ou suivant (← →), début et fin, aller à un écran (numéro, touche G), **revenir** à l'écran affiché avant le dernier saut (↩, touche R), plein écran (F) ; la barre colorée du bas montre tous les écrans (clic pour y aller).
+- **Contributions** : le public flashe le QR code et propose une adresse web dans le formulaire Grist ; les réponses sont lues toutes les quelques secondes. Chaque contribution est rattachée à l'écran affiché quand elle arrive. Sur un écran « Contributions », l'animateur choisit l'URL à afficher (**Afficher**) ; un site qui refuse l'affichage intégré est remplacé par un lien. Il peut aussi **modifier** l'adresse (pour un lien de redirection Google, l'adresse de destination est proposée) ou **supprimer** la contribution : dans la table Grist si une clé Grist avec droit d'écriture est renseignée (`GRIST_API_KEY`, page Paramètres), sinon pour la séance seulement ; les modifications sont enregistrées avec la séance et reproduites au rejeu.
+- **Diagrammes** : zoom à la molette ou avec les boutons + et −, déplacement en faisant glisser, ⟲ pour ajuster le diagramme à l'écran.
+- **Terminer et enregistrer** enregistre la séance dans Omeka S : écrans parcourus (heure, temps passé, durée prévue, couleur du chronomètre) et contributions (reçues, affichées). Une séance interrompue (onglet fermé) est proposée à la reprise à la prochaine ouverture du lecteur.
+
+### Partager le rejeu (QR code de fin de séance)
+
+À la fin de la séance (**Terminer et enregistrer**), le lecteur affiche le **QR code d'un lien public** qui ouvre directement le rejeu de cette séance : le public peut le flasher pour revoir la conférence. Ce lien est en **lecture seule** : on peut parcourir et rejouer la séance, mais plus participer (pas de QR code du formulaire) ni modifier ou supprimer les contributions, et il ne donne accès à rien d'autre de l'application. Pour une séance déjà enregistrée, le bouton **Lien public** de la liste des séances affiche le même QR code.
+
+Le lien contient un jeton aléatoire propre à la séance. Pour qu'il soit accessible sans mot de passe, le chemin `/public/` doit être exempté de l'authentification du serveur (voir la documentation d'installation, section 8.9), et l'adresse publique de l'application renseignée (`CHAOTICUM_URL`).
+
+### Rejouer une séance
+
+**Séances** (dans la liste des partitions) affiche les séances jouées, leur rapport et la partition ; **Rejouer** ouvre le lecteur en mode rejeu : les écrans défilent selon les temps enregistrés, à la vitesse choisie (×1 à ×30), et les contributions apparaissent au moment où elles ont été reçues et affichées. Lecture et pause : bouton ⏯ ou barre d'espace.
+
+## 5. Ce qui est enregistré dans Omeka S
 
 ```mermaid
 flowchart TD
@@ -338,9 +428,10 @@ Les deux applications utilisent les mêmes classes : un document, une annotation
 - Chaque **annotation** porte le passage, votre commentaire, la couleur et le positionnement, les marqueurs (liés aux concepts), le code de la grille, son auteur et sa date (`dcterms:created`).
 - Un **concept** n'est jamais créé en double : avant de le créer, le workflow cherche un concept de même identifiant ou de même titre.
 - exploZoteroAnno ajoute les **modèles de prompt RAG** (titre, description, gabarit) et les **réponses RAG** enregistrées (question, réponse, documents cités, modèle de prompt, coût et extraits dans `curation:data`, réponse complète en Markdown en média), ainsi que la trace JSON de l'indexation sur chaque document.
+- chaoticumSeminario ajoute les **partitions** (item de configuration avec la partition JSON, son rapport et les copies d'écran des diapos) et les **séances** (item `bibo:Performance` « Participation chaoticumSeminario », relié à la partition, avec le fichier JSON complet de la séance).
 - Chaque **exécution**, de l'une ou l'autre application, crée un item de configuration (« Configuration academic-paper-factory » ou « Configuration explo-zotero-anno ») : configuration (sans les clés d'API), statut, tokens consommés, coût estimé et, en médias, ses documents de fin d'analyse.
 
-## 5. Questions fréquentes
+## 6. Questions fréquentes
 
 **Puis-je modifier le plan de la proposition ?** Oui, dans *Paramètres › Proposition d'article › Plan de la proposition*. Les titres et leur ordre sont respectés par le rédacteur.
 
@@ -359,5 +450,9 @@ Les deux applications utilisent les mêmes classes : un document, une annotation
 **exploZoteroAnno : que voit Albert ?** Le texte extrait des documents de la collection, envoyé à l'API Albert (plateforme de l'État) dans des collections privées propres à la clé d'API. Décocher *Indexer les documents dans Albert* pour ne rien envoyer.
 
 **exploZoteroAnno : comment sont repérés les documents en double ?** Même fichier, même DOI, même URL, ou même titre (assez long) et même année. Un seul exemplaire est enregistré dans Omeka S, de préférence le PDF ; les annotations, notes et marqueurs de tous les exemplaires y sont cumulés. Pour désactiver la fusion : *Grille › Analyse › Fusionner les documents en double*.
+
+**chaoticumSeminario : pourquoi une diapo n'est-elle pas décrite ?** La copie d'écran demande Chromium (Playwright) : sans lui, la diapo est tirée et affichée, mais la question et le diagramme ne s'appuient que sur les citations.
+
+**chaoticumSeminario : le public voit-il le lecteur ?** Non : le lecteur reste sur le poste de l'animateur (derrière l'authentification) ; le public contribue uniquement par le formulaire Grist.
 
 **Le rédacteur peut-il inventer des références ?** Il ne reçoit que les clés BibTeX de la collection et doit citer uniquement celles-ci (syntaxe Pandoc `[@clé, p. 12]`) ; la relecture épistémologique vérifie l'usage des références.

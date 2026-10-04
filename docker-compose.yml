@@ -1,5 +1,5 @@
-# Deux applications, deux serveurs (même image) :
-#   Atelier d'articles : http://127.0.0.1:7272   exploZoteroAnno : http://127.0.0.1:7273
+# Trois applications, trois serveurs (même image) :
+#   Atelier d'articles : http://127.0.0.1:7272   exploZoteroAnno : http://127.0.0.1:7273   chaoticumSeminario : http://127.0.0.1:7276
 # Lancement : docker compose up -d
 x-common: &common
   build: .
@@ -33,3 +33,13 @@ services:
       EXPLO_PORT: 7273
     ports:
       - "127.0.0.1:7273:7273"
+
+  chaoticum:
+    <<: *common
+    container_name: ecosysteme-agents-recherche-chaoticum
+    environment:
+      WORKFLOW_APP: chaoticum
+      HOST: 0.0.0.0
+      CHAOTICUM_PORT: 7276
+    ports:
+      - "127.0.0.1:7276:7276"

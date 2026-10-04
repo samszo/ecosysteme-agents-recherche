@@ -17,7 +17,8 @@ export async function saveWorkflowConfig(
   const config = { ...(options.config ?? workflowConfig), input, runId, startedAt: now };
   const zUserId = process.env.ZOTERO_USER_ID;
   // la configuration est rattachée à l'item de la collection Zotero traitée
-  const collectionItemId = await (await getZoteroCollections()).itemId(input.zoteroCollection).catch(() => null);
+  // (pas de collection : citations tirées de toute la bibliothèque, chaoticumSeminario)
+  const collectionItemId = input.zoteroCollection ? await (await getZoteroCollections()).itemId(input.zoteroCollection).catch(() => null) : null;
 
   const { configClass } = workflowConfig.omeka;
   const item = await omk.createItem({
@@ -27,7 +28,7 @@ export async function saveWorkflowConfig(
     "dcterms:identifier": runId,
     "dcterms:date": now,
     "dcterms:description": JSON.stringify(config, null, 2),
-    ...(zUserId ? { "dcterms:source": { u: zoteroWebUrl(`collections/${input.zoteroCollection}`), l: `Collection Zotero ${input.zoteroCollection}` } } : {}),
+    ...(zUserId && input.zoteroCollection ? { "dcterms:source": { u: zoteroWebUrl(`collections/${input.zoteroCollection}`), l: `Collection Zotero ${input.zoteroCollection}` } } : {}),
     ...(collectionItemId ? { "dcterms:isPartOf": { rid: collectionItemId } } : {}),
     "curation:status": "running",
     "curation:dateStart": now,

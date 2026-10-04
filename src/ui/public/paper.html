@@ -85,6 +85,7 @@
     <h1>Atelier d'articles <small>workflow academic-paper-factory</small></h1>
     <div class="spacer"></div>
     <a id="link-explo" href="#" style="color:var(--accent);font-size:14px">exploZoteroAnno</a>
+    <a id="link-chaoticum" href="#" style="color:var(--accent);font-size:14px">chaoticumSeminario</a>
     <a href="/parametres" style="color:var(--accent);font-size:14px" title="Connexions Albert, Zotero, Omeka S">⚙ Paramètres</a>
     <a href="/docs/" target="_blank" style="color:var(--accent);font-size:14px">Documentation</a>
     <span id="status" class="badge">aucun traitement</span>
@@ -650,7 +651,7 @@ $("#btn-history").onclick = loadHistory;
 loadSettings().catch(e => toast("Erreur de chargement : " + e.message));
 connectEvents();
 // lien vers l'autre application (serveur et port distincts)
-api("/api/apps").then(a => { $("#link-explo").href = a.apps.explo.url; }).catch(() => {});
+api("/api/apps").then(a => { $("#link-explo").href = a.apps.explo.url; $("#link-chaoticum").href = a.apps.chaoticum.url; }).catch(() => {});
 </script>
 </body>
 </html>

@@ -46,7 +46,7 @@
 <div class="layout">
 <main>
 <h1 id="documentation"><a class="anchor" href="#documentation">#</a>Documentation</h1>
-<p>Écosystème d&#39;agents IA pour la recherche (Laboratoire Paragraphe, Université Paris 8). Deux applications, chacune avec son workflow et son serveur, partagent les mêmes sources (<strong>Zotero</strong>), les mêmes modèles (<strong>API Albert</strong>) et la même archive (<strong>Omeka S</strong>) :</p>
+<p>Écosystème d&#39;agents IA pour la recherche (Laboratoire Paragraphe, Université Paris 8). Trois applications, chacune avec son workflow et son serveur, partagent les mêmes sources (<strong>Zotero</strong>), les mêmes modèles (<strong>API Albert</strong>) et la même archive (<strong>Omeka S</strong>) :</p>
 <table>
 <thead>
 <tr>
@@ -59,6 +59,11 @@
 <td><strong>Atelier d&#39;articles</strong></td>
 <td><a href="http://127.0.0.1:7272" target="_blank" rel="noopener">http://127.0.0.1:7272</a></td>
 <td>à partir d&#39;une collection annotée et d&#39;un <strong>appel à propositions</strong> : attendus de l&#39;appel, graphe de concepts, accord entre annotateurs, <strong>proposition d&#39;article</strong></td>
+</tr>
+<tr>
+<td><strong>chaoticumSeminario</strong></td>
+<td><a href="http://127.0.0.1:7276" target="_blank" rel="noopener">http://127.0.0.1:7276</a></td>
+<td><strong>partition d&#39;une conférence participative</strong> : citations Zotero, diapos ConfErrance, questions et diagrammes générés, contributions du public (Grist), lecteur avec chronomètre, séances enregistrées et rejouables</td>
 </tr>
 <tr>
 <td><strong>exploZoteroAnno</strong></td>
@@ -97,8 +102,11 @@
     GR[Grille de couleurs] --&gt; W2
     W1 --&gt; R1[AttenduAPP, PropAPP,&lt;br/&gt;graphe de concepts, kappa]
     W2 --&gt; R2[Participation, collaborations,&lt;br/&gt;thèmes de discussion]
-    R1 &amp; R2 --&gt; O[(Omeka S)]</pre>
-<p>La version HTML de cette documentation est générée par <code>npm run docs</code> dans <code>docs/html/</code> ; elle est aussi servie par chacun des deux serveurs sur <code>/docs/</code> (<a href="http://127.0.0.1:7272/docs/" target="_blank" rel="noopener">http://127.0.0.1:7272/docs/</a>, <a href="http://127.0.0.1:7273/docs/" target="_blank" rel="noopener">http://127.0.0.1:7273/docs/</a>).</p>
+    Z --&gt; W3{{chaoticumSeminario}}
+    CE[Diapos ConfErrance] --&gt; W3
+    W3 --&gt; R3[Partition, séances]
+    R1 &amp; R2 &amp; R3 --&gt; O[(Omeka S)]</pre>
+<p>La version HTML de cette documentation est générée par <code>npm run docs</code> dans <code>docs/html/</code> ; elle est aussi servie par chacun des serveurs sur <code>/docs/</code> (<a href="http://127.0.0.1:7272/docs/" target="_blank" rel="noopener">http://127.0.0.1:7272/docs/</a>, <a href="http://127.0.0.1:7273/docs/" target="_blank" rel="noopener">http://127.0.0.1:7273/docs/</a>).</p>
 
 </main>
 

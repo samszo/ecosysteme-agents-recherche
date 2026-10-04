@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>chaoticumSeminario</title>
+<style>
+  :root {
+    --bg: #f6f5f1; --panel: #ffffff; --ink: #1d1f24; --muted: #6b6f78; --line: #e2e0d9;
+    --accent: #a23b62; --accent-ink: #ffffff; --ok: #2e7d4f; --warn: #b26a00; --err: #b3261e;
+    --code-bg: #f0eee8; --shadow: 0 1px 2px rgba(0,0,0,.05), 0 4px 16px rgba(0,0,0,.04);
+    --t-citation: #2f6db0; --t-diapo: #2e8b57; --t-question: #c2477d; --t-contribution: #d0802e; --t-diagramme: #7a5bb5;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #15171b; --panel: #1d2026; --ink: #e8e9ec; --muted: #9aa0aa; --line: #2e323a;
+      --accent: #e48bad; --accent-ink: #2a0f1a; --ok: #6cc28f; --warn: #e0a64a; --err: #f08a80;
+      --code-bg: #111317; --shadow: none;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { position: sticky; top: 0; z-index: 5; background: var(--panel); border-bottom: 1px solid var(--line); }
+  .bar { max-width: 1180px; margin: 0 auto; padding: 12px 16px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  h1 { font-size: 17px; margin: 0; font-weight: 650; }
+  h1 small { color: var(--muted); font-weight: 400; margin-left: 6px; }
+  .spacer { flex: 1; }
+  header a { color: var(--accent); font-size: 14px; }
+  nav { max-width: 1180px; margin: 0 auto; padding: 0 16px; display: flex; gap: 4px; overflow-x: auto; }
+  nav button { background: none; border: 0; border-bottom: 2px solid transparent; padding: 8px 12px; color: var(--muted); font: inherit; cursor: pointer; white-space: nowrap; }
+  nav button.active { color: var(--ink); border-color: var(--accent); }
+  main { max-width: 1180px; margin: 0 auto; padding: 20px 16px 80px; }
+  section.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; margin-bottom: 16px; box-shadow: var(--shadow); }
+  section.card > h2 { font-size: 15px; margin: 0 0 4px; }
+  p.lead { color: var(--muted); margin: 0 0 12px; font-size: 13.5px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px 16px; }
+  .field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .field.wide { grid-column: 1 / -1; }
+  label { font-size: 13px; font-weight: 600; }
+  .check { display: flex; gap: 8px; align-items: center; font-weight: 600; font-size: 13px; }
+  .check input { width: auto; }
+  .help { font-size: 12px; color: var(--muted); }
+  input, select, textarea { font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 7px 9px; width: 100%; min-width: 0; }
+  textarea { resize: vertical; }
+  button.btn { font: inherit; border: 1px solid var(--line); background: var(--panel); color: var(--ink); border-radius: 6px; padding: 7px 14px; cursor: pointer; }
+  button.btn.primary, a.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+  a.btn { display: inline-block; text-decoration: none; font-size: 14px; border: 1px solid var(--line); border-radius: 6px; padding: 6px 12px; color: var(--ink); }
+  button.btn.danger { color: var(--err); }
+  button.btn:disabled { opacity: .5; cursor: default; }
+  button.link { background: none; border: 0; color: var(--accent); cursor: pointer; font: inherit; padding: 0; }
+  .toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+  .badge { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
+  .badge.running { color: var(--warn); border-color: currentColor; }
+  .badge.success { color: var(--ok); border-color: currentColor; }
+  .badge.failed, .badge.stopped { color: var(--err); border-color: currentColor; }
+  .ok { color: var(--ok); } .ko { color: var(--err); } .muted { color: var(--muted); }
+  table.data { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  table.data th { text-align: left; font-size: 12px; color: var(--muted); font-weight: 600; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+  table.data td { padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  table.data td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .table-wrap { overflow-x: auto; }
+  .pattern { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .pattern select { width: auto; }
+  .timeline { display: flex; height: 26px; border-radius: 6px; overflow: hidden; border: 1px solid var(--line); margin: 6px 0 4px; }
+  .timeline span { display: flex; align-items: center; justify-content: center; color: #fff; font-size: 11px; overflow: hidden; white-space: nowrap; border-right: 1px solid rgba(255,255,255,.5); }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12.5px; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .sw { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
+  #log { background: var(--code-bg); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; height: 60vh; overflow: auto; font: 12.5px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; word-break: break-word; margin: 0; }
+  .md table { border-collapse: collapse; font-size: 13.5px; margin: 8px 0 16px; display: block; overflow-x: auto; }
+  .md th, .md td { border: 1px solid var(--line); padding: 4px 8px; text-align: left; vertical-align: top; }
+  .md code { background: var(--code-bg); padding: 1px 4px; border-radius: 4px; }
+  .md pre { background: var(--code-bg); padding: 8px; border-radius: 6px; overflow-x: auto; }
+  .qr { width: 132px; height: 132px; background: #fff; padding: 6px; border-radius: 6px; border: 1px solid var(--line); }
+  .qr svg { width: 100%; height: 100%; }
+  .empty { color: var(--muted); padding: 24px; text-align: center; border: 1px dashed var(--line); border-radius: 10px; }
+  .toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 8px 16px; border-radius: 8px; font-size: 14px; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 20; }
+  .toast.show { opacity: 1; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<header>
+  <div class="bar">
+    <h1>chaoticumSeminario <small>partition de présentation pour une conférence</small></h1>
+    <div class="spacer"></div>
+    <span id="app-links"></span>
+    <a href="/parametres" title="Connexions Albert, Zotero, Omeka S, Grist">⚙ Paramètres</a>
+    <a href="/docs/" target="_blank">Documentation</a>
+    <span id="status" class="badge">aucun traitement</span>
+    <button id="btn-run" class="btn primary">Enregistrer et générer</button>
+    <button id="btn-stop" class="btn danger hidden">Arrêter</button>
+  </div>
+  <nav>
+    <button data-tab="config" class="active">Partition</button>
+    <button data-tab="run">Exécution</button>
+    <button data-tab="partitions">Partitions et séances</button>
+  </nav>
+</header>
+
+<main>
+  <!-- ======================= CONFIGURATION ======================= -->
+  <div id="tab-config">
+    <section class="card">
+      <h2>Déroulé</h2>
+      <p class="lead">La partition est une suite d'écrans typés, répétée jusqu'au nombre d'écrans demandé ; la durée totale est répartie selon le poids de chaque type. Dans chaque cycle, la question et le diagramme sont tirés de la citation et de la diapo qui les précèdent.</p>
+      <div class="grid">
+        <div class="field wide"><label for="c-title">Titre de la conférence</label><input id="c-title"></div>
+        <div class="field wide"><label for="c-description">Description de la conférence</label><textarea id="c-description" rows="3" placeholder="Thème, public, intention : oriente le choix des citations et des diapos et la formulation des questions"></textarea></div>
+        <div class="field wide"><label for="c-program">Lien vers le programme des conférences</label><input id="c-program" type="url" placeholder="https://… (page web ou PDF)"><span class="help">Son texte est lu à la génération et sert, avec le titre et la description, à choisir les citations et les diapos.</span></div>
+        <div class="field wide"><label class="check"><input id="c-bytheme" type="checkbox"> Choisir les citations et les diapos d'après le thème de la conférence</label><span class="help">Le modèle retient les citations (parmi des candidates tirées au hasard) et les présentations les plus proches du titre, de la description et du programme ; le hasard départage. Décoché : tirage entièrement au hasard.</span></div>
+        <div class="field"><label for="c-candidates">Citations candidates</label><input id="c-candidates" type="number" min="5" step="5"></div>
+        <div class="field"><label for="c-shortlist">Présentations retenues</label><input id="c-shortlist" type="number" min="1" step="1"></div>
+        <div class="field"><label for="c-screens">Nombre d'écrans</label><input id="c-screens" type="number" min="1" max="200" step="1"></div>
+        <div class="field"><label for="c-duration">Durée totale (minutes)</label><input id="c-duration" type="number" min="1" step="1"></div>
+        <div class="field"><label for="c-seed">Graine du tirage</label><input id="c-seed" placeholder="vide = nouveau tirage à chaque génération"><span class="help">Reprendre la graine d'une partition redonne les mêmes citations et diapos.</span></div>
+        <div class="field wide"><label>Suite des écrans (un cycle)</label><div class="pattern" id="pattern"></div></div>
+        <div class="field wide"><label>Poids des types d'écran (part de la durée)</label><div class="grid" id="weights"></div></div>
+        <div class="field wide"><label>Aperçu</label><div class="timeline" id="preview"></div><div class="legend" id="legend"></div><span class="help" id="preview-help"></span></div>
+        <div class="field"><label for="t-warning">Chronomètre orange au-delà de (× durée prévue)</label><input id="t-warning" type="number" step="0.05" min="0.5"></div>
+        <div class="field"><label for="t-danger">Chronomètre rouge au-delà de (× durée prévue)</label><input id="t-danger" type="number" step="0.05" min="0.5"></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Index RAG (Albert)</h2>
+      <p class="lead">Pour une génération rapide, les deux sources sont indexées à l'avance dans deux collections privées Albert : <strong>les diapos</strong> (un document par diapo, avec la description de son image par le modèle de vision) et <strong>la bibliothèque Zotero</strong> (un document par référence, mots-clés et notes renforcés). La génération cherche alors dans ces index d'après le thème de la conférence et choisit les éléments les plus cohérents, sans parcourir Zotero ni analyser d'image. Les indexations sont incrémentales : les relancer ne traite que les nouveautés.</p>
+      <div class="grid">
+        <div class="field"><label class="check"><input id="r-enabled" type="checkbox"> Générer à partir des index RAG</label><span class="help">Décoché, ou index vides : tirage direct dans Zotero et sur le site (plus lent).</span></div>
+        <div class="field"><label for="r-perrun">Diapos décrites par indexation</label><input id="r-perrun" type="number" min="10" step="10"><span class="help">L'indexation reprend où elle s'est arrêtée.</span></div>
+        <div class="field"><label for="r-kw">Poids des mots-clés</label><input id="r-kw" type="number" min="1" max="10" step="1"></div>
+        <div class="field"><label for="r-notes">Poids des notes</label><input id="r-notes" type="number" min="1" max="10" step="1"></div>
+        <div class="field"><label for="r-limit">Extraits par recherche</label><input id="r-limit" type="number" min="3" max="50" step="1"></div>
+      </div>
+      <div class="grid" style="margin-top:12px">
+        <div class="field"><label>Bibliothèque</label><span id="idx-zotero" class="help">—</span><div><button id="b-idx-zotero" class="btn">Indexer la bibliothèque</button></div></div>
+        <div class="field"><label>Diapos</label><span id="idx-slides" class="help">—</span><div><button id="b-idx-slides" class="btn">Indexer les diapos</button></div></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Citations (Zotero)</h2>
+      <p class="lead">Passages surlignés (annotations) et notes, tirés au hasard. La bibliothèque est celle de la page Paramètres.</p>
+      <div class="grid">
+        <div class="field"><label for="ci-scope">Source</label><select id="ci-scope"><option value="collection">une collection</option><option value="library">toute la bibliothèque</option></select></div>
+        <div class="field"><label for="ci-collection">Collection</label><select id="ci-collection"></select><span class="help" id="ci-collection-help"></span></div>
+        <div class="field"><label class="check"><input id="ci-notes" type="checkbox"> Inclure les notes</label></div>
+        <div class="field"><label for="ci-min">Longueur minimale (caractères)</label><input id="ci-min" type="number" min="0" step="10"></div>
+        <div class="field"><label for="ci-max">Longueur maximale (caractères)</label><input id="ci-max" type="number" min="50" step="50"></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Diapos (ConfErrance)</h2>
+      <p class="lead">Une présentation est tirée au hasard parmi les <code>slide.html</code> du site, puis une diapo entre 0 et son <code>#numSlide-max</code> ; elle s'affiche dans un iframe (<code>slide.html?diapo=n</code>) et sa copie d'écran est décrite par le modèle de vision pour préparer la question et le diagramme.</p>
+      <div class="grid">
+        <div class="field"><label for="s-site">Adresse du site</label><input id="s-site"></div>
+        <div class="field"><label for="s-local">Dossier local des présentations</label><input id="s-local"><span class="help">S'il n'existe pas (Docker), la liste vient du dépôt GitHub.</span></div>
+        <div class="field"><label for="s-repo">Dépôt GitHub</label><input id="s-repo"></div>
+        <div class="field"><label for="s-settle">Attente avant la copie d'écran (ms)</label><input id="s-settle" type="number" min="0" step="250"></div>
+        <div class="field wide"><label for="s-exclude">Présentations écartées (une par ligne, nom du dossier)</label><textarea id="s-exclude" rows="2"></textarea></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Contributions du public (Grist)</h2>
+      <p class="lead">Sur les écrans « contributions », un QR code renvoie au formulaire ; les URL proposées par le public sont lues dans la table des réponses et affichées dans un iframe.</p>
+      <div class="grid">
+        <div class="field wide"><label for="g-form">Lien du formulaire</label><input id="g-form"></div>
+        <div class="field wide"><label for="g-responses">Lien de la table des réponses (CSV)</label><input id="g-responses"></div>
+        <div class="field"><label for="g-url">Colonne de l'URL</label><input id="g-url"></div>
+        <div class="field"><label for="g-name">Colonne du nom</label><input id="g-name"></div>
+        <div class="field"><label for="g-date">Colonne de la date</label><input id="g-date"></div>
+        <div class="field"><label for="g-poll">Lecture des réponses toutes les (s)</label><input id="g-poll" type="number" min="3" step="1"></div>
+        <div class="field"><label class="check"><input id="g-moderation" type="checkbox"> Valider chaque URL avant de l'afficher</label><span class="help">Recommandé en public : l'animateur choisit les contributions affichées.</span></div>
+      </div>
+      <div class="toolbar" style="margin-top:12px">
+        <div class="qr" id="qr" title="QR code du formulaire"></div>
+        <div>
+          <button id="g-test" class="btn">Lire la table des réponses</button>
+          <div id="g-result" class="help" style="margin-top:6px"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Modèles Albert</h2>
+      <div class="grid">
+        <div class="field"><label for="m-vision">Modèle de vision (copies d'écran)</label><input id="m-vision" list="albert-models"></div>
+        <div class="field"><label for="m-analytics">Modèle analytique (questions, diagrammes)</label><input id="m-analytics" list="albert-models"></div>
+      </div>
+      <datalist id="albert-models"></datalist>
+      <div class="toolbar" style="margin-top:12px">
+        <button id="btn-save" class="btn primary">Enregistrer</button>
+        <button id="btn-reset" class="btn">Rétablir les valeurs par défaut</button>
+        <span id="config-file" class="muted" style="font-size:13px"></span>
+      </div>
+    </section>
+  </div>
+
+  <!-- ======================= EXÉCUTION ======================= -->
+  <div id="tab-run" class="hidden">
+    <div class="toolbar"><span id="run-info" class="muted">Aucun traitement lancé depuis l'ouverture de l'application.</span></div>
+    <pre id="log"></pre>
+  </div>
+
+  <!-- ======================= PARTITIONS ======================= -->
+  <div id="tab-partitions" class="hidden">
+    <section class="card">
+      <h2>Partitions</h2>
+      <p class="lead"><strong>Jouer</strong> ouvre le lecteur (plein écran, chronomètre, navigation) ; la séance est enregistrée dans Omeka S à la fin. <strong>Séances</strong> liste les séances déjà jouées, que l'on peut <strong>rejouer</strong>.</p>
+      <div class="toolbar"><button id="p-refresh" class="btn">Actualiser</button><span id="p-info" class="muted" style="font-size:13px"></span></div>
+      <div id="partitions" class="muted">Chargement…</div>
+    </section>
+    <section class="card hidden" id="p-detail">
+      <h2 id="p-detail-title"></h2>
+      <div class="toolbar" id="p-detail-actions"></div>
+      <h2 style="margin-top:8px">Déroulé</h2>
+      <p class="lead">Chaque étape peut être modifiée (durée et contenu) ; la partition est enregistrée localement et dans Omeka S.</p>
+      <div id="p-steps" class="muted"></div>
+      <section class="card hidden" id="step-editor" style="margin-top:12px;border-color:var(--accent)">
+        <h2 id="step-title"></h2>
+        <div class="grid" id="step-fields"></div>
+        <div id="step-preview" style="margin-top:10px"></div>
+        <div class="toolbar" style="margin-top:12px">
+          <button id="step-save" class="btn primary">Enregistrer l'étape</button>
+          <button id="step-cancel" class="btn">Annuler</button>
+          <span id="step-info" class="muted" style="font-size:13px"></span>
+        </div>
+      </section>
+      <h2 style="margin-top:16px">Séances</h2>
+      <div id="p-sessions" class="muted"></div>
+      <h2 style="margin-top:16px">Rapport</h2>
+      <div id="p-report" class="md muted"></div>
+    </section>
+  </div>
+</main>
+<div class="toast" id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
+<script type="module">
+const $ = s => document.querySelector(s);
+const el = (tag, props = {}, ...children) => {
+  const e = Object.assign(document.createElement(tag), props);
+  for (const c of children.flat()) if (c != null && c !== false) e.append(c);
+  return e;
+};
+const api = async (url, opts = {}) => {
+  const res = await fetch(url, { headers: { "Content-Type": "application/json" }, ...opts, body: opts.body && JSON.stringify(opts.body) });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+  return data;
+};
+function toast(msg) { const t = $("#toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove("show"), 2800); }
+const md = text => window.marked ? window.marked.parse(text) : text;
+const mmss = s => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, "0")}`;
+const TYPES = ["citation", "diapo", "question", "contribution", "diagramme"];
+const LABELS = { citation: "Citation", diapo: "Diapo", question: "Question", contribution: "Contributions", diagramme: "Diagramme" };
+const typeColor = t => `var(--t-${t})`;
+
+// QR code (SVG) d'une adresse
+export function qrSvg(text) {
+  if (!window.qrcode || !text) return "";
+  const q = window.qrcode(0, "M"); q.addData(text); q.make();
+  return q.createSvgTag({ cellSize: 4, margin: 2, scalable: true });
+}
+
+// ==========================================
+// Onglets
+// ==========================================
+document.querySelectorAll("nav button").forEach(b => b.onclick = () => showTab(b.dataset.tab));
+function showTab(tab) {
+  document.querySelectorAll("nav button").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
+  for (const t of ["config", "run", "partitions"]) $(`#tab-${t}`).classList.toggle("hidden", t !== tab);
+  if (tab === "partitions") loadPartitions();
+}
+
+// ==========================================
+// Configuration
+// ==========================================
+let settings = null, config = null;
+
+// même calcul que planScreens (src/lib/chaoticum/partition.ts)
+function plan() {
+  const pattern = config.pattern.length ? config.pattern : ["citation"];
+  const n = Math.max(1, Math.round(config.screens));
+  const types = Array.from({ length: n }, (_, i) => pattern[i % pattern.length]);
+  const w = t => Math.max(0.1, Number(config.weights[t]) || 1);
+  const total = Math.max(1, Math.round(config.durationMinutes * 60));
+  const sum = types.reduce((s, t) => s + w(t), 0);
+  const d = types.map(t => Math.max(5, Math.round((total * w(t)) / sum)));
+  d[n - 1] = Math.max(5, d[n - 1] + total - d.reduce((s, x) => s + x, 0));
+  return types.map((type, i) => ({ type, duration: d[i] }));
+}
+function renderPreview() {
+  const screens = plan(), total = screens.reduce((s, x) => s + x.duration, 0);
+  $("#preview").replaceChildren(...screens.map((s, i) => el("span", { style: `width:${(s.duration / total) * 100}%;background:${typeColor(s.type)}`, title: `${i + 1}. ${LABELS[s.type]} : ${mmss(s.duration)}`, textContent: i + 1 })));
+  $("#legend").replaceChildren(...TYPES.map(t => el("span", {}, el("i", { className: "sw", style: `background:${typeColor(t)}` }), `${LABELS[t]} · ${mmss(screens.find(s => s.type === t)?.duration ?? 0)}`)));
+  const cycles = Math.ceil(screens.length / Math.max(1, config.pattern.length));
+  $("#preview-help").textContent = `${screens.length} écrans · ${cycles} cycle(s) · ${mmss(total)} au total · ${screens.filter(s => s.type === "citation").length} citation(s) et ${screens.filter(s => s.type === "diapo").length} diapo(s) à tirer`;
+}
+function renderPattern() {
+  $("#pattern").replaceChildren(
+    ...config.pattern.map((t, i) => el("span", { className: "pattern" },
+      el("select", { onchange: e => { config.pattern[i] = e.target.value; renderPreview(); } }, TYPES.map(x => el("option", { value: x, textContent: LABELS[x], selected: x === t }))),
+      el("button", { className: "link", textContent: "×", title: "Retirer", onclick: () => { config.pattern.splice(i, 1); renderPattern(); renderPreview(); } }),
+      i < config.pattern.length - 1 ? el("span", { className: "muted", textContent: "→" }) : null)),
+    el("button", { className: "link", textContent: "+ écran", onclick: () => { config.pattern.push("citation"); renderPattern(); renderPreview(); } }));
+  $("#weights").replaceChildren(...TYPES.map(t => el("div", { className: "field" },
+    el("label", {}, el("i", { className: "sw", style: `background:${typeColor(t)};margin-right:6px` }), LABELS[t]),
+    el("input", { type: "number", step: "0.25", min: "0.1", value: config.weights[t], oninput: e => { config.weights[t] = Number(e.target.value); renderPreview(); } }))));
+}
+
+const FIELDS = [
+  ["#c-title", "title"], ["#c-description", "description"], ["#c-program", "programUrl"], ["#c-candidates", "selection.citationCandidates", true], ["#c-shortlist", "selection.slideShortlist", true], ["#c-screens", "screens", true], ["#c-duration", "durationMinutes", true], ["#c-seed", "seed"],
+  ["#t-warning", "timer.warning", true], ["#t-danger", "timer.danger", true],
+  ["#ci-scope", "citations.scope"], ["#ci-min", "citations.minLength", true], ["#ci-max", "citations.maxLength", true],
+  ["#s-site", "slides.siteUrl"], ["#s-local", "slides.localDir"], ["#s-repo", "slides.repo"], ["#s-settle", "slides.settleMs", true],
+  ["#g-form", "grist.formUrl"], ["#g-responses", "grist.responsesUrl"], ["#g-url", "grist.urlColumn"], ["#g-name", "grist.nameColumn"], ["#g-date", "grist.dateColumn"], ["#g-poll", "grist.pollSeconds", true],
+  ["#m-vision", "models.vision"], ["#m-analytics", "models.analytics"],
+  ["#r-perrun", "rag.slidesPerRun", true], ["#r-kw", "rag.keywordsWeight", true], ["#r-notes", "rag.notesWeight", true], ["#r-limit", "rag.searchLimit", true],
+];
+const getPath = (o, p) => p.split(".").reduce((x, k) => x?.[k], o);
+const setPath = (o, p, v) => { const ks = p.split("."); const last = ks.pop(); ks.reduce((x, k) => x[k], o)[last] = v; };
+function renderSettings() {
+  for (const [sel, p] of FIELDS) $(sel).value = getPath(config, p) ?? "";
+  $("#ci-notes").checked = !!config.citations.includeNotes;
+  $("#c-bytheme").checked = config.selection?.byTheme !== false;
+  $("#r-enabled").checked = config.rag?.enabled !== false;
+  $("#g-moderation").checked = config.grist.moderation !== false;
+  $("#s-exclude").value = (config.slides.exclude ?? []).join("\n");
+  $("#ci-collection").disabled = config.citations.scope !== "collection";
+  $("#config-file").textContent = `Modifications enregistrées dans ${settings.configFile}`;
+  renderPattern(); renderPreview(); renderQr();
+}
+for (const [sel, p, num] of FIELDS) $(sel).addEventListener("input", e => {
+  setPath(config, p, num ? Number(e.target.value) : e.target.value);
+  if (["screens", "durationMinutes"].includes(p)) renderPreview();
+  if (p === "grist.formUrl") renderQr();
+  if (p === "citations.scope") $("#ci-collection").disabled = e.target.value !== "collection";
+});
+$("#ci-scope").addEventListener("change", e => { config.citations.scope = e.target.value; $("#ci-collection").disabled = e.target.value !== "collection"; });
+$("#ci-notes").onchange = e => { config.citations.includeNotes = e.target.checked; };
+$("#c-bytheme").onchange = e => { config.selection.byTheme = e.target.checked; };
+$("#r-enabled").onchange = e => { config.rag.enabled = e.target.checked; };
+
+// état des index RAG et lancement des indexations (suivies dans l'onglet Exécution)
+const fmtDate = d => (d ? new Date(d).toLocaleString("fr-FR") : "jamais");
+async function loadIndexStatus() {
+  try {
+    const r = await api("/api/chaoticum/index");
+    const z = r.bibliotheque, s = r.diapos;
+    $("#idx-zotero").textContent = z.references ? `${z.references} référence(s), ${z.citations} citation(s) possible(s) · ${z.library} · mise à jour : ${fmtDate(z.updatedAt)}` : "Pas encore indexée.";
+    $("#idx-slides").textContent = s.indexed || s.presentationsOpened
+      ? `${s.indexed} diapo(s) indexée(s) sur ${s.known} connue(s) · ${s.presentationsOpened}/${s.presentations} présentation(s) ouvertes · mise à jour : ${fmtDate(s.updatedAt)}${s.indexed < s.known || s.presentationsOpened < s.presentations ? " — relancer pour continuer" : ""}`
+      : `Pas encore indexées (${s.presentations} présentation(s) sur le site).`;
+  } catch (e) { $("#idx-zotero").textContent = $("#idx-slides").textContent = `État indisponible : ${e.message}`; }
+}
+const runTask = async (task, label) => {
+  if (!confirm(`${label} ? Le traitement appelle Albert (modèle de vision pour les diapos) et dépose des documents dans une collection privée Albert ; il est suivi dans l'onglet Exécution.`)) return;
+  try { await save(true); log.textContent = ""; await api(`/api/run?task=${task}`, { method: "POST" }); showTab("run"); }
+  catch (e) { toast("Erreur : " + e.message); }
+};
+$("#b-idx-zotero").onclick = () => runTask("index-bibliotheque", "Indexer la bibliothèque Zotero");
+$("#b-idx-slides").onclick = () => runTask("index-diapos", `Indexer jusqu'à ${config.rag.slidesPerRun} diapo(s)`);
+$("#g-moderation").onchange = e => { config.grist.moderation = e.target.checked; };
+$("#s-exclude").oninput = e => { config.slides.exclude = e.target.value.split("\n").map(s => s.trim()).filter(Boolean); };
+$("#ci-collection").onchange = e => { config.citations.collection = e.target.value; };
+function renderQr() { $("#qr").innerHTML = qrSvg(config.grist.formUrl); }
+
+async function loadCollections() {
+  const sel = $("#ci-collection"), help = $("#ci-collection-help");
+  try {
+    const r = await api("/api/zotero/collections", { method: "POST", body: {} });
+    const byParent = new Map();
+    for (const c of r.collections) { const k = c.parent ?? ""; if (!byParent.has(k)) byParent.set(k, []); byParent.get(k).push(c); }
+    const opts = [];
+    const walk = (p, d) => (byParent.get(p) ?? []).sort((a, b) => a.name.localeCompare(b.name)).forEach(c => { opts.push(el("option", { value: c.key, textContent: `${"— ".repeat(d)}${c.name} (${c.items ?? "?"})` })); walk(c.key, d + 1); });
+    walk("", 0);
+    sel.replaceChildren(...opts);
+    if (!r.collections.some(c => c.key === config.citations.collection) && opts.length) config.citations.collection = opts[0].value;
+    sel.value = config.citations.collection;
+    help.textContent = `Bibliothèque ${r.library} : ${r.collections.length} collection(s).`;
+  } catch (e) {
+    sel.replaceChildren(el("option", { value: config.citations.collection, textContent: config.citations.collection || "—" }));
+    help.replaceChildren(`Collections indisponibles (${e.message}) : vérifier la page `, el("a", { href: "/parametres", textContent: "Paramètres", style: "color:var(--accent)" }), ".");
+  }
+}
+$("#g-test").onclick = async () => {
+  $("#g-result").textContent = "Lecture…";
+  try {
+    await save(true);
+    const r = await api("/api/chaoticum/contributions");
+    const last = r.contributions.at(-1);
+    $("#g-result").className = "help ok";
+    $("#g-result").textContent = `✓ ${r.contributions.length} URL dans la table${last ? ` ; dernière : ${last.name || "anonyme"} — ${last.url}` : ""}`;
+  } catch (e) { $("#g-result").className = "help ko"; $("#g-result").textContent = "✗ " + e.message; }
+};
+
+async function loadSettings() {
+  settings = await api("/api/settings");
+  config = structuredClone(settings.config);
+  renderSettings();
+  loadCollections();
+  loadIndexStatus();
+  api("/api/albert/models").then(ms => $("#albert-models").replaceChildren(...ms.map(m => el("option", { value: m.id, label: m.type ?? "" })))).catch(() => {});
+}
+async function save(silent = false) {
+  await api("/api/settings", { method: "POST", body: { config } });
+  if (!silent) toast(`Configuration enregistrée (${settings.configFile})`);
+}
+$("#btn-save").onclick = () => save().catch(e => toast("Erreur : " + e.message));
+$("#btn-reset").onclick = () => {
+  if (!confirm("Rétablir toute la configuration par défaut ? (rien n'est enregistré avant « Enregistrer »)")) return;
+  config = structuredClone(settings.defaults); renderSettings(); loadCollections();
+};
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && config) loadCollections(); });
+
+// ==========================================
+// Exécution
+// ==========================================
+const STATUS_TEXT = { running: "en cours", success: "terminé", failed: "échec", stopped: "arrêté" };
+let lastState = null, timer = null;
+function renderStatus(s) {
+  lastState = s;
+  const b = $("#status");
+  b.className = `badge ${s?.status ?? ""}`;
+  const sec = s ? Math.round(((s.endedAt ?? Date.now()) - s.startedAt) / 1000) : 0;
+  b.textContent = s ? `${s.task ? `${s.label} · ` : ""}${STATUS_TEXT[s.status]} · ${sec >= 60 ? `${Math.floor(sec / 60)} min ${sec % 60} s` : `${sec} s`}` : "aucun traitement";
+  const running = s?.status === "running";
+  $("#btn-run").disabled = running;
+  $("#btn-stop").classList.toggle("hidden", !running);
+  $("#run-info").textContent = s ? `${s.task ? s.label : "Génération"} n°${s.id} lancée le ${new Date(s.startedAt).toLocaleString("fr-FR")} — ${STATUS_TEXT[s.status]}` : "Aucun traitement lancé.";
+  clearInterval(timer);
+  if (running) timer = setInterval(() => renderStatus(lastState), 1000);
+}
+const log = $("#log");
+const es = new EventSource("/api/run/events");
+let first = true;
+es.addEventListener("status", e => {
+  const s = JSON.parse(e.data);
+  if (!first && s?.status === "running" && s.id !== lastState?.id) log.textContent = "";
+  first = false;
+  renderStatus(s);
+  if (s && s.status !== "running" && s.endedAt && Date.now() - s.endedAt < 3000) {
+    if (s.task) { toast(`${s.label} : ${STATUS_TEXT[s.status]}`); loadIndexStatus(); }
+    else { toast(`Génération ${STATUS_TEXT[s.status]}`); partitionsLoaded = false; showTab("partitions"); }
+  }
+});
+es.addEventListener("log", e => { log.append(JSON.parse(e.data) + "\n"); log.scrollTop = log.scrollHeight; });
+$("#btn-run").onclick = async () => {
+  try { await save(true); log.textContent = ""; await api("/api/run", { method: "POST" }); showTab("run"); }
+  catch (e) { toast("Erreur : " + e.message); }
+};
+$("#btn-stop").onclick = async () => { if (confirm("Arrêter la génération en cours ?")) await api("/api/run/stop", { method: "POST" }); };
+
+// ==========================================
+// Partitions et séances
+// ==========================================
+let partitionsLoaded = false, partitions = [], omekaAdmin = "";
+async function loadPartitions(force = false) {
+  if (partitionsLoaded && !force) return;
+  const box = $("#partitions");
+  box.className = "muted"; box.textContent = "Chargement…";
+  let data;
+  try { data = await api("/api/chaoticum/partitions"); }
+  catch (e) { box.textContent = "Partitions indisponibles : " + e.message; return; }
+  partitionsLoaded = true; partitions = data.partitions; omekaAdmin = data.omekaAdmin;
+  $("#p-info").textContent = `${partitions.length} partition(s)${data.omekaError ? ` — Omeka S indisponible (${data.omekaError}) : archive locale seulement` : ""}`;
+  if (!partitions.length) { box.textContent = "Aucune partition : régler l'onglet Partition puis « Enregistrer et générer »."; return; }
+  box.className = "";
+  box.replaceChildren(el("div", { className: "table-wrap" }, el("table", { className: "data" },
+    el("thead", {}, el("tr", {}, ["Date", "Titre", "Écrans", "Durée", "Statut", "Tokens", "Coût estimé", "Source", ""].map(h => el("th", { textContent: h })))),
+    el("tbody", {}, partitions.map(p => el("tr", {},
+      el("td", { textContent: p.createdAt ? new Date(p.createdAt).toLocaleString("fr-FR") : "—" }),
+      el("td", { textContent: p.title ?? "—", title: `graine ${p.seed ?? "?"}` }),
+      el("td", { className: "num", textContent: p.screens ?? "—" }),
+      el("td", { className: "num", textContent: p.durationSeconds ? mmss(p.durationSeconds) : "—" }),
+      el("td", {}, el("span", { className: `badge ${p.status === "success" ? "success" : p.status === "running" ? "running" : "failed"}`, textContent: STATUS_TEXT[p.status] ?? p.status })),
+      el("td", { className: "num", textContent: p.tokens?.total?.toLocaleString("fr-FR") ?? "—" }),
+      el("td", { className: "num", textContent: p.impact ? `${Number(p.impact.energyWh).toLocaleString("fr-FR", { maximumFractionDigits: 2 })} Wh · ${Number(p.impact.apiCost).toLocaleString("fr-FR", { maximumFractionDigits: 4 })} ${p.impact.currency}` : "—" }),
+      el("td", {}, p.source.includes("local") ? "locale" : "", p.source === "local+omeka" ? " · " : "", p.configItemId && omekaAdmin ? el("a", { href: omekaAdmin + p.configItemId, target: "_blank", textContent: "Omeka S", style: "color:var(--accent)" }) : ""),
+      el("td", { style: "min-width:170px" },
+        el("a", { className: "btn primary", href: `/jouer?run=${encodeURIComponent(p.runId)}`, target: "_blank", textContent: "Jouer", style: "margin:0 4px 4px 0" }),
+        el("button", { className: "btn", textContent: "Séances", onclick: () => openPartition(p) }))))))));
+}
+$("#p-refresh").onclick = () => loadPartitions(true);
+
+// réparation des diagrammes écrits directement par un modèle (même logique que src/lib/chaoticum/mermaid.ts)
+function repairMermaid(code) {
+  const lab = (s, max) => { const t = String(s ?? "").replace(/["“”]/g, "'").replace(/[|\r\n]+/g, " ").replace(/\s+/g, " ").trim(); return t.length > max ? `${t.slice(0, max - 1)}…` : t; };
+  let m = String(code ?? "").replace(/^```(?:mermaid)?\s*/i, "").replace(/```\s*$/, "").trim();
+  if (!/^(flowchart|graph|mindmap)\b/.test(m)) m = `flowchart TD\n${m}`;
+  if (/^(flowchart|graph)\b/.test(m)) {
+    m = m.replace(/(-->|---|-\.->|==>)\s*([\w-]+):::[\w-]+\s+"([^"]*)"/g, (_s, arrow, id, l) => `${arrow}|"${lab(l, 40)}"| ${id}`)
+      .replace(/:::[\w-]+/g, "").replace(/^\s*classDef\b.*$/gm, "")
+      .replace(/(\b[\w-]+)\[(?!")([^\]\n]*)\]/g, (_s, id, l) => `${id}["${String(l).replace(/"/g, "'")}"]`)
+      .replace(/(\b[\w-]+)\((?![("])([^)\n]*)\)(?!\))/g, (_s, id, l) => `${id}("${String(l).replace(/"/g, "'")}")`);
+  }
+  return m;
+}
+
+// ==========================================
+// Déroulé d'une partition : modification d'une étape
+// ==========================================
+let detailRun = null, detailPartition = null, editing = null, slidesList = null, mermaidLib = null;
+const summaryOf = s =>
+  s.citation ? `« ${s.citation.text.slice(0, 110)}${s.citation.text.length > 110 ? "…" : ""} » — ${s.citation.source?.creators || s.citation.source?.title || ""}` :
+  s.diapo ? `${s.diapo.name}, diapo ${s.diapo.diapo}/${s.diapo.max}` :
+  s.question ? s.question.text :
+  s.diagramme ? s.diagramme.title :
+  s.type === "contribution" ? "URL proposées par le public" : "(non généré)";
+function renderSteps() {
+  const p = detailPartition;
+  $("#p-steps").className = "";
+  $("#p-steps").replaceChildren(el("div", { className: "table-wrap" }, el("table", { className: "data" },
+    el("thead", {}, el("tr", {}, ["#", "Début", "Durée", "Type", "Contenu", ""].map(h => el("th", { textContent: h })))),
+    el("tbody", {}, p.screens.map(s => el("tr", {},
+      el("td", { className: "num", textContent: s.index + 1 }),
+      el("td", { className: "num", textContent: mmss(s.start) }),
+      el("td", { className: "num", textContent: mmss(s.duration) }),
+      el("td", {}, el("i", { className: "sw", style: `background:${typeColor(s.type)};margin-right:6px` }), LABELS[s.type] ?? s.type),
+      el("td", { textContent: summaryOf(s) }),
+      el("td", {}, el("button", { className: "btn", textContent: "Modifier", onclick: () => editStep(s.index) }))))))),
+    ...(p.modifiedAt ? [el("p", { className: "help", textContent: `Modifiée le ${new Date(p.modifiedAt).toLocaleString("fr-FR")} · durée totale ${mmss(p.durationSeconds)}` })] : []));
+}
+const fieldEl = (label, input, wide = false, help = "") => el("div", { className: `field${wide ? " wide" : ""}` }, el("label", { textContent: label }), input, help ? el("span", { className: "help", textContent: help }) : null);
+async function editStep(index) {
+  const s = detailPartition.screens[index];
+  editing = { index, inputs: {} };
+  const I = editing.inputs;
+  const input = (key, value, props = {}) => (I[key] = el(props.rows ? "textarea" : "input", { value: value ?? "", ...props }));
+  $("#step-title").textContent = `Étape ${index + 1} : ${LABELS[s.type] ?? s.type}`;
+  const fields = [fieldEl("Durée (secondes)", input("duration", s.duration, { type: "number", min: 5, step: 5 }))];
+  if (s.type === "citation") {
+    const c = s.citation ?? { source: {} };
+    fields.push(fieldEl("Citation", input("text", c.text, { rows: 4 }), true), fieldEl("Commentaire", input("comment", c.comment, { rows: 2 }), true),
+      fieldEl("Auteurs", input("creators", c.source?.creators)), fieldEl("Année", input("year", c.source?.year)), fieldEl("Titre", input("title", c.source?.title)), fieldEl("Page", input("page", c.page)));
+  } else if (s.type === "diapo") {
+    if (!slidesList) slidesList = await api("/api/chaoticum/slides").catch(() => []);
+    const list = el("datalist", { id: "slides-list" }, slidesList.map(x => el("option", { value: x.path })));
+    fields.push(fieldEl("Présentation (dossier/slide.html)", input("path", s.diapo?.path, { list: "slides-list" }), false, "Changer de diapo efface la copie d'écran et sa description."), fieldEl("Numéro de la diapo", input("diapo", s.diapo?.diapo ?? 0, { type: "number", min: 0, step: 1 })), list);
+    const preview = () => { $("#step-preview").replaceChildren(el("iframe", { src: `${detailPartition.siteUrl.replace(/\/?$/, "/")}${I.path.value}?diapo=${I.diapo.value}`, style: "width:100%;height:360px;border:1px solid var(--line);border-radius:8px;background:#fff" })); };
+    I.path.onchange = preview; I.diapo.onchange = preview; setTimeout(preview);
+  } else if (s.type === "question") {
+    fields.push(fieldEl("Question", input("qtext", s.question?.text, { rows: 2 }), true, "Une phrase courte, lisible d'un coup d'œil."), fieldEl("Intention", input("intention", s.question?.intention, { rows: 2 }), true));
+  } else if (s.type === "diagramme") {
+    fields.push(fieldEl("Titre", input("dtitle", s.diagramme?.title), true), fieldEl("Diagramme (Mermaid)", input("mermaid", s.diagramme?.mermaid, { rows: 10, style: "font-family:ui-monospace,monospace;font-size:13px" }), true));
+    const preview = async () => {
+      mermaidLib ??= (await import("https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs")).default;
+      mermaidLib.initialize({ startOnLoad: false, securityLevel: "strict" });
+      try { const { svg } = await mermaidLib.render(`pv${Date.now()}`, I.mermaid.value); $("#step-preview").innerHTML = `<div style="background:#fff;border-radius:8px;padding:10px;overflow:auto">${svg}</div>`; }
+      catch (e) {
+        const fixed = repairMermaid(I.mermaid.value);
+        $("#step-preview").replaceChildren(el("p", { className: "ko", textContent: `Diagramme invalide : ${e.message}` }),
+          fixed !== I.mermaid.value ? el("button", { className: "btn", textContent: "Réparer automatiquement", onclick: () => { I.mermaid.value = fixed; preview(); } }) : null);
+      }
+    };
+    I.mermaid.oninput = () => { clearTimeout(editing.t); editing.t = setTimeout(preview, 500); }; setTimeout(preview);
+  }
+  $("#step-fields").replaceChildren(...fields);
+  if (!["diapo", "diagramme"].includes(s.type)) $("#step-preview").replaceChildren();
+  $("#step-info").textContent = "";
+  $("#step-editor").classList.remove("hidden");
+  $("#step-editor").scrollIntoView({ behavior: "smooth", block: "center" });
+}
+$("#step-cancel").onclick = () => { $("#step-editor").classList.add("hidden"); editing = null; };
+$("#step-save").onclick = async () => {
+  if (!editing) return;
+  const s = detailPartition.screens[editing.index], I = editing.inputs, v = k => I[k]?.value;
+  const changes = { duration: Number(v("duration")) };
+  if (s.type === "citation") changes.citation = { text: v("text"), comment: v("comment"), creators: v("creators"), year: v("year"), title: v("title"), page: v("page") };
+  if (s.type === "diapo") changes.diapo = { path: v("path"), diapo: Number(v("diapo")) };
+  if (s.type === "question") changes.question = { text: v("qtext"), intention: v("intention") };
+  if (s.type === "diagramme") changes.diagramme = { title: v("dtitle"), mermaid: v("mermaid") };
+  $("#step-info").textContent = "Enregistrement…";
+  try {
+    const r = await api("/api/chaoticum/partition/screen", { method: "POST", body: { run: detailRun, index: editing.index, changes } });
+    detailPartition = r.partition;
+    renderSteps();
+    $("#step-editor").classList.add("hidden");
+    toast(`Étape ${editing.index + 1} enregistrée${r.omeka === "ok" ? " (et dans Omeka S)" : r.omeka ? ` — Omeka S : ${r.omeka}` : " (localement)"}`);
+    editing = null;
+  } catch (e) { $("#step-info").textContent = "Erreur : " + e.message; }
+};
+
+// lien public de rejeu (lecture seule) d'une séance, avec son QR code
+async function shareSession(runId, id) {
+  const box = $("#p-share");
+  try {
+    const r = await api("/api/chaoticum/participation/share", { method: "POST", body: { run: runId, id } });
+    // adresse publique configurée (CHAOTICUM_URL), sauf si elle est locale : adresse de consultation de la page
+  const base = r.publicBase && !/\/\/(127\.|localhost|\[::1\])/.test(r.publicBase) ? r.publicBase : location.origin;
+  const url = `${base.replace(/\/$/, "")}${r.sharePath}`;
+    box.classList.remove("hidden");
+    box.replaceChildren(el("div", { className: "toolbar", style: "align-items:flex-start" },
+      el("div", { className: "qr", style: "width:160px;height:160px", innerHTML: qrSvg(url) }),
+      el("div", {},
+        el("strong", { textContent: "Lien public du rejeu (lecture seule)" }),
+        el("div", {}, el("a", { href: url, target: "_blank", textContent: url, style: "color:var(--accent);word-break:break-all" })),
+        el("p", { className: "help", textContent: "Accessible sans mot de passe si le chemin /public/ est exempté de l'authentification (voir la documentation d'installation). On ne peut ni participer ni modifier les contributions depuis ce lien." }),
+        el("button", { className: "btn", textContent: "Copier le lien", onclick: () => navigator.clipboard.writeText(url).then(() => toast("Lien copié")) }))));
+  } catch (e) { toast("Lien indisponible : " + e.message); }
+}
+
+async function openPartition(p) {
+  detailRun = p.runId;
+  $("#step-editor").classList.add("hidden");
+  $("#p-steps").textContent = "Chargement…";
+  api(`/api/chaoticum/partition?run=${encodeURIComponent(p.runId)}`).then(x => { detailPartition = x; renderSteps(); }).catch(e => { $("#p-steps").textContent = `Partition indisponible : ${e.message}`; });
+  $("#p-detail").classList.remove("hidden");
+  $("#p-detail-title").textContent = `${p.title} · ${new Date(p.createdAt).toLocaleString("fr-FR")}`;
+  $("#p-detail-actions").replaceChildren(
+    el("a", { className: "btn primary", href: `/jouer?run=${encodeURIComponent(p.runId)}`, target: "_blank", textContent: "Jouer la partition" }),
+    el("button", { className: "btn", textContent: "Reprendre la graine", onclick: () => { config.seed = p.seed ?? ""; $("#c-seed").value = config.seed; toast("Graine reprise dans l'onglet Partition (enregistrer pour confirmer)"); } }));
+  $("#p-sessions").textContent = "Chargement…";
+  $("#p-report").textContent = "Chargement…";
+  $("#p-detail").scrollIntoView({ behavior: "smooth" });
+  fetch(`/api/chaoticum/file?run=${encodeURIComponent(p.runId)}&name=rapport_chaoticum.md`).then(r => r.ok ? r.text() : Promise.reject(new Error(`HTTP ${r.status}`)))
+    .then(t => { $("#p-report").className = "md"; $("#p-report").innerHTML = md(t); })
+    .catch(e => { $("#p-report").className = "muted"; $("#p-report").textContent = `Rapport indisponible (${e.message}).`; });
+  try {
+    const r = await api(`/api/chaoticum/participations?run=${encodeURIComponent(p.runId)}`);
+    if (!r.participations.length) { $("#p-sessions").textContent = "Aucune séance jouée pour cette partition."; return; }
+    $("#p-sessions").className = "";
+    $("#p-sessions").replaceChildren(el("div", { className: "table-wrap" }, el("table", { className: "data" },
+      el("thead", {}, el("tr", {}, ["Date", "Mode", "Durée", "Écrans parcourus", "Contributions", "Source", ""].map(h => el("th", { textContent: h })))),
+      el("tbody", {}, r.participations.map(s => el("tr", {},
+        el("td", { textContent: s.startedAt ? new Date(s.startedAt).toLocaleString("fr-FR") : "—" }),
+        el("td", { textContent: s.mode === "replay" ? "rejeu" : "en direct" }),
+        el("td", { className: "num", textContent: s.elapsedSeconds != null ? mmss(s.elapsedSeconds) : "—" }),
+        el("td", { className: "num", textContent: s.events ?? "—" }),
+        el("td", { className: "num", textContent: s.contributions ?? "—" }),
+        el("td", {}, s.source.includes("local") ? "locale" : "", s.source === "local+omeka" ? " · " : "", s.omekaItemId && r.omekaAdmin ? el("a", { href: r.omekaAdmin + s.omekaItemId, target: "_blank", textContent: "Omeka S", style: "color:var(--accent)" }) : ""),
+        el("td", { style: "min-width:190px" },
+          el("a", { className: "btn", href: `/jouer?run=${encodeURIComponent(p.runId)}&replay=${encodeURIComponent(s.id)}`, target: "_blank", textContent: "Rejouer", style: "margin:0 4px 4px 0" }),
+          el("button", { className: "btn", textContent: "Lien public", title: "QR code du rejeu en lecture seule, à partager", onclick: () => shareSession(p.runId, s.id) }))))))),
+      el("div", { id: "p-share", className: "hidden", style: "margin-top:12px" }));
+  } catch (e) { $("#p-sessions").textContent = "Séances indisponibles : " + e.message; }
+}
+
+loadSettings().catch(e => toast("Erreur de chargement : " + e.message));
+// liens vers les autres applications
+api("/api/apps").then(a => $("#app-links").replaceChildren(...Object.entries(a.apps).filter(([k]) => k !== a.current).map(([, x]) => el("a", { href: x.url, textContent: x.label.replace(/ \(.*\)$/, ""), style: "margin-right:12px" })))).catch(() => {});
+</script>
+</body>
+</html>

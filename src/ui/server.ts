@@ -9,6 +9,8 @@ import { spawn, type ChildProcess } from "child_process";
 import dotenv from "dotenv";
 import { defaultWorkflowConfig } from "../config";
 import { defaultExploConfig, EXPLO_CONFIG_FILE, RUNS_DIR } from "../config/explo";
+import { defaultChaoticumConfig, CHAOTICUM_CONFIG_FILE } from "../config/chaoticum";
+import { chaoticumRoutes } from "./chaoticumRoutes";
 import { buildGuide } from "../workflow/reports/annotationGuide";
 import { mergeConfig, readConfigOverride, writeConfigOverride, CONFIG_FILE } from "../config/store";
 import { Zotero } from "../lib/zotero/zotero";
@@ -29,6 +31,7 @@ const TSX = path.join(APP_DIR, "node_modules", ".bin", "tsx");
 // Applications et paramétrage propre à chaque serveur
 // ==========================================
 const EXPLO_ENV_FILE = process.env.EXPLO_ENV_FILE || ".env.explo";
+const CHAOTICUM_ENV_FILE = process.env.CHAOTICUM_ENV_FILE || ".env.chaoticum";
 const APPS = {
   paper: {
     label: "Atelier d'articles (academic-paper-factory)",
@@ -49,6 +52,15 @@ const APPS = {
     portKey: "EXPLO_PORT", hostKey: "EXPLO_HOST", defaultPort: 7273,
     urlKey: "EXPLO_URL",
   },
+  chaoticum: {
+    label: "chaoticumSeminario",
+    script: path.join(APP_DIR, "src", "runners", "chaoticum.ts"),
+    page: "chaoticum.html",
+    // .env.chaoticum surcharge .env (connexions propres, clé Grist)
+    envFiles: [".env", CHAOTICUM_ENV_FILE],
+    portKey: "CHAOTICUM_PORT", hostKey: "CHAOTICUM_HOST", defaultPort: 7276,
+    urlKey: "CHAOTICUM_URL",
+  },
 } as const;
 type AppName = keyof typeof APPS;
 
@@ -59,7 +71,6 @@ if (!(APP_ARG in APPS)) {
 }
 const APP = APP_ARG as AppName;
 const APP_DEF = APPS[APP];
-const OTHER: AppName = APP === "paper" ? "explo" : "paper";
 const ENV_PATHS = APP_DEF.envFiles.map(f => path.join(ROOT, f));
 const ENV_FILE = ENV_PATHS[ENV_PATHS.length - 1]!;
 
@@ -72,6 +83,7 @@ const ENV_FIELDS = [
   { key: "OMKS_API_URL", label: "URL de l'API Omeka S", group: "Omeka S", help: "Ex. https://mon-omeka.fr/api" },
   { key: "OMKS_KEY_IDENTITY", label: "Identité de la clé Omeka S", group: "Omeka S", help: "Clé API d'un utilisateur Omeka S (Utilisateur > Clés API)." },
   { key: "OMKS_KEY_CREDENTIAL", label: "Secret de la clé Omeka S", secret: true, group: "Omeka S" },
+  ...(APP === "chaoticum" ? [{ key: "GRIST_API_KEY", label: "Clé API Grist", secret: true, group: "Grist", help: "Facultatif : nécessaire seulement si la table des réponses du formulaire n'est pas publique (Profil › Clé API sur Grist)." }] : []),
   { key: APP_DEF.portKey, label: "Port de cette interface", group: "Interface", help: `Pris en compte au prochain lancement du serveur (${APP_DEF.defaultPort} par défaut).` },
 ];
 const SECRET_KEYS = new Set(ENV_FIELDS.filter(f => f.secret).map(f => f.key));
@@ -116,13 +128,16 @@ const currentConfig = () => mergeConfig(defaultWorkflowConfig, readConfigOverrid
 const currentExploConfig = () => mergeConfig(defaultExploConfig, readConfigOverride(EXPLO_CONFIG_FILE));
 
 // configuration propre à l'application de ce serveur
-const APP_CONFIG = APP === "paper"
-  ? { current: currentConfig, defaults: defaultWorkflowConfig as any, file: CONFIG_FILE }
-  : { current: currentExploConfig, defaults: defaultExploConfig as any, file: EXPLO_CONFIG_FILE };
+const currentChaoticumConfig = () => mergeConfig(defaultChaoticumConfig, readConfigOverride(CHAOTICUM_CONFIG_FILE));
+const APP_CONFIG = ({
+  paper: { current: currentConfig, defaults: defaultWorkflowConfig as any, file: CONFIG_FILE },
+  explo: { current: currentExploConfig, defaults: defaultExploConfig as any, file: EXPLO_CONFIG_FILE },
+  chaoticum: { current: currentChaoticumConfig, defaults: defaultChaoticumConfig as any, file: CHAOTICUM_CONFIG_FILE },
+} as Record<AppName, { current: () => any; defaults: any; file: string }>)[APP];
 
-// adresses des deux applications (liens entre elles) : adresse publique si définie, sinon port local
+// adresses des applications (liens entre elles) : adresse publique si définie, sinon port local
 function appUrls() {
-  const env = Object.assign({}, parseEnv(path.join(ROOT, ".env")), parseEnv(path.join(ROOT, EXPLO_ENV_FILE)));
+  const env = Object.assign({}, ...[".env", EXPLO_ENV_FILE, CHAOTICUM_ENV_FILE].map(f => parseEnv(path.join(ROOT, f))));
   return Object.fromEntries((Object.keys(APPS) as AppName[]).map(a => {
     const d = APPS[a];
     return [a, { label: d.label, url: env[d.urlKey] || process.env[d.urlKey] || `http://127.0.0.1:${env[d.portKey] || d.defaultPort}` }];
@@ -133,9 +148,18 @@ function appUrls() {
 // Exécution du workflow (processus enfant : configuration et connexions relues à chaque lancement)
 // ==========================================
 
+// traitements secondaires d'une application (lanceur et arguments) : indexation RAG de chaoticumSeminario
+const TASKS: Partial<Record<AppName, Record<string, { label: string; args: string[] }>>> = {
+  chaoticum: {
+    "index-diapos": { label: "Indexation des diapos", args: [path.join(APP_DIR, "src", "runners", "chaoticumIndex.ts"), "diapos"] },
+    "index-bibliotheque": { label: "Indexation de la bibliothèque", args: [path.join(APP_DIR, "src", "runners", "chaoticumIndex.ts"), "bibliotheque"] },
+  },
+};
+
 interface Run {
   id: number;
   app: AppName;
+  task?: string | undefined;
   status: "running" | "success" | "failed" | "stopped";
   startedAt: number;
   endedAt?: number;
@@ -153,13 +177,13 @@ function broadcast(event: string, data: unknown) {
 }
 
 function runState() {
-  return run && { id: run.id, app: run.app, label: APPS[run.app].label, status: run.status, startedAt: run.startedAt, endedAt: run.endedAt, lines: run.logs.length };
+  return run && { id: run.id, app: run.app, task: run.task ?? null, label: run.task ? TASKS[run.app]?.[run.task]?.label ?? run.task : APPS[run.app].label, status: run.status, startedAt: run.startedAt, endedAt: run.endedAt, lines: run.logs.length };
 }
 
-function startRun(app: AppName = APP): Run {
-  const r: Run = { id: ++runCounter, app, status: "running", startedAt: Date.now(), logs: [] };
+function startRun(app: AppName = APP, task?: string): Run {
+  const r: Run = { id: ++runCounter, app, task, status: "running", startedAt: Date.now(), logs: [] };
   run = r;
-  const child = spawn(TSX, [APPS[app].script], {
+  const child = spawn(TSX, task ? TASKS[app]![task]!.args : [APPS[app].script], {
     cwd: ROOT,
     env: { ...process.env, ...readEnv(), FORCE_COLOR: "0", NO_COLOR: "1" },
   });
@@ -653,7 +677,9 @@ const routes: Record<string, (req: http.IncomingMessage, res: http.ServerRespons
     const app = url.searchParams.get("app") ?? APP;
     if (app !== APP) return sendJson(res, 400, { error: `Ce serveur lance ${APP_DEF.label} ; ${APPS[app as AppName]?.label ?? app} a son propre serveur.` });
     if (run?.status === "running") return sendJson(res, 409, { error: "Un traitement est déjà en cours." });
-    startRun();
+    const task = url.searchParams.get("task") ?? undefined;
+    if (task && !TASKS[APP]?.[task]) return sendJson(res, 400, { error: `Traitement inconnu : ${task}` });
+    startRun(APP, task);
     sendJson(res, 200, runState());
   },
 
@@ -812,8 +838,16 @@ const routes: Record<string, (req: http.IncomingMessage, res: http.ServerRespons
   },
 };
 
-// routes propres à une application (les autres sont communes aux deux serveurs)
+// chaoticumSeminario : routes dans un module dédié
+const CHAOTICUM_ROUTES = chaoticumRoutes({
+  root: ROOT, publicDir: PUBLIC_DIR, readEnv, config: currentChaoticumConfig, serverOmk, sendJson, readBody,
+  publicBase: () => readEnv().CHAOTICUM_URL || process.env.CHAOTICUM_URL || "",
+});
+Object.assign(routes, CHAOTICUM_ROUTES);
+
+// routes propres à une application (les autres sont communes à tous les serveurs)
 const APP_ONLY: Record<string, AppName> = {
+  ...Object.fromEntries(Object.keys(CHAOTICUM_ROUTES).map(k => [k, "chaoticum" as AppName])),
   "POST /api/cfp-file": "paper", "GET /api/results": "paper", "GET /api/history": "paper", "GET /api/file": "paper",
   "GET /api/explo/settings": "explo", "POST /api/explo/settings": "explo", "POST /api/explo/guide": "explo",
   "GET /api/explo/results": "explo", "GET /api/explo/file": "explo", "GET /api/explo/runs": "explo",

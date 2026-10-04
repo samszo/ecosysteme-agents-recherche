@@ -9,6 +9,7 @@ aap
 resultats
 workflow.config.json
 explo.config.json
+chaoticum.config.json
 workflow.history.json
 # instance Omeka S préparée (distribuée à part)
 install

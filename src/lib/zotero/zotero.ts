@@ -37,7 +37,7 @@ export function zoteroWebUrl(path: string): string {
 }
 
 // auteur d'une annotation ou d'une note : nom saisi dans l'annotation (PDF importé), sinon utilisateur Zotero qui l'a créée
-function authorOf(item: any): string | undefined {
+export function authorOf(item: any): string | undefined {
   const d = item.data ?? {};
   const u = item.meta?.createdByUser;
   return d.annotationAuthorName || u?.username || u?.name || undefined;
@@ -72,6 +72,26 @@ export class Zotero {
       start += page.length;
     }
     return items;
+  }
+
+  // une page de résultats et le nombre total (tirage aléatoire dans une grande bibliothèque sans tout charger)
+  async page(endpoint: string, start = 0, limit = 1): Promise<{ items: any[]; total: number }> {
+    const sep = endpoint.includes("?") ? "&" : "?";
+    const res = await this.get(`${this.prefix}${endpoint}${sep}format=json&limit=${limit}&start=${start}`);
+    return { items: await res.json(), total: Number(res.headers.get("Total-Results") ?? 0) };
+  }
+
+  // tous les items d'une requête sur la bibliothèque (ex. "itemType=annotation", "top")
+  itemsWhere(query: string) {
+    return this.getAll(`/items?${query}`);
+  }
+  topItems() {
+    return this.getAll(`/items/top`);
+  }
+
+  // items enfants d'un item (annotations d'une pièce jointe, notes d'une notice)
+  children(key: string, itemType: string) {
+    return this.getAll(`/items/${key}/children?itemType=${itemType}`);
   }
 
   collectionItems(collectionId: string) {

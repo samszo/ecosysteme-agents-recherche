@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lecteur de partition</title>
+<style>
+  :root {
+    --bg: #111317; --panel: #1b1e24; --ink: #f1f2f4; --muted: #9aa0aa; --line: #2e323a; --accent: #e48bad;
+    --ok: #3fb56f; --warn: #f0a33a; --err: #f0574a;
+    --t-citation: #4a8fd6; --t-diapo: #3aa36f; --t-question: #d65b93; --t-contribution: #e0913a; --t-diagramme: #9373d1;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; display: flex; flex-direction: column; overflow: hidden; }
+  header { display: flex; gap: 10px; align-items: center; padding: 8px 14px; background: var(--panel); border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  header h1 { font-size: 15px; margin: 0; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 28vw; }
+  .type { font-size: 13px; padding: 2px 10px; border-radius: 999px; color: #fff; }
+  .spacer { flex: 1; }
+  .chrono { font: 600 22px/1 ui-monospace, SFMono-Regular, Menlo, monospace; padding: 6px 12px; border-radius: 8px; background: var(--ok); color: #08130c; min-width: 150px; text-align: center; transition: background .3s; }
+  .chrono.warning { background: var(--warn); color: #1d1200; }
+  .chrono.danger { background: var(--err); color: #fff; }
+  .chrono.idle { background: var(--line); color: var(--ink); }
+  .chrono small { font-size: 12px; font-weight: 500; opacity: .8; }
+  .total { font: 13px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted); white-space: nowrap; }
+  .nav { display: flex; gap: 4px; align-items: center; }
+  button, select, input { font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 5px 10px; cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); color: #1f0a14; border-color: var(--accent); font-weight: 650; }
+  button:disabled { opacity: .45; cursor: default; }
+  input.goto { width: 64px; cursor: text; }
+  .badge { font-size: 12px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
+  main { flex: 1; min-height: 0; position: relative; }
+  .stage { position: absolute; inset: 0; padding: 3vh 4vw; display: flex; flex-direction: column; overflow: auto; }
+  .stage.full { padding: 0; }
+  .center { margin: auto; max-width: 1100px; width: 100%; }
+  blockquote.citation { font-size: clamp(22px, 3.2vw, 44px); line-height: 1.35; margin: 0; font-family: Georgia, "Times New Roman", serif; }
+  blockquote.citation::before { content: "« "; color: var(--t-citation); }
+  blockquote.citation::after { content: " »"; color: var(--t-citation); }
+  .ref { margin-top: 3vh; font-size: clamp(15px, 1.5vw, 22px); color: var(--muted); }
+  .comment { margin-top: 2vh; font-size: clamp(14px, 1.3vw, 19px); border-left: 3px solid var(--t-citation); padding-left: 12px; color: var(--ink); opacity: .85; }
+  .question { font-size: clamp(26px, 4vw, 58px); line-height: 1.25; font-weight: 650; }
+  .intention { margin-top: 2vh; font-size: clamp(14px, 1.4vw, 20px); color: var(--muted); }
+  .sources { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 4vh; align-items: flex-start; }
+  .sources .src { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-size: 13px; max-width: 360px; color: var(--muted); }
+  .sources img { width: 240px; border-radius: 6px; display: block; }
+  iframe.slide, iframe.contrib { width: 100%; height: 100%; border: 0; background: #fff; }
+  .contrib-layout { display: grid; grid-template-columns: minmax(220px, 26%) 1fr; gap: 16px; height: 100%; }
+  .contrib-side { display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+  .qr { background: #fff; padding: 10px; border-radius: 10px; width: 100%; max-width: 280px; aspect-ratio: 1; }
+  .qr svg { width: 100%; height: 100%; display: block; }
+  .form-link { font-size: 12px; color: var(--muted); word-break: break-all; }
+  .contribs { overflow: auto; flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 6px; }
+  .contribs .c { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; font-size: 13px; }
+  .contribs .c.on { border-color: var(--t-contribution); }
+  .contribs .c .u { color: var(--muted); font-size: 12px; word-break: break-all; }
+  .contrib-main { position: relative; border-radius: 10px; overflow: hidden; border: 1px solid var(--line); background: var(--panel); min-height: 0; }
+  .placeholder { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; text-align: center; padding: 24px; color: var(--muted); }
+  .placeholder a { color: var(--accent); font-size: 18px; word-break: break-all; }
+  .diagram { background: #fff; color: #111; border-radius: 10px; padding: 2vh 2vw; margin-top: 2vh; display: flex; justify-content: center; }
+  .diagram svg { max-width: 100%; height: auto; max-height: 70vh; }
+  h2.screen-title { font-size: clamp(20px, 2.4vw, 32px); margin: 0 0 1vh; }
+  pre.code { white-space: pre-wrap; font-size: 13px; color: var(--muted); }
+  footer { display: flex; height: 14px; cursor: pointer; }
+  footer span { flex: 1; opacity: .45; border-right: 1px solid var(--bg); position: relative; }
+  footer span.visited { opacity: .75; }
+  footer span.current { opacity: 1; box-shadow: inset 0 -4px 0 #fff; }
+  .overlay { position: absolute; inset: 0; background: rgba(10,11,14,.88); display: flex; align-items: center; justify-content: center; z-index: 10; }
+  .overlay .box { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 24px 28px; max-width: 560px; text-align: center; }
+  .overlay h2 { margin-top: 0; }
+  a.home { color: var(--muted); text-decoration: none; font-size: 13px; white-space: nowrap; }
+  a.home:hover { color: var(--accent); }
+  .qr-corner { position: absolute; right: 14px; bottom: 14px; z-index: 5; background: #fff; color: #111; border-radius: 10px; padding: 6px 6px 4px; width: 128px; text-align: center; font-size: 11px; font-weight: 600; box-shadow: 0 4px 16px rgba(0,0,0,.35); cursor: pointer; }
+  .qr-corner svg { width: 100%; height: auto; display: block; }
+  .qr-corner.small { width: 64px; font-size: 0; padding: 4px; }
+  .zoom-wrap { position: relative; overflow: hidden; cursor: grab; touch-action: none; height: 68vh; user-select: none; -webkit-user-select: none; }
+  .zoom-wrap.dragging { cursor: grabbing; }
+  .zoom-inner { transform-origin: 0 0; display: inline-block; }
+  .zoom-tools { position: absolute; top: 8px; right: 8px; display: flex; gap: 4px; z-index: 2; }
+  .zoom-tools button { background: #fff; color: #111; border-color: #ccc; padding: 2px 9px; }
+  .contribs .c .tools { display: flex; gap: 4px; margin-top: 4px; flex-wrap: wrap; }
+  .contribs .c .tools button { padding: 2px 8px; font-size: 12px; }
+  .contribs .c .edited { color: var(--t-contribution); font-size: 11px; }
+  .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 8px 16px; border-radius: 8px; font-size: 14px; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 30; }
+  .toast.show { opacity: 1; }
+  .hidden { display: none !important; }
+  @media (max-width: 800px) { .contrib-layout { grid-template-columns: 1fr; } header h1 { max-width: 60vw; } }
+</style>
+</head>
+<body>
+<header>
+  <a class="home" href="/" title="Retour à la liste des partitions">← Partitions</a>
+  <h1 id="title">Chargement…</h1>
+  <span id="type" class="type"></span>
+  <span id="pos" class="badge"></span>
+  <span id="mode" class="badge"></span>
+  <div class="spacer"></div>
+  <div id="chrono" class="chrono idle" title="Temps passé sur l'écran / durée prévue">0:00 <small>/ 0:00</small></div>
+  <span id="total" class="total"></span>
+  <div class="nav">
+    <button id="b-first" title="Début (Début)">⏮</button>
+    <button id="b-prev" title="Écran précédent (←)">◀</button>
+    <input id="b-goto" class="goto" type="number" min="1" title="Aller à l'écran (G)">
+    <button id="b-next" title="Écran suivant (→)">▶</button>
+    <button id="b-last" title="Fin (Fin)">⏭</button>
+    <button id="b-back" title="Revenir à l'écran précédemment affiché (R)">↩</button>
+  </div>
+  <span id="replay-ctl" class="nav hidden">
+    <button id="b-play" title="Lecture / pause (espace)">⏯</button>
+    <select id="b-speed" title="Vitesse du rejeu"><option value="1">×1</option><option value="2">×2</option><option value="5">×5</option><option value="10" selected>×10</option><option value="30">×30</option></select>
+  </span>
+  <button id="b-full" title="Plein écran (F)">⛶</button>
+  <button id="b-end" class="primary">Terminer et enregistrer</button>
+</header>
+<main>
+  <div id="stage" class="stage"></div>
+  <div id="qr-corner" class="qr-corner hidden" title="Participer : flasher le QR code (clic pour réduire, touche Q)"></div>
+  <div id="overlay" class="overlay hidden"><div class="box" id="overlay-box"></div></div>
+</main>
+<footer id="progress"></footer>
+<div class="toast" id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
+<script type="module">
+import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+mermaid.initialize({ startOnLoad: false, theme: "default", securityLevel: "strict" });
+
+const $ = s => document.querySelector(s);
+const el = (tag, props = {}, ...children) => {
+  const e = Object.assign(document.createElement(tag), props);
+  for (const c of children.flat()) if (c != null && c !== false) e.append(c);
+  return e;
+};
+const api = async (url, opts = {}) => {
+  const res = await fetch(url, { headers: { "Content-Type": "application/json" }, ...opts, body: opts.body && JSON.stringify(opts.body) });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+  return data;
+};
+function toast(msg) { const t = $("#toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove("show"), 2800); }
+const mmss = s => { s = Math.max(0, Math.round(s)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
+const LABELS = { citation: "Citation", diapo: "Diapo", question: "Question", contribution: "Contributions", diagramme: "Diagramme" };
+const qrSvg = text => { if (!window.qrcode || !text) return ""; const q = window.qrcode(0, "M"); q.addData(text); q.make(); return q.createSvgTag({ cellSize: 4, margin: 2, scalable: true }); };
+
+const params = new URLSearchParams(location.search);
+// rejeu public (/public/rejeu?t=<jeton>) : lecture seule, ni participation ni modification des liens
+const PUBLIC = location.pathname === "/public/rejeu";
+const token = params.get("t");
+let runId = params.get("run");
+const replayId = params.get("replay");
+const REPLAY = PUBLIC || !!replayId;
+const DRAFT_KEY = `chaoticum:seance:${runId}`;
+const store = {
+  get() { try { return JSON.parse(localStorage.getItem(DRAFT_KEY) ?? "null"); } catch { return null; } },
+  set(v) { try { localStorage.setItem(DRAFT_KEY, JSON.stringify(v)); } catch { /* stockage indisponible */ } },
+  clear() { try { localStorage.removeItem(DRAFT_KEY); } catch { /* stockage indisponible */ } },
+};
+
+let P = null;                 // partition
+let current = 0, previous = null;
+// séance en direct
+let started = false, startedAt = null, enteredAt = Date.now(), events = [], saved = false;
+const contributions = new Map(); // id → { id, name, url, date, receivedAt, screenIndex, shownAt, shownScreen }
+let baseline = null, allRows = [], shownByScreen = new Map(), pollTimer = null;
+// modifications et suppressions de contributions par l'animateur : id → { url?, deleted?, at, applied }
+const overrides = new Map();
+// rejeu
+let R = null, rIdx = 0, rElapsed = 0, playing = false, lastTick = Date.now();
+
+// ==========================================
+// Chronomètre
+// ==========================================
+function status(seconds, planned) {
+  const r = seconds / Math.max(1, planned);
+  return r <= P.timer.warning ? "ok" : r <= P.timer.danger ? "warning" : "danger";
+}
+function tick() {
+  if (!P) return;
+  const s = P.screens[current];
+  let elapsed, total;
+  if (REPLAY) {
+    const now = Date.now();
+    if (playing) rElapsed += ((now - lastTick) / 1000) * Number($("#b-speed").value);
+    lastTick = now;
+    const ev = R?.events?.[rIdx];
+    if (playing && ev && rElapsed >= ev.seconds) { if (rIdx < R.events.length - 1) replayGo(rIdx + 1); else { playing = false; toast("Fin du rejeu"); } }
+    elapsed = rElapsed;
+    total = (R?.events ?? []).slice(0, rIdx).reduce((n, e) => n + e.seconds, 0) + rElapsed;
+    if (s.type === "contribution") renderReplayContribution();
+  } else {
+    elapsed = started ? (Date.now() - enteredAt) / 1000 : 0;
+    total = started ? (Date.now() - new Date(startedAt).getTime()) / 1000 : 0;
+  }
+  const c = $("#chrono");
+  c.className = `chrono ${started || REPLAY ? status(elapsed, s.duration) : "idle"}`;
+  c.innerHTML = `${mmss(elapsed)} <small>/ ${mmss(s.duration)}</small>`;
+  const plannedNow = P.screens.slice(0, current).reduce((n, x) => n + x.duration, 0) + Math.min(elapsed, s.duration);
+  const drift = total - plannedNow;
+  $("#total").textContent = `séance ${mmss(total)} / ${mmss(P.durationSeconds)}${(started || REPLAY) && Math.abs(drift) >= 30 ? ` (${drift > 0 ? "+" : "−"}${mmss(Math.abs(drift))})` : ""}`;
+}
+setInterval(tick, 250);
+
+// ==========================================
+// Navigation
+// ==========================================
+function closeEvent() {
+  if (!started || REPLAY) return;
+  const s = P.screens[current];
+  const seconds = (Date.now() - enteredAt) / 1000;
+  if (seconds < 1) return;
+  events.push({ index: current, type: s.type, enteredAt: new Date(enteredAt).toISOString(), leftAt: new Date().toISOString(), seconds: Math.round(seconds * 10) / 10, planned: s.duration, status: status(seconds, s.duration) });
+}
+function go(i) {
+  if (!P) return;
+  i = Math.max(0, Math.min(P.screens.length - 1, i));
+  if (REPLAY) { // en rejeu, la navigation suit les passages enregistrés
+    const k = R.events.findIndex((e, n) => n >= (i > current ? rIdx + 1 : 0) && e.index === i);
+    if (k >= 0) replayGo(k); else toast("Écran non parcouru pendant cette séance");
+    return;
+  }
+  if (i === current) return;
+  closeEvent();
+  previous = current;
+  current = i;
+  enteredAt = Date.now();
+  saveDraft();
+  render();
+}
+$("#b-first").onclick = () => go(0);
+$("#b-prev").onclick = () => (REPLAY ? replayGo(rIdx - 1) : go(current - 1));
+$("#b-next").onclick = () => (REPLAY ? replayGo(rIdx + 1) : go(current + 1));
+$("#b-last").onclick = () => go(P.screens.length - 1);
+$("#b-back").onclick = () => { if (previous !== null) go(previous); };
+$("#b-goto").onchange = e => { const n = Number(e.target.value); if (n >= 1) go(n - 1); e.target.blur(); };
+$("#b-full").onclick = () => (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen()).catch(() => {});
+document.addEventListener("keydown", e => {
+  if (e.target.tagName === "INPUT" || e.target.tagName === "SELECT" || !P) return;
+  const k = e.key;
+  if (k === "ArrowRight" || k === "PageDown") { e.preventDefault(); $("#b-next").click(); }
+  else if (k === "ArrowLeft" || k === "PageUp") { e.preventDefault(); $("#b-prev").click(); }
+  else if (k === "Home") go(0);
+  else if (k === "End") go(P.screens.length - 1);
+  else if (k === "r" || k === "Backspace") { e.preventDefault(); $("#b-back").click(); }
+  else if (k === "g") { e.preventDefault(); $("#b-goto").focus(); $("#b-goto").select(); }
+  else if (k === "f") $("#b-full").click();
+  else if (k === "q") $("#qr-corner")?.classList.toggle("small");
+  else if (k === " " && REPLAY) { e.preventDefault(); togglePlay(); }
+});
+
+// ==========================================
+// Affichage des écrans
+// ==========================================
+const cycleMaterial = cycle => {
+  for (let c = cycle; c >= 0; c--) {
+    const inCycle = P.screens.filter(s => s.cycle === c);
+    const citations = inCycle.filter(s => s.citation).map(s => s.citation), diapos = inCycle.filter(s => s.diapo).map(s => s.diapo);
+    if (citations.length || diapos.length) return { citations, diapos };
+  }
+  return { citations: [], diapos: [] };
+};
+const fileUrl = name => (PUBLIC ? `/public/api/rejeu/file?t=${encodeURIComponent(token)}&name=${encodeURIComponent(name)}` : `/api/chaoticum/file?run=${encodeURIComponent(runId)}&name=${encodeURIComponent(name)}`);
+const refOf = ci => [ci.source.creators, ci.source.year, ci.source.title].filter(Boolean).join(", ");
+
+async function render() {
+  const s = P.screens[current];
+  $("#type").textContent = LABELS[s.type] ?? s.type;
+  $("#type").style.background = `var(--t-${s.type})`;
+  $("#pos").textContent = `écran ${current + 1} / ${P.screens.length}`;
+  $("#b-goto").value = current + 1;
+  $("#b-back").disabled = previous === null;
+  [...$("#progress").children].forEach((x, i) => { x.classList.toggle("current", i === current); x.classList.toggle("visited", visited().has(i)); });
+  const stage = $("#stage");
+  stage.className = "stage";
+  stage.replaceChildren();
+  // QR code de participation sur chaque écran (l'écran « Contributions » a le sien, en grand)
+  const corner = $("#qr-corner");
+  corner?.classList.toggle("hidden", s.type === "contribution" || !P.grist?.formUrl);
+
+  if (s.type === "citation" && s.citation) {
+    const ci = s.citation;
+    stage.append(el("div", { className: "center" },
+      el("blockquote", { className: "citation", textContent: ci.text }),
+      ci.comment ? el("div", { className: "comment", textContent: ci.comment }) : null,
+      el("div", { className: "ref" }, refOf(ci), ci.page ? `, p. ${ci.page}` : "", ci.author ? ` · surligné par ${ci.author}` : "")));
+  } else if (s.type === "diapo" && s.diapo) {
+    stage.className = "stage full";
+    stage.append(el("iframe", { className: "slide", src: s.diapo.url, title: `${s.diapo.name}, diapo ${s.diapo.diapo}`, allow: "fullscreen" }));
+  } else if (s.type === "question" && s.question) {
+    const m = cycleMaterial(s.cycle);
+    stage.append(el("div", { className: "center" },
+      el("div", { className: "question", textContent: s.question.text }),
+      s.question.intention ? el("div", { className: "intention", textContent: s.question.intention }) : null,
+      el("div", { className: "sources" },
+        m.citations.map(ci => el("div", { className: "src" }, `« ${ci.text.slice(0, 140)}${ci.text.length > 140 ? "…" : ""} » — ${ci.source.creators || ci.source.title}`)),
+        m.diapos.map(d => d.screenshot ? el("div", { className: "src" }, el("img", { src: fileUrl(d.screenshot), alt: `${d.name}, diapo ${d.diapo}`, loading: "lazy" }), `${d.name}, diapo ${d.diapo}`) : el("div", { className: "src", textContent: `${d.name}, diapo ${d.diapo}` })))));
+  } else if (s.type === "diagramme" && s.diagramme) {
+    const box = el("div", { className: "diagram", style: "display:block;padding:0" });
+    stage.append(el("div", { className: "center", style: "max-width:none" }, el("h2", { className: "screen-title", textContent: s.diagramme.title }), box));
+    // diagramme tel quel, sinon réparé (syntaxes invalides écrites par le modèle), sinon son code
+    let svg = null;
+    for (const code of [s.diagramme.mermaid, repairMermaid(s.diagramme.mermaid)]) {
+      try { svg = (await mermaid.render(`d${current}_${Date.now()}`, code)).svg; break; } catch { document.querySelectorAll('[id^="dd"]').forEach(x => x.remove()); }
+    }
+    if (svg) panZoom(box, svg); else box.replaceWith(el("pre", { className: "code", textContent: s.diagramme.mermaid }));
+  } else if (s.type === "contribution") {
+    stage.className = "stage";
+    stage.append(contributionLayout());
+    if (REPLAY) renderReplayContribution(true); else renderContribution();
+  } else {
+    stage.append(el("div", { className: "center muted" }, el("h2", { className: "screen-title", textContent: LABELS[s.type] ?? s.type }), "Contenu non généré pour cet écran (voir le rapport de la partition)."));
+  }
+}
+const visited = () => new Set([...(REPLAY ? (R?.events ?? []).slice(0, rIdx + 1) : events).map(e => e.index), current]);
+
+// ==========================================
+// Contributions (formulaire Grist)
+// ==========================================
+// réparation des diagrammes écrits directement par un modèle (même logique que src/lib/chaoticum/mermaid.ts)
+function repairMermaid(code) {
+  const lab = (s, max) => { const t = String(s ?? "").replace(/["“”]/g, "'").replace(/[|\r\n]+/g, " ").replace(/\s+/g, " ").trim(); return t.length > max ? `${t.slice(0, max - 1)}…` : t; };
+  let m = String(code ?? "").replace(/^```(?:mermaid)?\s*/i, "").replace(/```\s*$/, "").trim();
+  if (!/^(flowchart|graph|mindmap)\b/.test(m)) m = `flowchart TD\n${m}`;
+  if (/^(flowchart|graph)\b/.test(m)) {
+    m = m.replace(/(-->|---|-\.->|==>)\s*([\w-]+):::[\w-]+\s+"([^"]*)"/g, (_s, arrow, id, l) => `${arrow}|"${lab(l, 40)}"| ${id}`)
+      .replace(/:::[\w-]+/g, "").replace(/^\s*classDef\b.*$/gm, "")
+      .replace(/(\b[\w-]+)\[(?!")([^\]\n]*)\]/g, (_s, id, l) => `${id}["${String(l).replace(/"/g, "'")}"]`)
+      .replace(/(\b[\w-]+)\((?![("])([^)\n]*)\)(?!\))/g, (_s, id, l) => `${id}("${String(l).replace(/"/g, "'")}")`);
+  }
+  return m;
+}
+
+// zoom (molette, boutons) et déplacement (glisser) d'un diagramme
+function panZoom(box, svg) {
+  const inner = el("div", { className: "zoom-inner", innerHTML: svg });
+  const wrap = el("div", { className: "zoom-wrap" }, inner);
+  let scale = 1, x = 0, y = 0;
+  const apply = () => { inner.style.transform = `translate(${x}px, ${y}px) scale(${scale})`; };
+  const zoomAt = (factor, cx, cy) => {
+    const next = Math.min(8, Math.max(0.2, scale * factor));
+    x = cx - ((cx - x) * next) / scale; y = cy - ((cy - y) * next) / scale; scale = next; apply();
+  };
+  const fit = () => {
+    const s = inner.querySelector("svg");
+    if (!s) return;
+    s.style.maxWidth = "none"; s.style.maxHeight = "none";
+    const w = s.getBoundingClientRect().width / scale, h = s.getBoundingClientRect().height / scale;
+    scale = Math.min(wrap.clientWidth / w, wrap.clientHeight / h) * 0.95 || 1;
+    x = (wrap.clientWidth - w * scale) / 2; y = (wrap.clientHeight - h * scale) / 2; apply();
+  };
+  wrap.addEventListener("wheel", e => { e.preventDefault(); const r = wrap.getBoundingClientRect(); zoomAt(e.deltaY < 0 ? 1.15 : 1 / 1.15, e.clientX - r.left, e.clientY - r.top); }, { passive: false });
+  let drag = null;
+  wrap.addEventListener("pointerdown", e => { if (e.target.closest("button")) return; drag = { px: e.clientX, py: e.clientY, x, y }; wrap.setPointerCapture(e.pointerId); wrap.classList.add("dragging"); });
+  wrap.addEventListener("pointermove", e => { if (!drag) return; x = drag.x + e.clientX - drag.px; y = drag.y + e.clientY - drag.py; apply(); });
+  const end = () => { drag = null; wrap.classList.remove("dragging"); };
+  wrap.addEventListener("pointerup", end); wrap.addEventListener("pointercancel", end);
+  const center = f => zoomAt(f, wrap.clientWidth / 2, wrap.clientHeight / 2);
+  wrap.append(el("div", { className: "zoom-tools" },
+    el("button", { textContent: "+", title: "Zoomer", onclick: () => center(1.25) }),
+    el("button", { textContent: "−", title: "Dézoomer", onclick: () => center(0.8) }),
+    el("button", { textContent: "⟲", title: "Ajuster à l'écran", onclick: fit })));
+  box.replaceChildren(wrap);
+  requestAnimationFrame(fit);
+}
+
+// adresse effective d'une contribution (modifiée par l'animateur) et contributions supprimées
+const effective = c => ({ ...c, url: overrides.get(c.id)?.url ?? c.url });
+const isDeleted = c => !!overrides.get(c.id)?.deleted;
+// lien de redirection d'un moteur de recherche (google.com/url?…&url=…) : adresse de destination
+function cleanUrl(u) {
+  try { const x = new URL(u); if (/(^|\.)google\./.test(x.hostname) && x.pathname === "/url") return x.searchParams.get("url") || x.searchParams.get("q") || u; } catch { /* adresse invalide */ }
+  return u;
+}
+async function editContribution(c) {
+  const current = effective(c).url;
+  const proposal = cleanUrl(current);
+  const url = prompt(`Adresse proposée par ${c.name || "anonyme"}${proposal !== current ? " (lien de redirection : adresse de destination proposée)" : ""} :`, proposal);
+  if (!url || url.trim() === current) return;
+  if (!/^https?:\/\//i.test(url.trim())) return toast("Adresse invalide (http:// ou https://)");
+  await changeContribution(c, { url: url.trim() });
+}
+async function removeContribution(c) {
+  if (!confirm(`Supprimer la contribution de ${c.name || "anonyme"} ?\n${effective(c).url}`)) return;
+  await changeContribution(c, { remove: true });
+}
+async function changeContribution(c, change) {
+  let r = { applied: "session" };
+  try { r = await api("/api/chaoticum/contribution", { method: "POST", body: { run: runId, rowId: c.rowId, ...change } }); } catch (e) { r = { applied: "session", reason: e.message }; }
+  const at = new Date().toISOString();
+  const o = { ...(overrides.get(c.id) ?? {}), at, applied: r.applied, ...(change.remove ? { deleted: true } : { url: change.url }) };
+  overrides.set(c.id, o);
+  const rec = contributions.get(c.id);
+  if (rec && started) {
+    (rec.edits ??= []).push({ at, ...(change.remove ? { deleted: true } : { url: change.url }), applied: r.applied });
+    if (change.remove) rec.deletedAt = at;
+  }
+  if (change.remove && shownByScreen.get(current) === c.id) { shownByScreen.delete(current); const main = $("#contrib-main"); if (main) delete main.dataset.url; }
+  if (!change.remove) { const main = $("#contrib-main"); if (main && shownByScreen.get(current) === c.id) delete main.dataset.url; }
+  saveDraft();
+  toast(`${change.remove ? "Contribution supprimée" : "Adresse modifiée"} ${r.applied === "grist" ? "dans Grist" : `pour la séance${r.reason ? ` (${r.reason})` : ""}`}`);
+  renderContribution();
+}
+
+function contributionLayout() {
+  return el("div", { className: "contrib-layout" },
+    el("div", { className: "contrib-side" },
+      // rejeu : la séance est terminée, on ne peut plus participer
+      REPLAY ? el("div", { className: "form-link", style: "font-size:14px", textContent: "Séance terminée : rejeu en lecture seule des contributions reçues pendant la séance." }) : el("div", { className: "qr", innerHTML: qrSvg(P.grist.formUrl) }),
+      REPLAY ? null : el("div", { className: "form-link", textContent: P.grist.formUrl }),
+      el("div", { className: "contribs", id: "contribs" })),
+    el("div", { className: "contrib-main", id: "contrib-main" }));
+}
+
+// contributions de la séance (plus récentes d'abord), puis les plus anciennes de la table
+function renderContribution() {
+  const list = $("#contribs");
+  if (!list) return;
+  const session = [...contributions.values()].filter(c => !isDeleted(c)).reverse();
+  const older = allRows.filter(r => !contributions.has(r.id) && !isDeleted(r)).slice(-10).reverse();
+  const shownId = shownByScreen.get(current);
+  const item = (c, old) => el("div", { className: `c${c.id === shownId ? " on" : ""}` },
+    el("strong", { textContent: c.name || "anonyme" }), old ? el("span", { className: "muted", textContent: " · avant la séance" }) : null,
+    overrides.get(c.id)?.url ? el("span", { className: "edited", textContent: " · modifiée" }) : null,
+    el("div", { className: "u", textContent: effective(c).url }),
+    el("div", { className: "tools" },
+      el("button", { textContent: c.id === shownId ? "Affichée" : "Afficher", disabled: c.id === shownId, onclick: () => showContribution(c) }),
+      el("button", { textContent: "Modifier", title: "Corriger l'adresse", onclick: () => editContribution(c) }),
+      el("button", { textContent: "Supprimer", title: "Retirer cette contribution", onclick: () => removeContribution(c) })));
+  list.replaceChildren(
+    el("div", { className: "muted", style: "font-size:13px", textContent: started ? `${session.length} contribution(s) pendant la séance` : "La séance n'a pas commencé : contributions antérieures." }),
+    ...session.map(c => item(c, false)),
+    older.length ? el("div", { className: "muted", style: "font-size:12px;margin-top:6px", textContent: "Plus anciennes" }) : null,
+    ...older.map(c => item(c, true)));
+  const shown = contributions.get(shownId) ?? allRows.find(r => r.id === shownId);
+  if (shown && !isDeleted(shown)) displayUrl(effective(shown)); else placeholder();
+}
+function placeholder(text = "Flashez le QR code pour proposer une adresse web : elle s'affichera ici.") {
+  const main = $("#contrib-main");
+  if (main && !main.querySelector(".placeholder.waiting")) main.replaceChildren(el("div", { className: "placeholder waiting" }, el("div", { style: "font-size:22px", textContent: text })));
+}
+const frameCache = new Map();
+async function displayUrl(c) {
+  const main = $("#contrib-main");
+  if (!main || main.dataset.url === c.url) return;
+  main.dataset.url = c.url;
+  // rejeu public : vérification enregistrée pendant la séance (pas de requête vers le serveur)
+  if (!frameCache.has(c.url)) frameCache.set(c.url, PUBLIC
+    ? Promise.resolve(c.frameable === false ? { frameable: false, reason: "affichage intégré refusé par le site" } : { frameable: true })
+    : api(`/api/chaoticum/frameable?url=${encodeURIComponent(c.url)}`).catch(() => ({ frameable: false, reason: "vérification impossible" })));
+  const f = await frameCache.get(c.url);
+  if (main.dataset.url !== c.url) return;
+  const rec = contributions.get(c.id);
+  if (rec && started && rec.frameable === undefined) { rec.frameable = f.frameable; saveDraft(); }
+  main.replaceChildren(f.frameable
+    ? el("iframe", { className: "contrib", src: c.url, sandbox: "allow-scripts allow-same-origin allow-popups allow-forms", referrerPolicy: "no-referrer", title: c.url })
+    : el("div", { className: "placeholder" }, el("div", { textContent: `${c.name || "Contribution"} — ce site refuse l'affichage intégré (${f.reason}).` }), el("a", { href: c.url, target: "_blank", rel: "noopener", textContent: c.url })));
+}
+function showContribution(c) {
+  shownByScreen.set(current, c.id);
+  const rec = contributions.get(c.id);
+  if (rec && started && !rec.shownAt) { rec.shownAt = new Date().toISOString(); rec.shownScreen = current; }
+  if (rec && started) (rec.shows ??= []).push({ at: new Date().toISOString(), screen: current });
+  saveDraft();
+  renderContribution();
+}
+
+async function poll() {
+  try {
+    const r = await api(`/api/chaoticum/contributions?run=${encodeURIComponent(runId)}`);
+    allRows = r.contributions;
+    if (started) {
+      if (!baseline) baseline = new Set(allRows.map(x => x.id));
+      for (const row of allRows) {
+        if (baseline.has(row.id) || contributions.has(row.id)) continue;
+        contributions.set(row.id, { id: row.id, rowId: row.rowId, name: row.name, url: row.url, date: row.date, receivedAt: new Date().toISOString(), screenIndex: current, shownAt: null, shownScreen: null });
+        toast(`Nouvelle contribution : ${row.name || "anonyme"}`);
+        if (P.screens[current].type === "contribution" && !P.grist.moderation) showContribution(contributions.get(row.id));
+      }
+      saveDraft();
+    }
+    if (P.screens[current].type === "contribution") renderContribution();
+  } catch (e) {
+    if (P.screens[current].type === "contribution") placeholder(`Réponses Grist indisponibles : ${e.message}`);
+  }
+}
+
+// ==========================================
+// Séance en direct : début, brouillon, enregistrement
+// ==========================================
+function participation() {
+  return { runId, configItemId: P.configItemId ?? null, title: P.title, mode: "live", startedAt, endedAt: new Date().toISOString(), elapsedSeconds: Math.round((Date.now() - new Date(startedAt).getTime()) / 1000), plannedSeconds: P.durationSeconds, events, contributions: [...contributions.values()], overrides: [...overrides].map(([id, o]) => ({ id, ...o })) };
+}
+function saveDraft() { if (started && !REPLAY && !saved) store.set({ startedAt, events, current, enteredAt, contributions: [...contributions.values()], baseline: baseline ? [...baseline] : null, overrides: [...overrides] }); }
+function start(draft) {
+  started = true;
+  if (draft) {
+    startedAt = draft.startedAt; events = draft.events ?? []; current = draft.current ?? 0; enteredAt = draft.enteredAt ?? Date.now();
+    for (const c of draft.contributions ?? []) contributions.set(c.id, c);
+    baseline = draft.baseline ? new Set(draft.baseline) : null;
+    for (const [id, o] of draft.overrides ?? []) overrides.set(id, o);
+  } else {
+    startedAt = new Date().toISOString(); enteredAt = Date.now(); events = []; baseline = null;
+  }
+  $("#overlay").classList.add("hidden");
+  $("#mode").textContent = "en direct";
+  saveDraft(); render(); poll();
+}
+$("#b-end").onclick = async () => {
+  if (REPLAY) return;
+  if (!started) return toast("La séance n'a pas commencé");
+  if (!confirm("Terminer la séance et l'enregistrer dans Omeka S ?")) return;
+  closeEvent();
+  const p = participation();
+  enteredAt = Date.now();
+  $("#b-end").disabled = true;
+  try {
+    const r = await api("/api/chaoticum/participation", { method: "POST", body: p });
+    saved = true; store.clear();
+    overlay(el("h2", { textContent: "Séance enregistrée" }),
+      el("p", {}, `${p.events.length} passage(s) d'écran, ${p.contributions.length} contribution(s), ${mmss(p.elapsedSeconds)}.`),
+      r.itemId ? el("p", {}, "Omeka S : ", el("a", { href: r.adminUrl, target: "_blank", textContent: `item ${r.itemId}`, style: "color:var(--accent)" })) : el("p", { className: "muted", textContent: `Archive locale seulement${r.error ? ` (Omeka S : ${r.error})` : ""}.` }),
+      shareBlock(r),
+      el("button", { className: "primary", textContent: "Rejouer cette séance", onclick: () => { location.href = `/jouer?run=${encodeURIComponent(runId)}&replay=${encodeURIComponent(r.id)}`; } }));
+  } catch (e) { $("#b-end").disabled = false; toast("Enregistrement impossible : " + e.message); }
+};
+window.addEventListener("beforeunload", e => { if (started && !saved && !REPLAY && events.length) { e.preventDefault(); e.returnValue = ""; } });
+// QR code du lien public de rejeu (lecture seule) : à flasher par le public en fin de séance
+function shareBlock(r) {
+  if (!r.sharePath) return null;
+  // adresse publique configurée (CHAOTICUM_URL), sauf si elle est locale : adresse de consultation de la page
+  const base = r.publicBase && !/\/\/(127\.|localhost|\[::1\])/.test(r.publicBase) ? r.publicBase : location.origin;
+  const url = `${base.replace(/\/$/, "")}${r.sharePath}`;
+  return el("div", { style: "margin:14px 0" },
+    el("div", { style: "background:#fff;border-radius:10px;padding:10px;width:240px;margin:0 auto", innerHTML: qrSvg(url) }),
+    el("p", { style: "margin:8px 0 4px;font-weight:650", textContent: "Revoir la séance" }),
+    el("a", { href: url, target: "_blank", rel: "noopener", textContent: url, style: "color:var(--accent);font-size:12px;word-break:break-all" }),
+    el("p", { className: "muted", style: "font-size:12px", textContent: "Lien public en lecture seule : on ne peut plus participer ni modifier les contributions." }),
+    el("button", { textContent: "Copier le lien", onclick: () => navigator.clipboard.writeText(url).then(() => toast("Lien copié")) }));
+}
+function overlay(...children) { $("#overlay-box").replaceChildren(...children); $("#overlay").classList.remove("hidden"); }
+
+// ==========================================
+// Rejeu d'une séance enregistrée
+// ==========================================
+function replayGo(k) {
+  if (!R?.events?.length) return;
+  rIdx = Math.max(0, Math.min(R.events.length - 1, k));
+  previous = current;
+  current = R.events[rIdx].index;
+  rElapsed = 0; lastTick = Date.now();
+  $("#pos").textContent = `écran ${current + 1} / ${P.screens.length}`;
+  $("#mode").textContent = `rejeu · passage ${rIdx + 1} / ${R.events.length}`;
+  render();
+}
+function togglePlay() { playing = !playing; lastTick = Date.now(); $("#b-play").textContent = playing ? "⏸" : "⏯"; }
+$("#b-play").onclick = togglePlay;
+
+// contributions reçues et affichées au moment rejoué
+function renderReplayContribution(force = false) {
+  const ev = R?.events?.[rIdx];
+  const list = $("#contribs");
+  if (!ev || !list) return;
+  const t = new Date(ev.enteredAt).getTime() + rElapsed * 1000;
+  // adresse et suppression telles qu'elles étaient à l'instant rejoué
+  const at = c => { const edits = (c.edits ?? []).filter(e => new Date(e.at).getTime() <= t); return { ...c, url: [...edits].reverse().find(e => e.url)?.url ?? c.url, gone: edits.some(e => e.deleted) }; };
+  const received = (R.contributions ?? []).filter(c => new Date(c.receivedAt).getTime() <= t).map(at).filter(c => !c.gone);
+  const shows = (R.contributions ?? []).flatMap(c => (c.shows ?? (c.shownAt ? [{ at: c.shownAt, screen: c.shownScreen }] : [])).map(s => ({ ...s, c })))
+    .filter(s => s.screen === ev.index && new Date(s.at).getTime() >= new Date(ev.enteredAt).getTime() && new Date(s.at).getTime() <= t)
+    .sort((a, b) => a.at.localeCompare(b.at));
+  const shownRaw = shows.at(-1)?.c, shown = shownRaw ? received.find(c => c.id === shownRaw.id) : null;
+  const key = `${received.length}|${shown?.id ?? ""}`;
+  if (!force && list.dataset.key === key) return;
+  list.dataset.key = key;
+  list.replaceChildren(el("div", { className: "muted", style: "font-size:13px", textContent: `${received.length} contribution(s) reçue(s) à ce moment de la séance` }),
+    ...[...received].reverse().map(c => el("div", { className: `c${c.id === shown?.id ? " on" : ""}` }, el("strong", { textContent: c.name || "anonyme" }), el("div", { className: "u", textContent: c.url }))));
+  if (shown) displayUrl(shown); else { const main = $("#contrib-main"); if (main) { delete main.dataset.url; placeholder("Aucune contribution affichée à ce moment de la séance."); } }
+}
+
+// ==========================================
+// Chargement
+// ==========================================
+async function load() {
+  if (PUBLIC) {
+    if (!token) throw new Error("Lien de rejeu incomplet");
+    const r = await api(`/public/api/rejeu?t=${encodeURIComponent(token)}`);
+    P = r.partition; R = r.participation; runId = P.runId;
+    // lecture seule : ni retour à la liste (privée), ni QR code de participation, ni enregistrement
+    document.querySelector("a.home").classList.add("hidden");
+    $("#qr-corner").remove();
+  } else {
+    if (!runId) throw new Error("Partition non précisée (paramètre run)");
+    P = await api(`/api/chaoticum/partition?run=${encodeURIComponent(runId)}`);
+  }
+  document.title = `${P.title} – lecteur`;
+  $("#title").textContent = P.title;
+  if (!REPLAY) {
+    $("#qr-corner").replaceChildren(el("div", { innerHTML: qrSvg(P.grist?.formUrl) }), el("div", { textContent: "Participer" }));
+    $("#qr-corner").onclick = () => $("#qr-corner").classList.toggle("small");
+  } else $("#qr-corner")?.remove();
+  $("#progress").replaceChildren(...P.screens.map((s, i) => el("span", { style: `background:var(--t-${s.type});flex:${s.duration}`, title: `${i + 1}. ${LABELS[s.type]} (${mmss(s.duration)})`, onclick: () => go(i) })));
+  if (REPLAY) {
+    if (!PUBLIC) R = await api(`/api/chaoticum/participation?run=${encodeURIComponent(runId)}&id=${encodeURIComponent(replayId)}`);
+    $("#replay-ctl").classList.remove("hidden");
+    $("#b-end").classList.add("hidden");
+    $("#b-back").classList.add("hidden");
+    if (!R.events?.length) throw new Error("Séance sans passage d'écran enregistré");
+    replayGo(0);
+    overlay(el("h2", { textContent: "Rejeu de la séance" }),
+      el("p", {}, `${new Date(R.startedAt).toLocaleString("fr-FR")} · ${R.events.length} passage(s) d'écran · ${(R.contributions ?? []).length} contribution(s) · ${mmss(R.elapsedSeconds ?? 0)}`),
+      el("p", { className: "muted", textContent: "Les écrans défilent selon les temps enregistrés (vitesse réglable) ; les contributions apparaissent au moment où elles ont été reçues et affichées." }),
+      el("button", { className: "primary", textContent: "Lancer le rejeu", onclick: () => { $("#overlay").classList.add("hidden"); togglePlay(); } }));
+    return;
+  }
+  render();
+  pollTimer = setInterval(poll, Math.max(3, Number(P.grist.pollSeconds) || 10) * 1000);
+  poll();
+  const draft = store.get();
+  const intro = [el("h2", { textContent: P.title }),
+    el("p", {}, `${P.screens.length} écrans · ${mmss(P.durationSeconds)} · graine ${P.seed}`),
+    el("p", { className: "muted", textContent: "Navigation : ← → (écran précédent, suivant), Début / Fin, G (aller à), R (revenir), F (plein écran), Q (réduire le QR code). Le chronomètre passe à l'orange puis au rouge quand la durée prévue d'un écran est dépassée." })];
+  if (draft?.startedAt) overlay(...intro, el("p", {}, `Une séance commencée le ${new Date(draft.startedAt).toLocaleString("fr-FR")} n'a pas été enregistrée.`),
+    el("button", { className: "primary", textContent: "Reprendre cette séance", onclick: () => start(draft) }), " ",
+    el("button", { textContent: "Nouvelle séance", onclick: () => { store.clear(); start(null); } }));
+  else overlay(...intro, el("button", { className: "primary", textContent: "Démarrer la séance", onclick: () => start(null) }), " ",
+    el("button", { textContent: "Parcourir sans enregistrer", onclick: () => { $("#overlay").classList.add("hidden"); $("#mode").textContent = "aperçu"; } }));
+  $("#mode").textContent = "aperçu";
+}
+load().catch(e => overlay(el("h2", { textContent: PUBLIC ? "Rejeu indisponible" : "Partition indisponible" }), el("p", { textContent: e.message }), PUBLIC ? null : el("a", { href: "/", textContent: "Retour à l'application", style: "color:var(--accent)" })));
+</script>
+</body>
+</html>

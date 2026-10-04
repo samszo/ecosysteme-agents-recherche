@@ -41,7 +41,7 @@
             "args": ["paper"],
             "runtimeExecutable": "${workspaceFolder}/node_modules/.bin/tsx",
             "cwd": "${workspaceFolder}",
-            "env": { "PORT": "7282", "EXPLO_PORT": "7283", "PAPER_URL": "http://127.0.0.1:7282", "EXPLO_URL": "http://127.0.0.1:7283" },
+            "env": { "PORT": "7282", "EXPLO_PORT": "7283", "CHAOTICUM_PORT": "7286", "PAPER_URL": "http://127.0.0.1:7282", "EXPLO_URL": "http://127.0.0.1:7283", "CHAOTICUM_URL": "http://127.0.0.1:7286" },
             "autoAttachChildProcesses": true,
             "console": "integratedTerminal",
             "internalConsoleOptions": "neverOpen",
@@ -59,7 +59,39 @@
             "args": ["explo"],
             "runtimeExecutable": "${workspaceFolder}/node_modules/.bin/tsx",
             "cwd": "${workspaceFolder}",
-            "env": { "PORT": "7282", "EXPLO_PORT": "7283", "PAPER_URL": "http://127.0.0.1:7282", "EXPLO_URL": "http://127.0.0.1:7283" },
+            "env": { "PORT": "7282", "EXPLO_PORT": "7283", "CHAOTICUM_PORT": "7286", "PAPER_URL": "http://127.0.0.1:7282", "EXPLO_URL": "http://127.0.0.1:7283", "CHAOTICUM_URL": "http://127.0.0.1:7286" },
+            "autoAttachChildProcesses": true,
+            "console": "integratedTerminal",
+            "internalConsoleOptions": "neverOpen",
+            "sourceMaps": true,
+            "resolveSourceMapLocations": ["${workspaceFolder}/**", "!**/node_modules/**"],
+            "skipFiles": ["<node_internals>/**", "${workspaceFolder}/node_modules/**"],
+            "serverReadyAction": { "action": "openExternally", "pattern": "http://127\\.0\\.0\\.1:(\\d+)", "uriFormat": "http://127.0.0.1:%s" }
+        },
+        {
+            // Workflow chaoticumSeminario, sans interface (équivalent de npm run chaoticum)
+            "name": "Workflow : chaoticumSeminario",
+            "type": "node",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/runners/chaoticum.ts",
+            "runtimeExecutable": "${workspaceFolder}/node_modules/.bin/tsx",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "internalConsoleOptions": "neverOpen",
+            "sourceMaps": true,
+            "resolveSourceMapLocations": ["${workspaceFolder}/**", "!**/node_modules/**"],
+            "skipFiles": ["<node_internals>/**", "${workspaceFolder}/node_modules/**"]
+        },
+        {
+            // Interface chaoticumSeminario : serveur, lecteur de partition et workflow lancé depuis l'interface
+            "name": "Interface : chaoticumSeminario (7286)",
+            "type": "node",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/ui/server.ts",
+            "args": ["chaoticum"],
+            "runtimeExecutable": "${workspaceFolder}/node_modules/.bin/tsx",
+            "cwd": "${workspaceFolder}",
+            "env": { "PORT": "7282", "EXPLO_PORT": "7283", "CHAOTICUM_PORT": "7286", "PAPER_URL": "http://127.0.0.1:7282", "EXPLO_URL": "http://127.0.0.1:7283", "CHAOTICUM_URL": "http://127.0.0.1:7286" },
             "autoAttachChildProcesses": true,
             "console": "integratedTerminal",
             "internalConsoleOptions": "neverOpen",
@@ -86,8 +118,8 @@
     "compounds": [
         {
             // les deux interfaces en même temps (liens entre elles fonctionnels)
-            "name": "Interfaces : Atelier + exploZoteroAnno",
-            "configurations": ["Interface : Atelier d'articles (7282)", "Interface : exploZoteroAnno (7283)"],
+            "name": "Interfaces : les trois applications",
+            "configurations": ["Interface : Atelier d'articles (7282)", "Interface : exploZoteroAnno (7283)", "Interface : chaoticumSeminario (7286)"],
             "stopAll": true
         }
     ]

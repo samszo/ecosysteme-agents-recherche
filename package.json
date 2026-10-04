@@ -9,7 +9,10 @@
     "ui": "tsx src/ui/server.ts",
     "docs": "tsx scripts/build-docs.ts",
     "explo": "tsx src/runners/explo.ts",
-    "ui:explo": "tsx src/ui/server.ts explo"
+    "ui:explo": "tsx src/ui/server.ts explo",
+    "chaoticum": "tsx src/runners/chaoticum.ts",
+    "ui:chaoticum": "tsx src/ui/server.ts chaoticum",
+    "chaoticum:index": "tsx src/runners/chaoticumIndex.ts"
   },
   "repository": {
     "type": "git",
@@ -30,6 +33,7 @@
     "dotenv": "^18.0.4",
     "pdf-parse": "^2.4.5",
     "pdfjs-dist": "^5.4.296",
+    "playwright": "^1.63.0",
     "zod": "^4.6.5"
   },
   "devDependencies": {

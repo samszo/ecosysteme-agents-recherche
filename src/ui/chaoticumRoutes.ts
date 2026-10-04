@@ -9,7 +9,8 @@ import { PARTITIONS_DIR, type ChaoticumConfig } from "../config/chaoticum";
 import { deleteContribution, frameable, readContributions, updateContribution } from "../lib/chaoticum/grist";
 import { uploadWithFallback } from "../workflow/runs/importSynthesis";
 import { listSlides } from "../lib/chaoticum/slides";
-import { emptySlides, emptyZotero, loadStore } from "../lib/chaoticum/index/store";
+import { emptySlides, emptyZotero, indexDir, loadStore } from "../lib/chaoticum/index/store";
+import { regenerate } from "../lib/chaoticum/regenerate";
 
 type Handler = (req: http.IncomingMessage, res: http.ServerResponse, url: URL) => Promise<void> | void;
 interface Ctx {
@@ -25,7 +26,9 @@ interface Ctx {
 }
 
 const validId = (id: string | null): id is string => !!id && /^[\w-]{1,80}$/.test(id);
-const FILE_NAME = /^(partition\.json|rapport_chaoticum\.md|diapo_\d{1,3}\.png)$/;
+// copies d'écran : diapo_NN.png (génération) ou diapo_<identifiant>.png (éditeur d'écran)
+const FILE_NAME = /^(partition\.json|rapport_chaoticum\.md|diapo_[\w-]{1,40}\.png)$/;
+const SCREEN_TYPES = ["citation", "diapo", "question", "contribution", "diagramme"];
 const TYPES: Record<string, string> = { ".json": "application/json", ".md": "text/markdown", ".png": "image/png" };
 const val = (it: any, t: string) => it?.[t]?.[0]?.["@value"] ?? null;
 
@@ -105,7 +108,15 @@ export function chaoticumRoutes(ctx: Ctx): Record<string, Handler> {
     const s = p.screens?.[index];
     if (!s) throw new Error(`Écran ${index + 1} introuvable`);
     const changed: string[] = [];
+    if (ch.type && ch.type !== s.type) {
+      if (!SCREEN_TYPES.includes(ch.type)) throw new Error(`Type d'écran inconnu : ${ch.type}`);
+      // le contenu de l'ancien type est retiré
+      for (const k of ["citation", "diapo", "question", "diagramme", "contribution"]) delete s[k];
+      s.type = ch.type;
+      changed.push("type");
+    }
     if (ch.duration !== undefined) { s.duration = Math.max(5, Math.round(Number(ch.duration) || s.duration)); changed.push("durée"); }
+    if (s.type === "contribution" && ch.contribution) { s.contribution = { instruction: str(ch.contribution.instruction, 300) }; changed.push("consigne"); }
     if (s.type === "citation" && ch.citation) {
       const c = ch.citation;
       s.citation = { ...(s.citation ?? { key: "manuel", kind: "note", color: null, author: null, date: null }), text: str(c.text), comment: str(c.comment, 1000), page: str(c.page, 40),
@@ -118,8 +129,8 @@ export function chaoticumRoutes(ctx: Ctx): Record<string, Handler> {
       const moved = slidePath !== s.diapo?.path || n !== s.diapo?.diapo;
       s.diapo = { ...(s.diapo ?? {}), path: slidePath, name: slidePath.replace(/\/slide\.html$/, ""), diapo: n,
         max: Math.max(n, Number(ch.diapo.max ?? s.diapo?.max ?? n) || n), url: `${String(p.siteUrl).replace(/\/?$/, "/")}${slidePath}?diapo=${n}`,
-        // la copie d'écran et sa description ne correspondent plus à la nouvelle diapo
-        ...(moved ? { screenshot: null, description: "" } : {}) };
+        // la copie d'écran et sa description ne correspondent plus à la nouvelle diapo : reprises de l'index si elle y est
+        ...(moved ? fromIndex(p, slidePath, n) : {}) };
       changed.push("diapo");
     }
     if (s.type === "question" && ch.question) { s.question = { text: str(ch.question.text, 600), intention: str(ch.question.intention, 1000) }; changed.push("question"); }
@@ -130,6 +141,43 @@ export function chaoticumRoutes(ctx: Ctx): Record<string, Handler> {
     p.modifiedAt = new Date().toISOString();
     (p.edits ??= []).push({ at: p.modifiedAt, index, changed });
     return changed;
+  }
+
+  // diapo de l'index RAG : description et copie d'écran recopiée dans le dossier de la partition
+  const newFiles = new Map<string, string[]>();
+  function fromIndex(p: any, slidePath: string, n: number) {
+    const e = loadStore("diapos", emptySlides(), ctx.config()).items[`${slidePath}#${n}`];
+    if (!e?.description) return { screenshot: null, description: "" };
+    let screenshot: string | null = null;
+    const src = e.screenshot ? path.join(indexDir(ctx.config()), e.screenshot) : "";
+    if (src && fs.existsSync(src)) {
+      screenshot = `diapo_e${Date.now().toString(36)}.png`;
+      fs.mkdirSync(partDir(p.runId), { recursive: true });
+      fs.copyFileSync(src, path.join(partDir(p.runId), screenshot));
+      newFiles.set(p.runId, [...(newFiles.get(p.runId) ?? []), screenshot]);
+    }
+    return { screenshot, description: `${e.title}. ${e.description}`, max: e.max };
+  }
+
+  // structure de la partition : insérer, dupliquer, déplacer, supprimer un écran
+  function applyStructure(p: any, op: string, index: number, opts: any) {
+    const n = p.screens.length;
+    if (!Number.isInteger(index) || index < 0 || index >= n) throw new Error("Écran introuvable");
+    const s = p.screens[index];
+    if (op === "delete") { if (n <= 1) throw new Error("Une partition garde au moins un écran"); p.screens.splice(index, 1); }
+    else if (op === "duplicate") p.screens.splice(index + 1, 0, JSON.parse(JSON.stringify(s)));
+    else if (op === "insert") {
+      const type = SCREEN_TYPES.includes(opts.type) ? opts.type : "contribution";
+      p.screens.splice(index + 1, 0, { type, cycle: s.cycle, duration: Math.max(5, Math.round(Number(opts.duration) || 60)) });
+    } else if (op === "move") {
+      const to = Math.max(0, Math.min(n - 1, Number(opts.to)));
+      p.screens.splice(to, 0, ...p.screens.splice(index, 1));
+    } else throw new Error(`Opération inconnue : ${op}`);
+    let start = 0;
+    p.screens.forEach((x: any, i: number) => { x.index = i; x.start = start; start += x.duration; });
+    p.durationSeconds = start;
+    p.modifiedAt = new Date().toISOString();
+    (p.edits ??= []).push({ at: p.modifiedAt, op, index });
   }
 
   async function savePartition(p: any) {
@@ -146,6 +194,11 @@ export function chaoticumRoutes(ctx: Ctx): Record<string, Handler> {
         await uploadWithFallback(omk, item["o:id"], { buffer: Buffer.from(json, "utf-8"), fileName: `partition_${p.modifiedAt.replace(/[:.]/g, "-")}.json`, type: "application/json" },
           { "dcterms:title": `Partition chaoticumSeminario (données) – modifiée le ${p.modifiedAt}`, "dcterms:identifier": identifier, "dcterms:date": p.modifiedAt, "dcterms:format": "application/json" });
         for (const m of previous) await omk.deleteResource(m["o:id"], "media").catch(() => {});
+        for (const f of newFiles.get(p.runId) ?? []) {
+          await uploadWithFallback(omk, item["o:id"], { buffer: fs.readFileSync(path.join(partDir(p.runId), f)), fileName: f, type: "image/png" },
+            { "dcterms:title": `Copie d'écran ${f} (éditeur)`, "dcterms:identifier": `${p.runId}/${f}` }).catch(() => {});
+        }
+        newFiles.delete(p.runId);
         mediaCache.delete(p.runId);
         omeka = "ok";
       }
@@ -299,6 +352,12 @@ export function chaoticumRoutes(ctx: Ctx): Record<string, Handler> {
 
   return {
     // lecteur de partition (plein écran)
+    // éditeur d'écran (module partagé par la page de configuration et le lecteur)
+    "GET /editeur-ecran.js": (_req, res) => {
+      res.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8" });
+      res.end(fs.readFileSync(path.join(ctx.publicDir, "editeur-ecran.js")));
+    },
+
     "GET /jouer": (_req, res) => {
       res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
       res.end(fs.readFileSync(path.join(ctx.publicDir, "jouer.html")));
@@ -351,6 +410,57 @@ export function chaoticumRoutes(ctx: Ctx): Record<string, Handler> {
       } catch (e) { ctx.sendJson(res, 200, { applied: "session", reason: (e as Error).message }); }
     },
 
+    // structure de la partition (insérer, dupliquer, déplacer, supprimer un écran)
+    "POST /api/chaoticum/partition/structure": async (req, res) => {
+      const { run: runId, op, index, ...opts } = await ctx.readBody(req);
+      if (!validId(runId)) return ctx.sendJson(res, 400, { error: "Partition invalide" });
+      try {
+        const p = await readPartition(runId);
+        applyStructure(p, String(op), Number(index), opts);
+        ctx.sendJson(res, 200, { partition: p, omeka: await savePartition(p) });
+      } catch (e) { ctx.sendJson(res, 400, { error: (e as Error).message }); }
+    },
+
+    // nouvelle proposition de question ou de diagramme pour un écran (non enregistrée : l'animateur valide)
+    "POST /api/chaoticum/partition/regenerate": async (req, res) => {
+      const { run: runId, index, what, hint } = await ctx.readBody(req);
+      if (!validId(runId) || !["question", "diagramme"].includes(what)) return ctx.sendJson(res, 400, { error: "Demande invalide" });
+      try { ctx.sendJson(res, 200, await regenerate(await readPartition(runId), Number(index), what, ctx.config(), str(hint, 300))); }
+      catch (e) { ctx.sendJson(res, 502, { error: (e as Error).message }); }
+    },
+
+    // recherche dans les index locaux (citations ou diapos) pour l'éditeur d'écran : sans appel à Albert
+    "GET /api/chaoticum/index/search": async (_req, res, url) => {
+      const c = ctx.config(), kind = url.searchParams.get("kind"), q = (url.searchParams.get("q") ?? "").toLowerCase().trim();
+      const terms = q.split(/\s+/).filter(t => t.length > 1);
+      const score = (text: string) => { const t = text.toLowerCase(); return terms.length ? terms.reduce((n, w) => n + (t.includes(w) ? 1 : 0), 0) : 1; };
+      if (kind === "diapo") {
+        const items = Object.values(loadStore("diapos", emptySlides(), c).items).filter(e => e.description)
+          .map(e => ({ e, s: score(`${e.name} ${e.title} ${e.keywords.join(" ")} ${e.description}`) })).filter(x => x.s > 0)
+          .sort((a, b) => b.s - a.s).slice(0, 24)
+          .map(({ e }) => ({ path: e.path, name: e.name, diapo: e.diapo, max: e.max, title: e.title, description: e.description, thumb: e.screenshot ? `/api/chaoticum/index/screenshot?path=${encodeURIComponent(e.path)}&diapo=${e.diapo}` : null }));
+        return ctx.sendJson(res, 200, items);
+      }
+      if (kind === "citation") {
+        const items = Object.values(loadStore("bibliotheque", emptyZotero(), c).items).flatMap(r => Object.values(r.annotations).map(a => ({ a, r })))
+          .filter(x => (x.a.text || x.a.comment).length >= 20)
+          .map(x => ({ ...x, s: score(`${x.a.text} ${x.a.comment} ${x.r.title} ${x.r.creators} ${x.r.tags.join(" ")}`) })).filter(x => x.s > 0)
+          .sort((a, b) => b.s - a.s).slice(0, 30)
+          .map(({ a, r }) => ({ key: a.key, kind: a.kind, text: a.text || a.comment, comment: a.text ? a.comment : "", page: a.page, color: a.color, author: a.author, date: a.date, source: { key: r.key, title: r.title, creators: r.creators, year: r.year } }));
+        return ctx.sendJson(res, 200, items);
+      }
+      ctx.sendJson(res, 400, { error: "kind = citation ou diapo" });
+    },
+
+    // copie d'écran d'une diapo de l'index (vignettes de l'éditeur)
+    "GET /api/chaoticum/index/screenshot": async (_req, res, url) => {
+      const e = loadStore("diapos", emptySlides(), ctx.config()).items[`${url.searchParams.get("path")}#${url.searchParams.get("diapo")}`];
+      const file = e?.screenshot ? path.join(indexDir(ctx.config()), e.screenshot) : "";
+      if (!file || !fs.existsSync(file)) return ctx.sendJson(res, 404, { error: "Copie d'écran absente" });
+      res.writeHead(200, { "Content-Type": "image/png", "Cache-Control": "max-age=3600" });
+      res.end(fs.readFileSync(file));
+    },
+
     // modification d'un écran de la partition (durée, citation, diapo, question, diagramme)
     "POST /api/chaoticum/partition/screen": async (req, res) => {
       const { run: runId, index, changes } = await ctx.readBody(req);
@@ -386,7 +496,7 @@ export function chaoticumRoutes(ctx: Ctx): Record<string, Handler> {
     },
     "GET /public/api/rejeu/file": async (_req, res, url) => {
       const token = url.searchParams.get("t"), name = url.searchParams.get("name") ?? "";
-      if (!validToken(token) || !/^diapo_\d{1,3}\.png$/.test(name)) return ctx.sendJson(res, 404, { error: "Fichier inconnu" });
+      if (!validToken(token) || !/^diapo_[\w-]{1,40}\.png$/.test(name)) return ctx.sendJson(res, 404, { error: "Fichier inconnu" });
       try {
         const { partition } = await findByToken(token);
         const content = await readFile(partition.runId, name);

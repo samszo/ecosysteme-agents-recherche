@@ -216,18 +216,9 @@
       <h2 id="p-detail-title"></h2>
       <div class="toolbar" id="p-detail-actions"></div>
       <h2 style="margin-top:8px">Déroulé</h2>
-      <p class="lead">Chaque étape peut être modifiée (durée et contenu) ; la partition est enregistrée localement et dans Omeka S.</p>
+      <p class="lead">Chaque écran peut être modifié avec des outils adaptés à son type (recherche dans les index, navigation dans les diapos, éditeur de diagramme, nouvelle proposition par Albert), et la partition réorganisée (insérer, dupliquer, déplacer, supprimer) ; elle est enregistrée localement et dans Omeka S.</p>
       <div id="p-steps" class="muted"></div>
-      <section class="card hidden" id="step-editor" style="margin-top:12px;border-color:var(--accent)">
-        <h2 id="step-title"></h2>
-        <div class="grid" id="step-fields"></div>
-        <div id="step-preview" style="margin-top:10px"></div>
-        <div class="toolbar" style="margin-top:12px">
-          <button id="step-save" class="btn primary">Enregistrer l'étape</button>
-          <button id="step-cancel" class="btn">Annuler</button>
-          <span id="step-info" class="muted" style="font-size:13px"></span>
-        </div>
-      </section>
+      <section class="card hidden" id="step-editor" style="margin-top:12px;border-color:var(--accent)"></section>
       <h2 style="margin-top:16px">Séances</h2>
       <div id="p-sessions" class="muted"></div>
       <h2 style="margin-top:16px">Rapport</h2>
@@ -504,13 +495,13 @@ function repairMermaid(code) {
 // ==========================================
 // Déroulé d'une partition : modification d'une étape
 // ==========================================
-let detailRun = null, detailPartition = null, editing = null, slidesList = null, mermaidLib = null;
+let detailRun = null, detailPartition = null;
 const summaryOf = s =>
   s.citation ? `« ${s.citation.text.slice(0, 110)}${s.citation.text.length > 110 ? "…" : ""} » — ${s.citation.source?.creators || s.citation.source?.title || ""}` :
   s.diapo ? `${s.diapo.name}, diapo ${s.diapo.diapo}/${s.diapo.max}` :
   s.question ? s.question.text :
   s.diagramme ? s.diagramme.title :
-  s.type === "contribution" ? "URL proposées par le public" : "(non généré)";
+  s.type === "contribution" ? (s.contribution?.instruction ? `Consigne : ${s.contribution.instruction}` : "URL proposées par le public") : "(non généré)";
 function renderSteps() {
   const p = detailPartition;
   $("#p-steps").className = "";
@@ -525,65 +516,20 @@ function renderSteps() {
       el("td", {}, el("button", { className: "btn", textContent: "Modifier", onclick: () => editStep(s.index) }))))))),
     ...(p.modifiedAt ? [el("p", { className: "help", textContent: `Modifiée le ${new Date(p.modifiedAt).toLocaleString("fr-FR")} · durée totale ${mmss(p.durationSeconds)}` })] : []));
 }
-const fieldEl = (label, input, wide = false, help = "") => el("div", { className: `field${wide ? " wide" : ""}` }, el("label", { textContent: label }), input, help ? el("span", { className: "help", textContent: help }) : null);
+// éditeur d'écran (module partagé avec le lecteur) : outils propres à chaque type, structure de la partition
+let editorMod = null, editor = null;
 async function editStep(index) {
-  const s = detailPartition.screens[index];
-  editing = { index, inputs: {} };
-  const I = editing.inputs;
-  const input = (key, value, props = {}) => (I[key] = el(props.rows ? "textarea" : "input", { value: value ?? "", ...props }));
-  $("#step-title").textContent = `Étape ${index + 1} : ${LABELS[s.type] ?? s.type}`;
-  const fields = [fieldEl("Durée (secondes)", input("duration", s.duration, { type: "number", min: 5, step: 5 }))];
-  if (s.type === "citation") {
-    const c = s.citation ?? { source: {} };
-    fields.push(fieldEl("Citation", input("text", c.text, { rows: 4 }), true), fieldEl("Commentaire", input("comment", c.comment, { rows: 2 }), true),
-      fieldEl("Auteurs", input("creators", c.source?.creators)), fieldEl("Année", input("year", c.source?.year)), fieldEl("Titre", input("title", c.source?.title)), fieldEl("Page", input("page", c.page)));
-  } else if (s.type === "diapo") {
-    if (!slidesList) slidesList = await api("/api/chaoticum/slides").catch(() => []);
-    const list = el("datalist", { id: "slides-list" }, slidesList.map(x => el("option", { value: x.path })));
-    fields.push(fieldEl("Présentation (dossier/slide.html)", input("path", s.diapo?.path, { list: "slides-list" }), false, "Changer de diapo efface la copie d'écran et sa description."), fieldEl("Numéro de la diapo", input("diapo", s.diapo?.diapo ?? 0, { type: "number", min: 0, step: 1 })), list);
-    const preview = () => { $("#step-preview").replaceChildren(el("iframe", { src: `${detailPartition.siteUrl.replace(/\/?$/, "/")}${I.path.value}?diapo=${I.diapo.value}`, style: "width:100%;height:360px;border:1px solid var(--line);border-radius:8px;background:#fff" })); };
-    I.path.onchange = preview; I.diapo.onchange = preview; setTimeout(preview);
-  } else if (s.type === "question") {
-    fields.push(fieldEl("Question", input("qtext", s.question?.text, { rows: 2 }), true, "Une phrase courte, lisible d'un coup d'œil."), fieldEl("Intention", input("intention", s.question?.intention, { rows: 2 }), true));
-  } else if (s.type === "diagramme") {
-    fields.push(fieldEl("Titre", input("dtitle", s.diagramme?.title), true), fieldEl("Diagramme (Mermaid)", input("mermaid", s.diagramme?.mermaid, { rows: 10, style: "font-family:ui-monospace,monospace;font-size:13px" }), true));
-    const preview = async () => {
-      mermaidLib ??= (await import("https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs")).default;
-      mermaidLib.initialize({ startOnLoad: false, securityLevel: "strict" });
-      try { const { svg } = await mermaidLib.render(`pv${Date.now()}`, I.mermaid.value); $("#step-preview").innerHTML = `<div style="background:#fff;border-radius:8px;padding:10px;overflow:auto">${svg}</div>`; }
-      catch (e) {
-        const fixed = repairMermaid(I.mermaid.value);
-        $("#step-preview").replaceChildren(el("p", { className: "ko", textContent: `Diagramme invalide : ${e.message}` }),
-          fixed !== I.mermaid.value ? el("button", { className: "btn", textContent: "Réparer automatiquement", onclick: () => { I.mermaid.value = fixed; preview(); } }) : null);
-      }
-    };
-    I.mermaid.oninput = () => { clearTimeout(editing.t); editing.t = setTimeout(preview, 500); }; setTimeout(preview);
-  }
-  $("#step-fields").replaceChildren(...fields);
-  if (!["diapo", "diagramme"].includes(s.type)) $("#step-preview").replaceChildren();
-  $("#step-info").textContent = "";
-  $("#step-editor").classList.remove("hidden");
-  $("#step-editor").scrollIntoView({ behavior: "smooth", block: "center" });
+  editorMod ??= await import("/editeur-ecran.js");
+  if (!document.querySelector("#editor-css")) document.head.append(el("style", { id: "editor-css", textContent: editorMod.editorCss }));
+  const box = $("#step-editor");
+  box.classList.remove("hidden");
+  editor = editorMod.openScreenEditor({
+    container: box, runId: detailRun, partition: detailPartition, index, toast,
+    onSaved: (p, i) => { detailPartition = p; renderSteps(); },
+    onClose: () => { box.classList.add("hidden"); editor = null; },
+  });
+  box.scrollIntoView({ behavior: "smooth", block: "start" });
 }
-$("#step-cancel").onclick = () => { $("#step-editor").classList.add("hidden"); editing = null; };
-$("#step-save").onclick = async () => {
-  if (!editing) return;
-  const s = detailPartition.screens[editing.index], I = editing.inputs, v = k => I[k]?.value;
-  const changes = { duration: Number(v("duration")) };
-  if (s.type === "citation") changes.citation = { text: v("text"), comment: v("comment"), creators: v("creators"), year: v("year"), title: v("title"), page: v("page") };
-  if (s.type === "diapo") changes.diapo = { path: v("path"), diapo: Number(v("diapo")) };
-  if (s.type === "question") changes.question = { text: v("qtext"), intention: v("intention") };
-  if (s.type === "diagramme") changes.diagramme = { title: v("dtitle"), mermaid: v("mermaid") };
-  $("#step-info").textContent = "Enregistrement…";
-  try {
-    const r = await api("/api/chaoticum/partition/screen", { method: "POST", body: { run: detailRun, index: editing.index, changes } });
-    detailPartition = r.partition;
-    renderSteps();
-    $("#step-editor").classList.add("hidden");
-    toast(`Étape ${editing.index + 1} enregistrée${r.omeka === "ok" ? " (et dans Omeka S)" : r.omeka ? ` — Omeka S : ${r.omeka}` : " (localement)"}`);
-    editing = null;
-  } catch (e) { $("#step-info").textContent = "Erreur : " + e.message; }
-};
 
 // lien public de rejeu (lecture seule) d'une séance, avec son QR code
 async function shareSession(runId, id) {

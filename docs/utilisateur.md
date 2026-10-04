@@ -368,17 +368,20 @@ Les **questions** sont courtes (une phrase de 15 mots au plus), pour être lues 
 
 ### Jouer la partition (lecteur)
 
-### Modifier une étape de la partition
+### Modifier les écrans de la partition
 
-Dans **Partitions et séances**, **Séances** affiche le **déroulé** de la partition : chaque étape peut être modifiée (**Modifier**) avant de la jouer :
+Une fois la partition créée, chaque écran peut être modifié à la main avec des outils adaptés à son type, de deux endroits : le **déroulé** de la partition (**Partitions et séances › Séances › Modifier**) et le **lecteur** lui-même (bouton ✎ ou touche E, sur l'écran affiché ; la séance en cours continue).
 
-- durée de l'étape (les débuts des étapes suivantes et la durée totale sont recalculés) ;
-- citation : texte, commentaire, auteurs, année, titre, page ;
-- diapo : présentation et numéro de diapo, avec un aperçu (la copie d'écran et sa description ne correspondant plus, elles sont effacées) ;
-- question : texte et intention ;
-- diagramme : titre et code Mermaid, avec un aperçu en direct (un diagramme invalide peut être réparé automatiquement).
+| Écran | Outils |
+|---|---|
+| Tous | type de l'écran, durée (les débuts suivants et la durée totale sont recalculés) ; **structure** : avancer ou reculer l'écran, le dupliquer, insérer un écran d'un type choisi après lui, le supprimer |
+| Citation | texte, commentaire, auteurs, année, titre, page ; **chercher une autre citation** dans l'index de la bibliothèque (passages, notes, titres, mots-clés) et la reprendre d'un clic |
+| Diapo | présentation (liste du site), numéro de diapo avec ◀ ▶ et **aperçu en direct** ; **chercher une diapo** dans l'index (vignettes) ; une diapo de l'index reprend sa description et sa copie d'écran |
+| Question | texte avec compteur de mots (alerte au-delà de 15), intention ; **proposer une autre question** (Albert, à partir des citations et diapos du cycle, avec une orientation facultative) |
+| Diagramme | titre ; **éditeur visuel** (idées, liens et leurs relations, sens du diagramme) ou **code Mermaid**, **aperçu en direct**, réparation automatique d'un code invalide ; **proposer un autre diagramme** (Albert) |
+| Contributions | **consigne** affichée au public avec le QR code |
 
-La partition modifiée est enregistrée localement et remplace la précédente dans Omeka S.
+Une nouvelle proposition d'Albert n'est enregistrée qu'après **Enregistrer l'écran** ; son coût s'affiche. La partition modifiée est enregistrée localement et remplace la précédente dans Omeka S (avec les nouvelles copies d'écran).
 
 ### Jouer la partition (lecteur)
 

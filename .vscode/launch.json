@@ -48,7 +48,7 @@
             "sourceMaps": true,
             "resolveSourceMapLocations": ["${workspaceFolder}/**", "!**/node_modules/**"],
             "skipFiles": ["<node_internals>/**", "${workspaceFolder}/node_modules/**"],
-            "serverReadyAction": { "action": "openExternally", "pattern": "http://127\\.0\\.0\\.1:(\\d+)", "uriFormat": "http://127.0.0.1:%s" }
+            "serverReadyAction": { "action": "openExternally", "pattern": "academic-paper-factory\\) : http://127\\.0\\.0\\.1:(\\d+)", "uriFormat": "http://127.0.0.1:%s" }
         },
         {
             // Interface exploZoteroAnno : serveur et workflow lancé depuis l'interface
@@ -66,7 +66,7 @@
             "sourceMaps": true,
             "resolveSourceMapLocations": ["${workspaceFolder}/**", "!**/node_modules/**"],
             "skipFiles": ["<node_internals>/**", "${workspaceFolder}/node_modules/**"],
-            "serverReadyAction": { "action": "openExternally", "pattern": "http://127\\.0\\.0\\.1:(\\d+)", "uriFormat": "http://127.0.0.1:%s" }
+            "serverReadyAction": { "action": "openExternally", "pattern": "exploZoteroAnno : http://127\\.0\\.0\\.1:(\\d+)", "uriFormat": "http://127.0.0.1:%s" }
         },
         {
             // Workflow chaoticumSeminario, sans interface (équivalent de npm run chaoticum)
@@ -84,6 +84,8 @@
         },
         {
             // Interface chaoticumSeminario : serveur, lecteur de partition et workflow lancé depuis l'interface
+            // (serverReadyAction : seule la ligne de démarrage de cette application est reconnue, le terminal de débogage
+            // pouvant contenir celle d'une session précédente)
             "name": "Interface : chaoticumSeminario (7286)",
             "type": "node",
             "request": "launch",
@@ -98,7 +100,7 @@
             "sourceMaps": true,
             "resolveSourceMapLocations": ["${workspaceFolder}/**", "!**/node_modules/**"],
             "skipFiles": ["<node_internals>/**", "${workspaceFolder}/node_modules/**"],
-            "serverReadyAction": { "action": "openExternally", "pattern": "http://127\\.0\\.0\\.1:(\\d+)", "uriFormat": "http://127.0.0.1:%s" }
+            "serverReadyAction": { "action": "openExternally", "pattern": "chaoticumSeminario : http://127\\.0\\.0\\.1:(\\d+)", "uriFormat": "http://127.0.0.1:%s" }
         },
         {
             // Fichier .ts ouvert dans l'éditeur (pratique pour tester un outil ou une bibliothèque isolément)

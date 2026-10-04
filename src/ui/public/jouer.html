@@ -81,6 +81,8 @@
   .contribs .c .tools { display: flex; gap: 4px; margin-top: 4px; flex-wrap: wrap; }
   .contribs .c .tools button { padding: 2px 8px; font-size: 12px; }
   .contribs .c .edited { color: var(--t-contribution); font-size: 11px; }
+  .drawer { position: absolute; top: 0; right: 0; bottom: 0; width: min(560px, 100%); background: var(--panel); border-left: 1px solid var(--line); z-index: 8; overflow: auto; padding: 14px 16px; box-shadow: -8px 0 24px rgba(0,0,0,.35); --accent-ink: #1f0a14; }
+  .instruction { font-size: clamp(16px, 1.6vw, 22px); color: var(--ink); margin-bottom: 4px; }
   .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 8px 16px; border-radius: 8px; font-size: 14px; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 30; }
   .toast.show { opacity: 1; }
   .hidden { display: none !important; }
@@ -109,12 +111,14 @@
     <button id="b-play" title="Lecture / pause (espace)">⏯</button>
     <select id="b-speed" title="Vitesse du rejeu"><option value="1">×1</option><option value="2">×2</option><option value="5">×5</option><option value="10" selected>×10</option><option value="30">×30</option></select>
   </span>
+  <button id="b-edit" title="Modifier cet écran (E)">✎</button>
   <button id="b-full" title="Plein écran (F)">⛶</button>
   <button id="b-end" class="primary">Terminer et enregistrer</button>
 </header>
 <main>
   <div id="stage" class="stage"></div>
   <div id="qr-corner" class="qr-corner hidden" title="Participer : flasher le QR code (clic pour réduire, touche Q)"></div>
+  <div id="drawer" class="drawer hidden"></div>
   <div id="overlay" class="overlay hidden"><div class="box" id="overlay-box"></div></div>
 </main>
 <footer id="progress"></footer>
@@ -244,6 +248,7 @@ document.addEventListener("keydown", e => {
   else if (k === "r" || k === "Backspace") { e.preventDefault(); $("#b-back").click(); }
   else if (k === "g") { e.preventDefault(); $("#b-goto").focus(); $("#b-goto").select(); }
   else if (k === "f") $("#b-full").click();
+  else if (k === "e" && !REPLAY) $("#b-edit").click();
   else if (k === "q") $("#qr-corner")?.classList.toggle("small");
   else if (k === " " && REPLAY) { e.preventDefault(); togglePlay(); }
 });
@@ -407,6 +412,7 @@ function contributionLayout() {
       // rejeu : la séance est terminée, on ne peut plus participer
       REPLAY ? el("div", { className: "form-link", style: "font-size:14px", textContent: "Séance terminée : rejeu en lecture seule des contributions reçues pendant la séance." }) : el("div", { className: "qr", innerHTML: qrSvg(P.grist.formUrl) }),
       REPLAY ? null : el("div", { className: "form-link", textContent: P.grist.formUrl }),
+      P.screens[current].contribution?.instruction ? el("div", { className: "instruction", textContent: P.screens[current].contribution.instruction }) : null,
       el("div", { className: "contribs", id: "contribs" })),
     el("div", { className: "contrib-main", id: "contrib-main" }));
 }
@@ -524,6 +530,29 @@ $("#b-end").onclick = async () => {
   } catch (e) { $("#b-end").disabled = false; toast("Enregistrement impossible : " + e.message); }
 };
 window.addEventListener("beforeunload", e => { if (started && !saved && !REPLAY && events.length) { e.preventDefault(); e.returnValue = ""; } });
+// ==========================================
+// Modification de l'écran en cours (éditeur partagé avec la page de configuration)
+// ==========================================
+let editorMod = null;
+$("#b-edit").onclick = async () => {
+  const drawer = $("#drawer");
+  if (!drawer.classList.contains("hidden")) { drawer.classList.add("hidden"); return; }
+  editorMod ??= await import("/editeur-ecran.js");
+  if (!document.querySelector("#editor-css")) document.head.append(el("style", { id: "editor-css", textContent: editorMod.editorCss }));
+  drawer.classList.remove("hidden");
+  editorMod.openScreenEditor({
+    container: drawer, runId, partition: P, index: current, toast,
+    onSaved: (p, i) => {
+      // partition modifiée : barre des écrans et écran affiché mis à jour ; la séance en cours continue
+      P = p;
+      $("#progress").replaceChildren(...P.screens.map((s, j) => el("span", { style: `background:var(--t-${s.type});flex:${s.duration}`, title: `${j + 1}. ${LABELS[s.type]} (${mmss(s.duration)})`, onclick: () => go(j) })));
+      if (i !== current) { closeEvent(); previous = current; current = Math.max(0, Math.min(P.screens.length - 1, i)); enteredAt = Date.now(); saveDraft(); }
+      render();
+    },
+    onClose: () => drawer.classList.add("hidden"),
+  });
+};
+
 // QR code du lien public de rejeu (lecture seule) : à flasher par le public en fin de séance
 function shareBlock(r) {
   if (!r.sharePath) return null;
@@ -603,6 +632,7 @@ async function load() {
     $("#replay-ctl").classList.remove("hidden");
     $("#b-end").classList.add("hidden");
     $("#b-back").classList.add("hidden");
+    $("#b-edit").classList.add("hidden");
     if (!R.events?.length) throw new Error("Séance sans passage d'écran enregistré");
     replayGo(0);
     overlay(el("h2", { textContent: "Rejeu de la séance" }),

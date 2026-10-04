@@ -522,16 +522,41 @@ Consigne : mobiliser les concepts du graphe et les références de la collection
 <p>Les <strong>questions</strong> sont courtes (une phrase de 15 mots au plus), pour être lues d&#39;un coup d&#39;œil sur un grand écran.</p>
 <p><strong>Enregistrer et générer</strong> lance le workflow (onglet Exécution) : lecture du programme, choix des citations, rendu des présentations et copie d&#39;écran des diapos tirées, description des copies d&#39;écran, puis question et diagramme de chaque cycle. La partition, son rapport et les copies d&#39;écran sont enregistrés localement et dans Omeka S, avec le coût de la génération (tokens, énergie, carbone, argent).</p>
 <h3 id="jouer-la-partition-lecteur"><a class="anchor" href="#jouer-la-partition-lecteur">#</a>Jouer la partition (lecteur)</h3>
-<h3 id="modifier-une-etape-de-la-partition"><a class="anchor" href="#modifier-une-etape-de-la-partition">#</a>Modifier une étape de la partition</h3>
-<p>Dans <strong>Partitions et séances</strong>, <strong>Séances</strong> affiche le <strong>déroulé</strong> de la partition : chaque étape peut être modifiée (<strong>Modifier</strong>) avant de la jouer :</p>
-<ul>
-<li>durée de l&#39;étape (les débuts des étapes suivantes et la durée totale sont recalculés) ;</li>
-<li>citation : texte, commentaire, auteurs, année, titre, page ;</li>
-<li>diapo : présentation et numéro de diapo, avec un aperçu (la copie d&#39;écran et sa description ne correspondant plus, elles sont effacées) ;</li>
-<li>question : texte et intention ;</li>
-<li>diagramme : titre et code Mermaid, avec un aperçu en direct (un diagramme invalide peut être réparé automatiquement).</li>
-</ul>
-<p>La partition modifiée est enregistrée localement et remplace la précédente dans Omeka S.</p>
+<h3 id="modifier-les-ecrans-de-la-partition"><a class="anchor" href="#modifier-les-ecrans-de-la-partition">#</a>Modifier les écrans de la partition</h3>
+<p>Une fois la partition créée, chaque écran peut être modifié à la main avec des outils adaptés à son type, de deux endroits : le <strong>déroulé</strong> de la partition (<strong>Partitions et séances › Séances › Modifier</strong>) et le <strong>lecteur</strong> lui-même (bouton ✎ ou touche E, sur l&#39;écran affiché ; la séance en cours continue).</p>
+<table>
+<thead>
+<tr>
+<th>Écran</th>
+<th>Outils</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Tous</td>
+<td>type de l&#39;écran, durée (les débuts suivants et la durée totale sont recalculés) ; <strong>structure</strong> : avancer ou reculer l&#39;écran, le dupliquer, insérer un écran d&#39;un type choisi après lui, le supprimer</td>
+</tr>
+<tr>
+<td>Citation</td>
+<td>texte, commentaire, auteurs, année, titre, page ; <strong>chercher une autre citation</strong> dans l&#39;index de la bibliothèque (passages, notes, titres, mots-clés) et la reprendre d&#39;un clic</td>
+</tr>
+<tr>
+<td>Diapo</td>
+<td>présentation (liste du site), numéro de diapo avec ◀ ▶ et <strong>aperçu en direct</strong> ; <strong>chercher une diapo</strong> dans l&#39;index (vignettes) ; une diapo de l&#39;index reprend sa description et sa copie d&#39;écran</td>
+</tr>
+<tr>
+<td>Question</td>
+<td>texte avec compteur de mots (alerte au-delà de 15), intention ; <strong>proposer une autre question</strong> (Albert, à partir des citations et diapos du cycle, avec une orientation facultative)</td>
+</tr>
+<tr>
+<td>Diagramme</td>
+<td>titre ; <strong>éditeur visuel</strong> (idées, liens et leurs relations, sens du diagramme) ou <strong>code Mermaid</strong>, <strong>aperçu en direct</strong>, réparation automatique d&#39;un code invalide ; <strong>proposer un autre diagramme</strong> (Albert)</td>
+</tr>
+<tr>
+<td>Contributions</td>
+<td><strong>consigne</strong> affichée au public avec le QR code</td>
+</tr>
+</tbody></table>
+<p>Une nouvelle proposition d&#39;Albert n&#39;est enregistrée qu&#39;après <strong>Enregistrer l&#39;écran</strong> ; son coût s&#39;affiche. La partition modifiée est enregistrée localement et remplace la précédente dans Omeka S (avec les nouvelles copies d&#39;écran).</p>
 <h3 id="jouer-la-partition-lecteur"><a class="anchor" href="#jouer-la-partition-lecteur">#</a>Jouer la partition (lecteur)</h3>
 <p>Dans l&#39;onglet <strong>Partitions et séances</strong>, <strong>Jouer</strong> ouvre le lecteur dans un nouvel onglet (à passer en plein écran sur l&#39;écran de projection).</p>
 <ul>
@@ -588,7 +613,7 @@ Consigne : mobiliser les concepts du graphe et les références de la collection
 <p><strong>Le rédacteur peut-il inventer des références ?</strong> Il ne reçoit que les clés BibTeX de la collection et doit citer uniquement celles-ci (syntaxe Pandoc <code>[@clé, p. 12]</code>) ; la relecture épistémologique vérifie l&#39;usage des références.</p>
 
 </main>
-<nav class="toc"><strong>Sur cette page</strong><a class="l3" href="#la-page-parametres-connexions">La page Paramètres (connexions)</a><a class="l2" href="#1-preparer-le-corpus-dans-zotero">1. Préparer le corpus dans Zotero</a><a class="l3" href="#la-collection">La collection</a><a class="l3" href="#surligner-avec-une-couleur-qui-indique-votre-positionnement">Surligner avec une couleur qui indique votre positionnement</a><a class="l3" href="#notes-et-marqueurs">Notes et marqueurs</a><a class="l3" href="#coder-les-phrases-pour-l-39-accord-inter-juges">Coder les phrases pour l&#39;accord inter-juges</a><a class="l2" href="#2-atelier-d-39-articles-utiliser-l-39-interface">2. Atelier d&#39;articles : utiliser l&#39;interface</a><a class="l3" href="#configuration">Configuration</a><a class="l3" href="#execution">Exécution</a><a class="l3" href="#resultats">Résultats</a><a class="l3" href="#appels-traites">Appels traités</a><a class="l2" href="#3-explozoteroanno-animer-une-annotation-collective">3. exploZoteroAnno : animer une annotation collective</a><a class="l3" href="#parametrer-la-grille-onglet-grille">Paramétrer la grille (onglet Grille)</a><a class="l3" href="#suivre-le-traitement-onglet-execution">Suivre le traitement (onglet Exécution)</a><a class="l3" href="#recharger-une-analyse-deja-effectuee-onglet-analyses">Recharger une analyse déjà effectuée (onglet Analyses)</a><a class="l3" href="#visualiser-la-participation-onglet-participation">Visualiser la participation (onglet Participation)</a><a class="l3" href="#analyser-les-collaborations-onglet-collaborations">Analyser les collaborations (onglet Collaborations)</a><a class="l3" href="#generer-des-themes-de-discussion-onglet-themes">Générer des thèmes de discussion (onglet Thèmes)</a><a class="l3" href="#interroger-la-collection-onglet-rag">Interroger la collection (onglet RAG)</a><a class="l3" href="#rapport-et-enregistrement-onglet-rapport">Rapport et enregistrement (onglet Rapport)</a><a class="l2" href="#4-chaoticumseminario-jouer-une-conference-participative">4. chaoticumSeminario : jouer une conférence participative</a><a class="l3" href="#indexer-les-sources-index-rag">Indexer les sources (index RAG)</a><a class="l3" href="#regler-la-partition-onglet-partition">Régler la partition (onglet Partition)</a><a class="l3" href="#jouer-la-partition-lecteur">Jouer la partition (lecteur)</a><a class="l3" href="#modifier-une-etape-de-la-partition">Modifier une étape de la partition</a><a class="l3" href="#jouer-la-partition-lecteur">Jouer la partition (lecteur)</a><a class="l3" href="#partager-le-rejeu-qr-code-de-fin-de-seance">Partager le rejeu (QR code de fin de séance)</a><a class="l3" href="#rejouer-une-seance">Rejouer une séance</a><a class="l2" href="#5-ce-qui-est-enregistre-dans-omeka-s">5. Ce qui est enregistré dans Omeka S</a><a class="l2" href="#6-questions-frequentes">6. Questions fréquentes</a></nav>
+<nav class="toc"><strong>Sur cette page</strong><a class="l3" href="#la-page-parametres-connexions">La page Paramètres (connexions)</a><a class="l2" href="#1-preparer-le-corpus-dans-zotero">1. Préparer le corpus dans Zotero</a><a class="l3" href="#la-collection">La collection</a><a class="l3" href="#surligner-avec-une-couleur-qui-indique-votre-positionnement">Surligner avec une couleur qui indique votre positionnement</a><a class="l3" href="#notes-et-marqueurs">Notes et marqueurs</a><a class="l3" href="#coder-les-phrases-pour-l-39-accord-inter-juges">Coder les phrases pour l&#39;accord inter-juges</a><a class="l2" href="#2-atelier-d-39-articles-utiliser-l-39-interface">2. Atelier d&#39;articles : utiliser l&#39;interface</a><a class="l3" href="#configuration">Configuration</a><a class="l3" href="#execution">Exécution</a><a class="l3" href="#resultats">Résultats</a><a class="l3" href="#appels-traites">Appels traités</a><a class="l2" href="#3-explozoteroanno-animer-une-annotation-collective">3. exploZoteroAnno : animer une annotation collective</a><a class="l3" href="#parametrer-la-grille-onglet-grille">Paramétrer la grille (onglet Grille)</a><a class="l3" href="#suivre-le-traitement-onglet-execution">Suivre le traitement (onglet Exécution)</a><a class="l3" href="#recharger-une-analyse-deja-effectuee-onglet-analyses">Recharger une analyse déjà effectuée (onglet Analyses)</a><a class="l3" href="#visualiser-la-participation-onglet-participation">Visualiser la participation (onglet Participation)</a><a class="l3" href="#analyser-les-collaborations-onglet-collaborations">Analyser les collaborations (onglet Collaborations)</a><a class="l3" href="#generer-des-themes-de-discussion-onglet-themes">Générer des thèmes de discussion (onglet Thèmes)</a><a class="l3" href="#interroger-la-collection-onglet-rag">Interroger la collection (onglet RAG)</a><a class="l3" href="#rapport-et-enregistrement-onglet-rapport">Rapport et enregistrement (onglet Rapport)</a><a class="l2" href="#4-chaoticumseminario-jouer-une-conference-participative">4. chaoticumSeminario : jouer une conférence participative</a><a class="l3" href="#indexer-les-sources-index-rag">Indexer les sources (index RAG)</a><a class="l3" href="#regler-la-partition-onglet-partition">Régler la partition (onglet Partition)</a><a class="l3" href="#jouer-la-partition-lecteur">Jouer la partition (lecteur)</a><a class="l3" href="#modifier-les-ecrans-de-la-partition">Modifier les écrans de la partition</a><a class="l3" href="#jouer-la-partition-lecteur">Jouer la partition (lecteur)</a><a class="l3" href="#partager-le-rejeu-qr-code-de-fin-de-seance">Partager le rejeu (QR code de fin de séance)</a><a class="l3" href="#rejouer-une-seance">Rejouer une séance</a><a class="l2" href="#5-ce-qui-est-enregistre-dans-omeka-s">5. Ce qui est enregistré dans Omeka S</a><a class="l2" href="#6-questions-frequentes">6. Questions fréquentes</a></nav>
 </div>
 <script type="module">
 import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";

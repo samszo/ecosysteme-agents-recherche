@@ -21,6 +21,8 @@ export interface Screen {
   diapo?: DiapoScreen;
   question?: { text: string; intention: string };
   diagramme?: { title: string; mermaid: string };
+  // écran de contributions : consigne affichée au public (éditeur d'écran)
+  contribution?: { instruction: string };
 }
 
 export interface Partition {

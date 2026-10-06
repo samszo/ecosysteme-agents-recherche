@@ -11,7 +11,7 @@ import { seminarioAgent } from "../../agents/seminarioAgent";
 import { askAgent } from "../../agents/ask";
 import { workflowConfig } from "../../config";
 import { recordUsage } from "../metrics/usage";
-import { zoteroWebUrl } from "../zotero/zotero";
+import { Zotero, collectionWithDescendants, zoteroWebUrl } from "../zotero/zotero";
 import { emptySlides, emptyZotero, indexDir, loadStore, type AnnotationEntry, type ReferenceEntry, type SlideEntry } from "./index/store";
 import { hasTheme, themeBlock, type Theme } from "./theme";
 import { buildMermaid } from "./mermaid";
@@ -40,11 +40,23 @@ export async function ragMaterial(o: { c: ChaoticumConfig; theme: Theme; screens
   if (!c.rag.enabled) return { used: false, reason: "index RAG désactivés" };
   const sStore = loadStore("diapos", emptySlides(), c), zStore = loadStore("bibliotheque", emptyZotero(), c);
   const slides = Object.values(sStore.items).filter(e => e.docId && e.description);
-  const inScope = (r: ReferenceEntry) => c.citations.scope !== "collection" || r.collections.includes(c.citations.collection);
-  const allCits: Cand[] = Object.values(zStore.items).filter(inScope).flatMap(r => Object.values(r.annotations).map(a => ({ a, r })))
-    .filter(x => (x.a.text || x.a.comment).length >= c.citations.minLength && (c.citations.includeNotes || x.a.kind === "annotation"));
+  // collection choisie : elle et toutes ses sous-collections
+  let scopeKeys: Set<string> | null = c.citations.scope === "collection" && c.citations.collection
+    ? await collectionWithDescendants(new Zotero(process.env.ZOTERO_USER_ID ?? "", process.env.ZOTERO_API_KEY ?? ""), c.citations.collection)
+    : null;
+  const inScope = (r: ReferenceEntry) => !scopeKeys || r.collections.some(k => scopeKeys!.has(k));
+  const usable = (x: Cand) => (x.a.text || x.a.comment).length >= c.citations.minLength && (c.citations.includeNotes || x.a.kind === "annotation");
+  const libraryCits: Cand[] = Object.values(zStore.items).flatMap(r => Object.values(r.annotations).map(a => ({ a, r }))).filter(usable);
+  let allCits = libraryCits.filter(x => inScope(x.r));
   const needC = screens.some(s => s.type === "citation"), needD = screens.some(s => s.type === "diapo");
-  if (needC && !allCits.length) return { used: false, reason: "index de la bibliothèque vide (ou aucune citation dans la collection choisie)" };
+  if (needC && scopeKeys && !allCits.length && libraryCits.length) {
+    // collection sans citation exploitable : toute la bibliothèque plutôt qu'un échec
+    console.warn(`⚠️ [RAG] Aucune citation d'au moins ${c.citations.minLength} caractères dans la collection ${c.citations.collection} et ses ${scopeKeys.size - 1} sous-collection(s) : citations tirées de toute la bibliothèque.`);
+    scopeKeys = null;
+    allCits = libraryCits;
+  }
+  if (scopeKeys && scopeKeys.size > 1) console.log(`📂 [RAG] Collection ${c.citations.collection} et ${scopeKeys.size - 1} sous-collection(s)`);
+  if (needC && !allCits.length) return { used: false, reason: "index de la bibliothèque vide" };
   if (needD && !slides.length) return { used: false, reason: "index des diapos vide" };
   console.log(`🔎 [RAG] Index : ${slides.length} diapo(s), ${allCits.length} citation(s) possible(s)`);
 
@@ -84,8 +96,9 @@ export async function ragMaterial(o: { c: ChaoticumConfig; theme: Theme; screens
     if (cScreens.length) {
       if (query && zCol) {
         try {
-          const res = await albert.search({ collectionIds: [zCol], query, limit: c.rag.searchLimit, method: "hybrid",
-            ...(c.citations.scope === "collection" && c.citations.collection ? { metadataFilter: { key: "collections", type: "co" as const, value: c.citations.collection } } : {}) });
+          // une seule collection : filtre dans Albert ; plusieurs (sous-collections) : plus d'extraits, filtrés ici
+          const res = await albert.search({ collectionIds: [zCol], query, limit: scopeKeys && scopeKeys.size > 1 ? Math.min(100, c.rag.searchLimit * 4) : c.rag.searchLimit, method: "hybrid",
+            ...(scopeKeys && scopeKeys.size === 1 ? { metadataFilter: { key: "collections", type: "co" as const, value: [...scopeKeys][0]! } } : {}) });
           recordUsage("Recherche RAG (bibliothèque)", "BAAI/bge-m3", { inputTokens: Number(res.usage?.prompt_tokens) || Math.ceil(query.length / 4), outputTokens: 0 });
           for (const hit of res.data) {
             const r = zStore.items[String(hit.chunk.metadata?.key ?? "")];

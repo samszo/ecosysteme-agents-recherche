@@ -159,6 +159,32 @@ export function chaoticumRoutes(ctx: Ctx): Record<string, Handler> {
     return { screenshot, description: `${e.title}. ${e.description}`, max: e.max };
   }
 
+  // suppression d'une partition : archive locale (partition, copies d'écran, séances) et, si demandé, Omeka S
+  // (item de configuration avec ses médias, items des séances reliées)
+  async function deletePartition(runId: string, inOmeka: boolean) {
+    const p = await readPartition(runId).catch(() => null);
+    const local = fs.existsSync(partDir(runId));
+    if (local) fs.rmSync(partDir(runId), { recursive: true, force: true });
+    mediaCache.delete(runId);
+    let omeka: { partition: number; seances: number; error?: string } | null = null;
+    if (inOmeka) {
+      omeka = { partition: 0, seances: 0 };
+      try {
+        const omk = await ctx.serverOmk();
+        const items = await omk.getAllItems(`property[0][property]=dcterms:type&property[0][type]=eq&property[0][text]=${encodeURIComponent(ctx.config().omeka.participationType)}`);
+        for (const it of items) {
+          let data: any = {};
+          try { data = JSON.parse(val(it, "curation:data") ?? "{}"); } catch { /* données illisibles */ }
+          if (data.runId === runId) { await omk.deleteResource(it["o:id"]); omeka.seances++; }
+        }
+        const item = p?.configItemId ? { "o:id": p.configItemId } : (await omk.searchItemsByProp("dcterms:identifier", runId))[0];
+        if (item) { await omk.deleteResource(item["o:id"]); omeka.partition = 1; }
+      } catch (e) { omeka.error = (e as Error).message; }
+    }
+    if (!local && !(omeka?.partition)) throw new Error("Partition introuvable");
+    return { local, omeka };
+  }
+
   // structure de la partition : insérer, dupliquer, déplacer, supprimer un écran
   function applyStructure(p: any, op: string, index: number, opts: any) {
     const n = p.screens.length;
@@ -408,6 +434,14 @@ export function chaoticumRoutes(ctx: Ctx): Record<string, Handler> {
         else await updateContribution(grist.responsesUrl, grist, rowId, String(url).trim(), apiKey);
         ctx.sendJson(res, 200, { applied: "grist" });
       } catch (e) { ctx.sendJson(res, 200, { applied: "session", reason: (e as Error).message }); }
+    },
+
+    // suppression d'une partition (archive locale, et Omeka S si omeka: true)
+    "POST /api/chaoticum/partition/delete": async (req, res) => {
+      const { run: runId, omeka } = await ctx.readBody(req);
+      if (!validId(runId)) return ctx.sendJson(res, 400, { error: "Partition invalide" });
+      try { ctx.sendJson(res, 200, await deletePartition(runId, !!omeka)); }
+      catch (e) { ctx.sendJson(res, 404, { error: (e as Error).message }); }
     },
 
     // structure de la partition (insérer, dupliquer, déplacer, supprimer un écran)

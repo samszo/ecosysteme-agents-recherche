@@ -474,9 +474,30 @@ async function loadPartitions(force = false) {
       el("td", {}, p.source.includes("local") ? "locale" : "", p.source === "local+omeka" ? " · " : "", p.configItemId && omekaAdmin ? el("a", { href: omekaAdmin + p.configItemId, target: "_blank", textContent: "Omeka S", style: "color:var(--accent)" }) : ""),
       el("td", { style: "min-width:170px" },
         el("a", { className: "btn primary", href: `/jouer?run=${encodeURIComponent(p.runId)}`, target: "_blank", textContent: "Jouer", style: "margin:0 4px 4px 0" }),
-        el("button", { className: "btn", textContent: "Séances", onclick: () => openPartition(p) }))))))));
+        el("button", { className: "btn", textContent: "Séances", onclick: () => openPartition(p), style: "margin:0 4px 4px 0" }),
+        el("button", { className: "btn danger", textContent: "Supprimer", onclick: e => askDelete(p, e.target.closest("tr")) }))))))));
 }
 $("#p-refresh").onclick = () => loadPartitions(true);
+
+// suppression d'une partition : localement, ou aussi dans Omeka S (item de la partition et séances enregistrées)
+function askDelete(p, tr) {
+  document.querySelector("#delete-row")?.remove();
+  const label = `${p.title ?? "partition"} du ${p.createdAt ? new Date(p.createdAt).toLocaleString("fr-FR") : "?"}`;
+  const run = async omeka => {
+    if (!confirm(`Supprimer définitivement la partition « ${label} »${omeka ? ", ses médias et ses séances dans Omeka S" : ""} ? Cette action est irréversible.`)) return;
+    try {
+      const r = await api("/api/chaoticum/partition/delete", { method: "POST", body: { run: p.runId, omeka } });
+      toast(`Partition supprimée${r.local ? " localement" : ""}${r.omeka ? (r.omeka.error ? ` — Omeka S : ${r.omeka.error}` : ` et dans Omeka S (${r.omeka.partition} item, ${r.omeka.seances} séance(s))`) : ""}`);
+      if (detailRun === p.runId) $("#p-detail").classList.add("hidden");
+      loadPartitions(true);
+    } catch (e) { toast("Suppression impossible : " + e.message); }
+  };
+  tr.after(el("tr", { id: "delete-row" }, el("td", { colSpan: 9 }, el("div", { className: "toolbar", style: "margin:4px 0" },
+    el("span", { textContent: `Supprimer « ${label} » :` }),
+    p.source.includes("local") ? el("button", { className: "btn danger", textContent: "de l'archive locale seulement", onclick: () => run(false) }) : null,
+    p.source.includes("omeka") || p.configItemId ? el("button", { className: "btn danger", textContent: "localement et dans Omeka S (avec ses séances)", onclick: () => run(true) }) : null,
+    el("button", { className: "btn", textContent: "Annuler", onclick: () => document.querySelector("#delete-row")?.remove() })))));
+}
 
 // réparation des diagrammes écrits directement par un modèle (même logique que src/lib/chaoticum/mermaid.ts)
 function repairMermaid(code) {

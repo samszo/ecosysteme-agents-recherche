@@ -357,7 +357,7 @@ La carte indique l'état des deux index. Les indexations sont suivies dans l'ong
 - **Déroulé** : nombre d'écrans, durée totale, **suite des écrans d'un cycle** (par défaut citation → diapo → question → contributions → diagramme, répétée jusqu'au nombre d'écrans) et **poids** de chaque type : la durée totale est répartie selon ces poids. L'aperçu montre les écrans et leur durée. Dans chaque cycle, la question et le diagramme sont tirés de la citation et de la diapo qui les précèdent.
 - **Graine du tirage** : vide, chaque génération tire de nouvelles citations et diapos ; reprendre la graine d'une partition (bouton dans la liste des partitions) redonne le même tirage.
 - **Chronomètre** : vert tant que la durée prévue de l'écran est respectée, orange au-delà (par défaut dès qu'elle est dépassée), rouge quand elle est très dépassée (par défaut au-delà de 125 %).
-- **Citations** : une collection ou toute la bibliothèque Zotero (celle de la page Paramètres), notes comprises ou non, longueur minimale et maximale.
+- **Citations** : une collection, avec toutes ses sous-collections, ou toute la bibliothèque Zotero (celle de la page Paramètres), notes comprises ou non, longueur minimale et maximale. Si la collection ne contient aucune citation assez longue (par exemple une collection de publications sans passage surligné), les citations sont tirées de toute la bibliothèque et le journal le signale.
 - **Diapos** : adresse du site, dossier local des présentations (à défaut, le dépôt GitHub), présentations écartées.
 - **Contributions** : lien du formulaire Grist (son QR code s'affiche), lien de la table des réponses (CSV), colonnes de l'URL, du nom et de la date, fréquence de lecture et **validation par l'animateur** (recommandée en public : une URL n'est affichée qu'après un clic). **Lire la table des réponses** vérifie la connexion.
 - **Modèles Albert** : modèle de vision (description des copies d'écran) et modèle analytique (questions, diagrammes).
@@ -400,6 +400,10 @@ Dans l'onglet **Partitions et séances**, **Jouer** ouvre le lecteur dans un nou
 À la fin de la séance (**Terminer et enregistrer**), le lecteur affiche le **QR code d'un lien public** qui ouvre directement le rejeu de cette séance : le public peut le flasher pour revoir la conférence. Ce lien est en **lecture seule** : on peut parcourir et rejouer la séance, mais plus participer (pas de QR code du formulaire) ni modifier ou supprimer les contributions, et il ne donne accès à rien d'autre de l'application. Pour une séance déjà enregistrée, le bouton **Lien public** de la liste des séances affiche le même QR code.
 
 Le lien contient un jeton aléatoire propre à la séance. Pour qu'il soit accessible sans mot de passe, le chemin `/public/` doit être exempté de l'authentification du serveur (voir la documentation d'installation, section 8.9), et l'adresse publique de l'application renseignée (`CHAOTICUM_URL`).
+
+### Supprimer une partition
+
+Dans **Partitions et séances**, **Supprimer** propose de retirer la partition de l'**archive locale seulement**, ou **localement et dans Omeka S** : l'item de la partition (avec sa partition JSON, son rapport et ses copies d'écran) et les items des séances enregistrées sont alors supprimés. La suppression est définitive ; les liens publics de rejeu de ses séances ne fonctionnent plus.
 
 ### Rejouer une séance
 

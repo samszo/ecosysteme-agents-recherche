@@ -164,3 +164,18 @@ export class Zotero {
       });
   }
 }
+
+// une collection et toutes ses sous-collections (à tous les niveaux) ; la collection seule si la liste est indisponible
+export async function collectionWithDescendants(zotero: Zotero, key: string): Promise<Set<string>> {
+  const keys = new Set([key]);
+  try {
+    const children = new Map<string, string[]>();
+    for (const c of await zotero.collections()) {
+      const parent = c.data?.parentCollection;
+      if (parent) children.set(parent, [...(children.get(parent) ?? []), c.key]);
+    }
+    const stack = [key];
+    while (stack.length) for (const k of children.get(stack.pop()!) ?? []) if (!keys.has(k)) { keys.add(k); stack.push(k); }
+  } catch { /* liste des collections indisponible : collection seule */ }
+  return keys;
+}

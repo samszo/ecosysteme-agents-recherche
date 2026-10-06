@@ -1,5 +1,5 @@
 // Citations tirées au hasard de la bibliothèque Zotero ou d'une collection : passages surlignés (annotations) et notes
-import { Zotero, authorOf, zoteroWebUrl } from "../zotero/zotero";
+import { Zotero, authorOf, collectionWithDescendants, zoteroWebUrl } from "../zotero/zotero";
 import { htmlToText } from "../extraction/attachmentExtract";
 import type { ChaoticumConfig } from "../../config/chaoticum";
 import type { Rng } from "./random";
@@ -78,7 +78,12 @@ export class CitationPicker {
   // n citations distinctes ; chooser (facultatif) retient les plus pertinentes parmi `candidates` tirées au hasard
   async pick(n: number, chooser?: (texts: string[], n: number) => Promise<number[]>, candidates = n): Promise<Citation[]> {
     const want = Math.max(n, chooser ? candidates : n);
-    const pool = this.c.scope === "collection" ? this.sample(await this.collectionPool(), want) : await this.fromLibrary(want);
+    let pool = this.c.scope === "collection" ? this.sample(await this.collectionPool(), want) : await this.fromLibrary(want);
+    // collection sans citation exploitable : toute la bibliothèque plutôt qu'un échec
+    if (!pool.length) {
+      console.warn(`⚠️ [ZOTERO] Aucune annotation ni note d'au moins ${this.c.minLength} caractères dans la collection ${this.c.collection} et ses sous-collections : citations tirées de toute la bibliothèque.`);
+      pool = await this.fromLibrary(want);
+    }
     let chosen: any[] = [];
     if (chooser && pool.length > n) {
       const order = await chooser(pool.map(it => clip(textOf(it), 300)), n);
@@ -100,18 +105,22 @@ export class CitationPicker {
     return out;
   }
 
-  // collection : toutes les annotations de ses pièces jointes et ses notes
+  // collection et ses sous-collections : toutes les annotations de leurs pièces jointes et leurs notes
   private async collectionPool() {
     if (!this.c.collection) throw new Error("Collection Zotero des citations non choisie");
-    const items = await this.zotero.collectionItems(this.c.collection);
+    const keys = await collectionWithDescendants(this.zotero, this.c.collection);
+    const items: any[] = [];
+    // un document de plusieurs sous-collections n'est compté qu'une fois
+    const byKey = new Map<string, any>();
+    for (const k of keys) for (const it of await this.zotero.collectionItems(k)) byKey.set(it.key, it);
+    items.push(...byKey.values());
     const pool: any[] = [];
     for (const att of items.filter(it => it.data.itemType === "attachment")) {
       pool.push(...(await this.zotero.children(att.key, "annotation").catch(() => [])));
     }
     if (this.c.includeNotes) pool.push(...items.filter(it => it.data.itemType === "note"));
     const candidates = pool.filter(this.acceptable);
-    console.log(`📚 [ZOTERO] ${candidates.length} citation(s) possible(s) dans la collection ${this.c.collection}`);
-    if (!candidates.length) throw new Error(`Aucune annotation ni note d'au moins ${this.c.minLength} caractères dans la collection ${this.c.collection}`);
+    console.log(`📚 [ZOTERO] ${candidates.length} citation(s) possible(s) dans la collection ${this.c.collection}${keys.size > 1 ? ` et ses ${keys.size - 1} sous-collection(s)` : ""}`);
     return candidates;
   }
 

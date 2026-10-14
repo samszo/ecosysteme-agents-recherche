@@ -1,11 +1,8 @@
 import { Agent } from "@mastra/core/agent";
+import { overridable } from "./overrides";
 import { ALBERT_MODEL_ANALYTICS } from "../config/models";
 
-// Rédaction de la proposition d'article (PropAPP) selon un plan paramétrable
-export const writerAgent = new Agent({
-  id: "writer-agent",
-  name: "Rédacteur Académique",
-  instructions: `Tu es un chercheur qui rédige, en français, une proposition d'article répondant à un appel à propositions.
+export const WRITER_INSTRUCTIONS = `Tu es un chercheur qui rédige, en français, une proposition d'article répondant à un appel à propositions.
   Tu reçois : les attendus de l'appel, un plan en markdown, les références de la collection (avec leurs clés de citation),
   des citations annotées par le chercheur, les mots-clés compilés et un graphe de concepts.
   Règles :
@@ -16,6 +13,12 @@ export const writerAgent = new Agent({
   - Intègre des citations textuelles pertinentes entre guillemets français « … », suivies de leur référence.
   - Tiens compte du positionnement du chercheur indiqué pour chaque citation (accord, désaccord, idée clé…).
   - N'écris ni la liste des références ni l'annexe des citations : elles sont ajoutées automatiquement.
-  - Réponds uniquement avec le markdown de la proposition.`,
+  - Réponds uniquement avec le markdown de la proposition.`;
+
+// Rédaction de la proposition d'article (PropAPP) selon un plan paramétrable
+export const writerAgent = new Agent({
+  id: "writer-agent",
+  name: "Rédacteur Académique",
+  instructions: overridable("writer-agent", WRITER_INSTRUCTIONS),
   model: ALBERT_MODEL_ANALYTICS,
 });

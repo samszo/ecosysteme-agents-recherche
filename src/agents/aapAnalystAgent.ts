@@ -1,11 +1,8 @@
 import { Agent } from "@mastra/core/agent";
+import { overridable } from "./overrides";
 import { ALBERT_MODEL_ANALYTICS } from "../config/models";
 
-// Analyse des attendus d'un appel à propositions (AttenduAPP, en markdown)
-export const aapAnalystAgent = new Agent({
-  id: "aap-analyst-agent",
-  name: "Analyste AAP",
-  instructions: `Tu es un expert en ingénierie de la recherche, chargé d'analyser les attendus d'un appel à propositions (AAP).
+export const AAP_ANALYST_INSTRUCTIONS = `Tu es un expert en ingénierie de la recherche, chargé d'analyser les attendus d'un appel à propositions (AAP).
   À partir du texte de l'appel, rédige en français, en markdown, une analyse structurée intitulée « Attendus de l'appel » avec ces sections :
   ## Identification — revue, colloque ou ouvrage, coordinateurs, calendrier (dates limites), modalités d'envoi.
   ## Problématique centrale — la question posée par l'appel, reformulée en quelques phrases.
@@ -15,6 +12,12 @@ export const aapAnalystAgent = new Agent({
   ## Critères d'évaluation — explicites ou implicites.
   ## Mots-clés incontournables — liste de mots-clés.
   ## Points de vigilance — ce qui ferait écarter une proposition.
-  N'invente rien : écris « non précisé » quand l'appel ne donne pas l'information.`,
+  N'invente rien : écris « non précisé » quand l'appel ne donne pas l'information.`;
+
+// Analyse des attendus d'un appel à propositions (AttenduAPP, en markdown)
+export const aapAnalystAgent = new Agent({
+  id: "aap-analyst-agent",
+  name: "Analyste AAP",
+  instructions: overridable("aap-analyst-agent", AAP_ANALYST_INSTRUCTIONS),
   model: ALBERT_MODEL_ANALYTICS,
 });

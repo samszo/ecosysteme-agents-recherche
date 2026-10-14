@@ -41,6 +41,12 @@ flowchart LR
     Préparer --> Paramétrer --> Lancer --> Exploiter
 ```
 
+### L'onglet Workflow (prompts des agents)
+
+Chaque application a un onglet **Workflow** : un diagramme montre les étapes du traitement dans l'ordre d'exécution (les étapes encadrées « en parallèle » s'exécutent en même temps), les agents qu'elles font intervenir et, en dessous, les agents appelés hors du traitement (onglet RAG d'exploZoteroAnno, indexation des diapos et éditeur d'écran de chaoticumSeminario). Les modèles utilisés sont rappelés en tête.
+
+Un clic sur un agent ouvre son formulaire : son rôle, les étapes qui l'appellent, son modèle et ses outils, ses **instructions** (prompt système) et, quand elle est modifiable, la **demande** qui lui est envoyée (gabarit avec des variables `{{…}}` remplacées par les données du traitement ; c'est le cas de l'Animateur de discussion d'exploZoteroAnno). **Enregistrer** vaut pour les appels suivants de l'agent, y compris ceux de l'interface, sans redémarrer ; un agent modifié est marqué « modifié » dans le diagramme. **Rétablir les textes par défaut** remet les textes d'origine. Les textes modifiés sont enregistrés dans `agents.config.json`, commun aux trois applications.
+
 ## 1. Préparer le corpus dans Zotero
 
 ### La collection
@@ -88,7 +94,7 @@ Les juges doivent travailler dans une **bibliothèque de groupe** Zotero : c'est
 
 ## 2. Atelier d'articles : utiliser l'interface
 
-L'interface s'ouvre sur http://127.0.0.1:7272. Elle comporte quatre onglets : Configuration, Exécution, Résultats et Appels traités. Dans l'en-tête, **exploZoteroAnno** ouvre la seconde application et **⚙ Paramètres** la page des connexions.
+L'interface s'ouvre sur http://127.0.0.1:7272. Elle comporte cinq onglets : Configuration, Workflow (voir *L'onglet Workflow*), Exécution, Résultats et Appels traités. Dans l'en-tête, **exploZoteroAnno** ouvre la seconde application et **⚙ Paramètres** la page des connexions.
 
 ### Configuration
 
@@ -217,7 +223,7 @@ Seuls les documents nouveaux ou modifiés sont retraités : ceux dont l'extracti
 
 ## 3. exploZoteroAnno : animer une annotation collective
 
-**exploZoteroAnno** est la seconde application, avec son propre serveur : http://127.0.0.1:7273 (lien dans l'en-tête de l'Atelier d'articles). Elle peut analyser pendant qu'un traitement de l'Atelier est en cours. Elle comporte huit onglets : Grille, Exécution, Analyses, Participation, Collaborations, Thèmes, RAG et Rapport ; ses connexions se règlent sur la page **⚙ Paramètres**. Elle accompagne un groupe qui annote ensemble une collection Zotero : elle fixe une grille de couleurs commune, mesure la participation de chacun, analyse les convergences et divergences de lecture, et propose des thèmes pour une séance de discussion. Tout est enregistré dans Omeka S.
+**exploZoteroAnno** est la seconde application, avec son propre serveur : http://127.0.0.1:7273 (lien dans l'en-tête de l'Atelier d'articles). Elle peut analyser pendant qu'un traitement de l'Atelier est en cours. Elle comporte neuf onglets : Grille, Workflow (prompts des agents, voir *L'onglet Workflow*), Exécution, Analyses, Participation, Collaborations, Thèmes, RAG et Rapport ; ses connexions se règlent sur la page **⚙ Paramètres**. Elle accompagne un groupe qui annote ensemble une collection Zotero : elle fixe une grille de couleurs commune, mesure la participation de chacun, analyse les convergences et divergences de lecture, et propose des thèmes pour une séance de discussion. Tout est enregistré dans Omeka S.
 
 ```mermaid
 flowchart LR
@@ -235,8 +241,9 @@ flowchart LR
 
 - **Collection** : la collection Zotero annotée, idéalement dans une **bibliothèque de groupe** pour que chaque annotation garde son auteur. La liste suit la bibliothèque enregistrée sur la page Paramètres, et l'application retient la collection choisie pour chaque bibliothèque.
 - **Grille de couleurs** : pour chaque couleur de surlignage de Zotero, une signification (idée clé, accord, désaccord, définition, méthode, question, exemple, contexte par défaut) et une consigne « quand l'utiliser ». La grille se modifie librement (couleurs, libellés, ajout ou suppression).
+- **Tension entre les couleurs** : quand deux personnes surlignent le même passage avec des couleurs différentes, leurs lectures sont plus ou moins en tension (de 0 à 1). La tension suit le rapport entre les deux couleurs sur le cercle chromatique — identiques, analogues (teintes voisines), en carré (≈ 90°), triadiques (≈ 120°), complémentaires (opposées), ou avec un gris — avec une valeur réglable pour chaque rapport. Elle peut être fixée pour une paire de significations (par défaut, Accord – Désaccord : 1). Un tableau montre la tension obtenue entre toutes les significations de la grille. La tension ordonne les passages divergents, colore les liens du réseau et oriente les thèmes de discussion.
 - **Guide d'annotation** : produit à partir de la grille, avec les consignes d'annotation (bibliothèque de groupe, commentaires, notes, marqueurs). Il se copie ou se télécharge pour être envoyé aux collaborateurs, et il est enregistré dans Omeka S à chaque analyse.
-- **RAG Albert** : indexation des documents dans Albert à chaque analyse (activée par défaut), dépôt aussi dans les autres collections du document, taille et chevauchement des extraits, nombre d'extraits par question et méthode de recherche par défaut, instructions générales du modèle (voir l'onglet RAG).
+- **RAG Albert** : indexation des documents dans Albert à chaque analyse (activée par défaut), dépôt aussi dans les autres collections du document, taille et chevauchement des extraits, nombre d'extraits par question et méthode de recherche par défaut, (voir l'onglet RAG).
 - **Analyse** : similarité à partir de laquelle deux surlignages portent sur le même passage, nombre minimum de passages communs pour calculer un kappa, nombre de thèmes de discussion, et **fusion des documents en double** (activée par défaut) : quand plusieurs membres du groupe ont ajouté le même document à la collection (même fichier, même DOI, même URL, ou même titre et même année), il n'est enregistré qu'une fois dans Omeka S et cumule les surlignages, notes et marqueurs de tous ses exemplaires. L'onglet Participation signale ces documents (« N exemplaires fusionnés ») et le rapport les liste.
 
 **Enregistrer** garde les réglages sans lancer de traitement ; **Rétablir la grille par défaut** remet les couleurs d'origine. **Enregistrer et analyser** lance le workflow ; il peut être relancé à tout moment pendant l'annotation : les nouvelles annotations de Zotero sont prises en compte, sans réextraire les documents déjà enregistrés dans Omeka S.
@@ -268,8 +275,9 @@ Recharger des analyses successives d'une même collection permet de suivre l'év
 - **convergence** (même signification) et **divergence** (significations différentes) de lecture sur ces passages ;
 - **matrice** des passages en commun et de l'accord pour chaque paire de collaborateurs ;
 - **kappa** d'accord sur la signification des couleurs, calculé à partir d'un nombre minimum de passages communs ;
-- les **passages aux lectures divergentes**, avec la lecture et le commentaire de chacun ;
-- le **réseau** collaborateurs–documents (sigma.js), où les liens entre collaborateurs indiquent leurs passages communs et leur accord.
+- la **tension** des lectures : moyenne des passages divergents et de chaque paire de collaborateurs ;
+- les **passages aux lectures divergentes**, du plus tendu au moins tendu, avec la lecture et le commentaire de chacun ;
+- le **réseau** collaborateurs–documents (graphe de forces d3.js) : glisser un nœud le déplace, le survoler montre ses voisins, cliquer affiche ses liens ; l'épaisseur d'un lien suit le nombre d'annotations ou de passages communs, et la couleur des liens entre collaborateurs leur tension (du gris au rouge).
 
 ### Générer des thèmes de discussion (onglet Thèmes)
 

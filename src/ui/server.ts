@@ -12,6 +12,9 @@ import { defaultExploConfig, EXPLO_CONFIG_FILE, RUNS_DIR } from "../config/explo
 import { defaultChaoticumConfig, CHAOTICUM_CONFIG_FILE } from "../config/chaoticum";
 import { chaoticumRoutes } from "./chaoticumRoutes";
 import { buildGuide } from "../workflow/reports/annotationGuide";
+import { tensionMatrix } from "../lib/analysis/colorTension";
+import { AGENTS, DIAGRAMS, type AgentInfo } from "../workflow/diagrams";
+import { readAgentOverrides, writeAgentOverride, AGENTS_CONFIG_FILE } from "../agents/overrides";
 import { mergeConfig, readConfigOverride, writeConfigOverride, CONFIG_FILE } from "../config/store";
 import { Zotero } from "../lib/zotero/zotero";
 import { Omk, containerUrl } from "../lib/omeka/omk";
@@ -565,6 +568,12 @@ async function readBody(req: http.IncomingMessage): Promise<any> {
   return body ? JSON.parse(body) : {};
 }
 
+// textes par défaut d'un agent ; ceux de l'assistant RAG sont les instructions de la configuration RAG de exploZoteroAnno
+function agentDefaults(id: string): AgentInfo {
+  const a = AGENTS[id]!;
+  return id === "rag-assistant" ? { ...a, instructions: currentExploConfig().rag.system } : a;
+}
+
 const routes: Record<string, (req: http.IncomingMessage, res: http.ServerResponse, url: URL) => Promise<void> | void> = {
   "GET /": (_req, res) => {
     res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
@@ -575,6 +584,47 @@ const routes: Record<string, (req: http.IncomingMessage, res: http.ServerRespons
   "GET /parametres": (_req, res) => {
     res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
     res.end(fs.readFileSync(path.join(PUBLIC_DIR, "settings.html")));
+  },
+
+  // ==========================================
+  // Workflow de l'application : diagramme des étapes et agents, textes des agents (agents.config.json)
+  // ==========================================
+  "GET /api/workflow": (_req, res) => {
+    const diagram = DIAGRAMS[APP as keyof typeof DIAGRAMS];
+    if (!diagram) return sendJson(res, 404, { error: "Pas de workflow pour cette application" });
+    const ids = [...new Set([...diagram.stages.flat(), ...diagram.outside].flatMap(s => s.agents ?? []))];
+    const overrides = readAgentOverrides();
+    const wf = currentConfig();
+    const chao = APP === "chaoticum" ? currentChaoticumConfig() : null;
+    const allModels = { analytique: chao?.models.analytics ?? wf.models.analytics, rapide: wf.models.fast, vision: chao?.models.vision ?? wf.models.fast };
+    // modèles utilisés par les agents et les étapes de ce workflow
+    const roles = new Set([...ids.map(id => AGENTS[id]!.model), ...[...diagram.stages.flat(), ...diagram.outside].flatMap(s => (s.model ? [s.model] : []))]);
+    const models = Object.fromEntries(Object.entries(allModels).filter(([role]) => roles.has(role as keyof typeof allModels)));
+    sendJson(res, 200, {
+      ...diagram,
+      models,
+      configFile: path.relative(ROOT, AGENTS_CONFIG_FILE),
+      agents: Object.fromEntries(ids.map(id => {
+        const a = agentDefaults(id);
+        const o = overrides[id] ?? {};
+        return [id, { ...a, defaults: { instructions: a.instructions, prompt: a.prompt }, instructions: o.instructions || a.instructions, prompt: a.prompt === undefined ? undefined : o.prompt || a.prompt, modified: !!(o.instructions || o.prompt) }];
+      })),
+    });
+  },
+
+  // enregistre les textes d'un agent ({ id, instructions, prompt }) ; reset:true rétablit ceux par défaut
+  "POST /api/workflow/agent": async (req, res) => {
+    const { id, instructions, prompt, reset } = await readBody(req);
+    if (!AGENTS[id]) return sendJson(res, 404, { error: `Agent inconnu : ${id}` });
+    const a = agentDefaults(id);
+    const kept = writeAgentOverride(id, reset ? {} : { instructions, prompt }, { instructions: a.instructions, prompt: a.prompt });
+    sendJson(res, 200, { ok: true, modified: Object.keys(kept).length > 0 });
+  },
+
+  // module du diagramme (partagé par les pages des trois applications)
+  "GET /workflowDiagram.js": (_req, res) => {
+    res.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8" });
+    res.end(fs.readFileSync(path.join(PUBLIC_DIR, "workflowDiagram.js")));
   },
 
   // application de ce serveur et adresses des deux applications
@@ -706,6 +756,19 @@ const routes: Record<string, (req: http.IncomingMessage, res: http.ServerRespons
     const { config, collectionName } = await readBody(req);
     res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" });
     res.end(buildGuide(mergeConfig(defaultExploConfig, config ?? {}), collectionName));
+  },
+
+  // tensions entre les significations de la grille (réglages enregistrés ou en cours d'édition)
+  "POST /api/explo/tension": async (req, res) => {
+    const { config } = await readBody(req);
+    const c = mergeConfig(defaultExploConfig, config ?? {});
+    sendJson(res, 200, tensionMatrix({ positions: c.grid.positions, tolerance: c.grid.tolerance }, c.tension));
+  },
+
+  // graphe d3.js (module partagé avec la page autonome du réseau)
+  "GET /forceGraph.js": (_req, res) => {
+    res.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8" });
+    res.end(fs.readFileSync(path.join(PUBLIC_DIR, "forceGraph.js")));
   },
 
   "GET /api/explo/results": async (_req, res, url) => {
@@ -850,6 +913,7 @@ const APP_ONLY: Record<string, AppName> = {
   ...Object.fromEntries(Object.keys(CHAOTICUM_ROUTES).map(k => [k, "chaoticum" as AppName])),
   "POST /api/cfp-file": "paper", "GET /api/results": "paper", "GET /api/history": "paper", "GET /api/file": "paper",
   "GET /api/explo/settings": "explo", "POST /api/explo/settings": "explo", "POST /api/explo/guide": "explo",
+  "POST /api/explo/tension": "explo",
   "GET /api/explo/results": "explo", "GET /api/explo/file": "explo", "GET /api/explo/runs": "explo",
   "GET /api/explo/rag/status": "explo", "GET /api/explo/rag/prompts": "explo", "POST /api/explo/rag/prompts": "explo",
   "POST /api/explo/rag/prompts/defaults": "explo", "POST /api/explo/rag/query": "explo", "POST /api/explo/rag/save": "explo",

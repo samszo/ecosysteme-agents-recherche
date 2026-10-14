@@ -121,7 +121,7 @@
     UI1 &amp; UI2 -- lit --&gt; FS</pre>
 <ul>
 <li><strong>Interface</strong> (<code>src/ui/server.ts</code>) : serveur <code>node:http</code> sans dépendance, lancé une fois par application (voir <em>Un serveur par application</em>), qui gère les connexions et la configuration de son application, lance son workflow dans un <strong>processus enfant</strong> (la configuration et les connexions sont ainsi relues à chaque exécution), diffuse le journal en <strong>Server-Sent Events</strong> et sert les résultats.</li>
-<li><strong>Lanceurs</strong> (<code>src/runners/paper.ts</code>, <code>src/runners/explo.ts</code>) : enregistrent la configuration dans Omeka S, exécutent le workflow Mastra, produisent les fichiers de résultats (graphe ou réseau sigma.js, rapport de traitement…) et importent les documents de fin d&#39;analyse dans l&#39;item de configuration de l&#39;exécution.</li>
+<li><strong>Lanceurs</strong> (<code>src/runners/paper.ts</code>, <code>src/runners/explo.ts</code>) : enregistrent la configuration dans Omeka S, exécutent le workflow Mastra, produisent les fichiers de résultats (graphe sigma.js ou réseau d3.js, rapport de traitement…) et importent les documents de fin d&#39;analyse dans l&#39;item de configuration de l&#39;exécution.</li>
 <li><strong>Paramètres de connexion</strong> : page commune <code>src/ui/public/settings.html</code>, servie par chaque serveur sur <code>/parametres</code> ; elle enregistre les connexions de l&#39;application qui la sert (<code>.env</code>, ou <code>.env.explo</code> pour exploZoteroAnno). Les pages des applications n&#39;enregistrent que leur configuration.</li>
 <li><strong>RAG Albert</strong> (exploZoteroAnno) : l&#39;indexation est une étape du workflow (processus enfant) ; la consultation, les modèles de prompt et l&#39;enregistrement des réponses sont des routes du serveur (<code>src/lib/rag/ragQuery.ts</code>), qui appellent directement Albert et Omeka S avec les connexions du serveur.</li>
 <li><strong>Répertoire de données</strong> : le répertoire courant. En local c&#39;est la racine du projet ; dans Docker c&#39;est le volume <code>/data</code>, le code étant dans <code>/app</code>.</li>
@@ -201,10 +201,11 @@
 <td><code>finalReview</code></td>
 </tr>
 </tbody></table>
+<p><strong>Instructions des agents.</strong> Chaque agent exporte ses instructions par défaut (<code>XXX_INSTRUCTIONS</code>) et les passe à Mastra par <code>overridable(id, défaut)</code> (<code>src/agents/overrides.ts</code>) : un argument dynamique, évalué à chaque génération, qui lit <code>agents.config.json</code> (<code>AGENTS_CONFIG_FILE</code>, commun aux trois applications ; seuls les textes différents des défauts y sont gardés). Une demande peut aussi y être modifiée quand l&#39;étape la construit avec <code>agentText(id, &quot;prompt&quot;, défaut)</code> (Animateur de discussion). L&#39;onglet <strong>Workflow</strong> de chaque application les modifie : <code>GET /api/workflow</code> renvoie le diagramme de l&#39;application (<code>DIAGRAMS</code> et <code>AGENTS</code> dans <code>src/workflow/diagrams.ts</code>, à tenir à jour avec les <code>.then()</code> / <code>.parallel()</code> des workflows) avec les textes en vigueur, <code>POST /api/workflow/agent</code> enregistre ou rétablit (<code>reset</code>) ceux d&#39;un agent ; le dessin et le formulaire sont dans <code>src/ui/public/workflowDiagram.js</code>. L&#39;assistant RAG d&#39;exploZoteroAnno (appel direct à Albert, <code>ragQuery</code>) y figure sous l&#39;id <code>rag-assistant</code> : ses instructions par défaut sont <code>rag.system</code>.</p>
 <p>Les outils sont appelés <strong>directement</strong> par les étapes (<code>outil.execute({ data })</code>) : les données brutes circulent entre les étapes sans passer par un modèle. Les agents ne reçoivent que ce qu&#39;ils doivent rédiger ou analyser.</p>
 <h2 id="3-organisation-du-code"><a class="anchor" href="#3-organisation-du-code">#</a>3. Organisation du code</h2>
 <pre><code class="language-">src/
-├── agents/                   agents Mastra, un fichier par agent (index.ts ré-exporte)
+├── agents/                   agents Mastra, un fichier par agent (index.ts ré-exporte) ; overrides : instructions et demandes modifiées (agents.config.json)
 ├── config/
 │   ├── index.ts              configuration de l'Atelier (defaultWorkflowConfig, workflowConfig, outputPath)
 │   ├── explo.ts              configuration d'exploZoteroAnno (defaultExploConfig, exploConfig, exploGrid)
@@ -213,13 +214,13 @@
 │   └── store.ts              fusion avec workflow.config.json / explo.config.json
 ├── lib/                      fonctions et clients utilisés par les outils et les étapes (hors outils Mastra)
 │   ├── chaoticum/            slides (présentations, #numSlide-max, copies d'écran), citations, partition, grist, random
-│   ├── analysis/             cleanGraph, annotationPositions (grille de couleurs), codebook (grille kappa)
+│   ├── analysis/             cleanGraph, annotationPositions (grille de couleurs), colorTension (tension entre couleurs), codebook (grille kappa)
 │   ├── extraction/           pdfExtract, attachmentExtract, zip, chunkText
 │   ├── metrics/              usage (tokens), impact (énergie, carbone, argent)
 │   ├── omeka/                omk (client), oaAnnotations, conceptIndex, conceptStore, zoteroCollections, verify
 │   ├── albert/               albert (client de l'API Albert : collections, documents, recherche, complétions)
 │   ├── rag/                  ragIndex (indexation d'une collection), ragQuery (modèles de prompt, consultation, réponses)
-│   ├── visualization/        graphViz (graphology, sigma.js)
+│   ├── visualization/        graphViz (graphology, sigma.js), forceGraphHtml (d3.js)
 │   └── zotero/               zotero (client), zoteroToOmeka (correspondance des métadonnées), duplicates (doublons)
 ├── tools/                    outils Mastra uniquement (index.ts ré-exporte)
 ├── workflow/
@@ -848,7 +849,7 @@
         R[rag-index&lt;br/&gt;indexCollectionForRag&lt;br/&gt;→ collections Albert]
     end
     PAR --&gt; T[themes&lt;br/&gt;discussionAgent + formatAnnotations]
-    T --&gt; OUT([rapport, thèmes, réseau sigma.js,&lt;br/&gt;données JSON, guide → Omeka])</pre>
+    T --&gt; OUT([rapport, thèmes, réseau d3.js,&lt;br/&gt;données JSON, guide → Omeka])</pre>
 <table>
 <thead>
 <tr>
@@ -874,8 +875,8 @@
 </tr>
 <tr>
 <td><code>analyzeCollaboration</code></td>
-<td>passages communs, paires, convergences et divergences, kappa, réseau</td>
-<td><code>words</code> / <code>jaccard</code>, <code>fleissKappa</code> / <code>cohenKappa</code>, <code>interpretKappa</code></td>
+<td>passages communs, paires, convergences et divergences, kappa, tension des lectures (passages, paires, liens du réseau), réseau</td>
+<td><code>words</code> / <code>jaccard</code>, <code>fleissKappa</code> / <code>cohenKappa</code>, <code>interpretKappa</code>, <code>tensionBetween</code> (<code>src/lib/analysis/colorTension.ts</code> : rapport chromatique des deux couleurs de la grille — identiques, analogues &lt; 45°, en carré &lt; 105°, triadiques &lt; 150°, complémentaires, achromatique si saturation &lt; 0,15 — pondéré par <code>tension.relations</code>, ou tension fixée dans <code>tension.pairs</code>)</td>
 </tr>
 <tr>
 <td><code>rag-index</code> (<code>src/lib/rag/ragIndex.ts</code>)</td>
@@ -884,13 +885,13 @@
 </tr>
 <tr>
 <td><code>discussionAgent</code></td>
-<td>thèmes de discussion (modèle analytique)</td>
+<td>thèmes de discussion (modèle analytique) ; instructions et demande dans <code>agents.discussion</code> (<code>instructions</code>, <code>prompt</code> à variables <code>{{…}}</code>), modifiables dans l&#39;onglet Grille</td>
 <td><code>formatAnnotations</code> (grille en paramètre), comptage des tokens</td>
 </tr>
 <tr>
 <td><code>src/runners/explo.ts</code></td>
 <td>lancement (<code>npm run explo</code>), fichiers, Omeka, coût</td>
-<td><code>saveWorkflowConfig</code>, <code>updateWorkflowStatus</code>, <code>attachDocuments</code>, <code>generateGraphHtml</code>, <code>usageReport</code>, <code>estimateImpact</code></td>
+<td><code>saveWorkflowConfig</code>, <code>updateWorkflowStatus</code>, <code>attachDocuments</code>, <code>generateForceGraphHtml</code> (page autonome qui inclut <code>src/ui/public/forceGraph.js</code>, le module d3.js de l&#39;onglet Collaborations ; le graphe reste aussi dans <code>collaborations.json</code>), <code>usageReport</code>, <code>estimateImpact</code></td>
 </tr>
 <tr>
 <td><code>src/workflow/reports/annotationGuide.ts</code></td>

@@ -71,15 +71,16 @@ export function buildExploReport(ctx: {
       "",
       `Accord sur la signification des couleurs : kappa de Fleiss **${c.kappa.fleiss ?? "—"}**${c.kappa.cohen !== null ? `, de Cohen **${c.kappa.cohen}**` : ""} (${c.kappa.interpretation}, ${c.kappa.passages} passage(s)).`,
       "",
-      "| Paire | Documents en commun | Passages en commun | Même signification | Accord |",
-      "|---|---|---|---|---|",
-      ...c.pairs.map((x: any) => `| ${cell(x.a)} – ${cell(x.b)} | ${x.sharedDocuments} | ${x.sharedPassages} | ${x.samePosition} | ${pct(x.agreement)} |`),
+      ...(c.tension?.mean != null ? [`Tension des lectures divergentes (rapport entre les couleurs, de 0 à 1) : moyenne **${c.tension.mean.toFixed(2)}**, maximum **${c.tension.max.toFixed(2)}** — ${Object.entries(c.tension.byRelation).map(([r, n]) => `${n} passage(s) aux couleurs ${r}`).join(", ")}.`, ""] : []),
+      "| Paire | Documents en commun | Passages en commun | Même signification | Accord | Tension |",
+      "|---|---|---|---|---|---|",
+      ...c.pairs.map((x: any) => `| ${cell(x.a)} – ${cell(x.b)} | ${x.sharedDocuments} | ${x.sharedPassages} | ${x.samePosition} | ${pct(x.agreement)} | ${x.tension != null ? x.tension.toFixed(2) : "—"} |`),
       ""
     );
     if (c.divergent.length) {
       push("### Passages aux lectures divergentes", "");
       for (const u of c.divergent.slice(0, 15)) {
-        push(`> « ${cell(u.phrase)} » — *${cell(u.document)}*`, ">", `> ${u.annotations.map((a: any) => `${cell(a.author)} : **${a.position ?? "hors grille"}**${a.note ? ` (« ${cell(a.note)} »)` : ""}`).join(" · ")}`, "");
+        push(`> « ${cell(u.phrase)} » — *${cell(u.document)}*${u.tension != null ? ` — tension ${u.tension.toFixed(2)} (${u.relation})` : ""}`, ">", `> ${u.annotations.map((a: any) => `${cell(a.author)} : **${a.position ?? "hors grille"}**${a.note ? ` (« ${cell(a.note)} »)` : ""}`).join(" · ")}`, "");
       }
     }
   }

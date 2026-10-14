@@ -7,6 +7,7 @@ import type { UsageEntry, UsageSummary } from "../metrics/usage";
 import { estimateTokens } from "./ragIndex";
 import { defaultExploConfig } from "../../config/explo";
 import { defaultWorkflowConfig } from "../../config";
+import { agentText } from "../../agents/overrides";
 
 type RagConfig = typeof defaultExploConfig.rag;
 type Costs = typeof defaultWorkflowConfig.costs;
@@ -135,7 +136,9 @@ export async function queryRag(o: {
   const template = /\{\{\s*extraits\s*\}\}/.test(o.prompt.template) ? o.prompt.template : `${o.prompt.template}\n\nExtraits :\n{{extraits}}`;
   const filledPrompt = fill(template, { question, extraits, collection: o.collection.name });
 
-  const chat = await o.albert.chat({ model: o.model, messages: [{ role: "system", content: o.rag.system }, { role: "user", content: filledPrompt }] });
+  // instructions de l'assistant : celles modifiées dans l'onglet Workflow, sinon celles de la configuration RAG
+  const system = agentText("rag-assistant", "instructions", o.rag.system);
+  const chat = await o.albert.chat({ model: o.model, messages: [{ role: "system", content: system }, { role: "user", content: filledPrompt }] });
 
   // coût : recherche (vectorisation de la question) + complétion, estimé avec les hypothèses de config.costs
   const entry = (source: string, model: string, input: number, output: number, known: boolean): UsageEntry =>
@@ -143,7 +146,7 @@ export async function queryRag(o: {
   const searchTokens = Number(search.usage?.prompt_tokens) || 0;
   const entries = [
     entry("Recherche RAG (vectorisation de la question)", o.rag.embeddingsModel, searchTokens || estimateTokens(question), 0, !!searchTokens),
-    entry("Réponse RAG", o.model, Number(chat.usage?.prompt_tokens) || estimateTokens(o.rag.system + filledPrompt), Number(chat.usage?.completion_tokens) || estimateTokens(chat.text), !!chat.usage?.total_tokens),
+    entry("Réponse RAG", o.model, Number(chat.usage?.prompt_tokens) || estimateTokens(system + filledPrompt), Number(chat.usage?.completion_tokens) || estimateTokens(chat.text), !!chat.usage?.total_tokens),
   ];
   const sum = (k: keyof UsageEntry) => entries.reduce((n, e) => n + (e[k] as number), 0);
   const usage: UsageSummary = { entries, calls: sum("calls"), inputTokens: sum("inputTokens"), outputTokens: sum("outputTokens"), reasoningTokens: 0, totalTokens: sum("totalTokens"), unknown: sum("unknown") };

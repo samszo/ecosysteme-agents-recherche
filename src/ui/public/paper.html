@@ -94,6 +94,7 @@
   </div>
   <nav>
     <button data-tab="settings" class="active">Configuration</button>
+    <button data-tab="workflow">Workflow</button>
     <button data-tab="run">Exécution</button>
     <button data-tab="results">Résultats</button>
     <button data-tab="history">Appels traités</button>
@@ -146,6 +147,15 @@
   </div>
 
   <!-- ======================= EXÉCUTION ======================= -->
+  <!-- ======================= WORKFLOW ======================= -->
+  <div id="tab-workflow" class="hidden">
+    <section class="card">
+      <h2>Workflow</h2>
+      <p class="lead">Étapes du traitement dans l'ordre d'exécution et agents impliqués. Cliquer sur un agent pour lire et modifier ses instructions (prompt système) et, quand elle est modifiable, la demande qui lui est envoyée. Les textes enregistrés valent pour les traitements suivants.</p>
+      <div id="workflow" class="muted">Chargement…</div>
+    </section>
+  </div>
+
   <div id="tab-run" class="hidden">
     <div class="toolbar">
       <span id="run-info" class="muted">Aucun traitement lancé depuis l'ouverture de l'interface.</span>
@@ -267,9 +277,20 @@ function toast(msg) {
 document.querySelectorAll("nav button").forEach(b => b.onclick = () => showTab(b.dataset.tab));
 function showTab(tab) {
   document.querySelectorAll("nav button").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
-  for (const t of ["settings", "run", "results", "history"]) $(`#tab-${t}`).classList.toggle("hidden", t !== tab);
+  for (const t of ["settings", "workflow", "run", "results", "history"]) $(`#tab-${t}`).classList.toggle("hidden", t !== tab);
   if (tab === "results") loadResults();
   if (tab === "history") loadHistory();
+  if (tab === "workflow") loadWorkflow();
+}
+
+// diagramme du workflow et édition des prompts des agents (module partagé /workflowDiagram.js)
+let workflowLoaded = false;
+async function loadWorkflow() {
+  if (workflowLoaded) return;
+  workflowLoaded = true;
+  const { workflowDiagram } = await import("/workflowDiagram.js");
+  $("#workflow").className = "";
+  workflowDiagram($("#workflow"), { toast });
 }
 
 // ==========================================

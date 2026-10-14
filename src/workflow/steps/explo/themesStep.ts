@@ -1,5 +1,6 @@
 import { createStep } from "@mastra/core/workflows";
-import { discussionAgent } from "../../../agents/discussionAgent";
+import { discussionAgent, DISCUSSION_PROMPT } from "../../../agents/discussionAgent";
+import { agentText } from "../../../agents/overrides";
 import { formatAnnotations } from "../../../tools/buildLLMWiki";
 import { recordUsage } from "../../../lib/metrics/usage";
 import { workflowConfig } from "../../../config";
@@ -16,7 +17,7 @@ export const themesStep = createStep({
     const { count, maxPassages } = exploConfig.themes;
 
     const passage = (u: any) =>
-      `- « ${u.phrase} » (${u.document}) — ${u.annotations.map((a: any) => `${a.author} : ${a.position ?? "couleur hors grille"}${a.note ? ` (« ${a.note} »)` : ""}`).join(" ; ")}`;
+      `- « ${u.phrase} » (${u.document})${u.tension != null ? ` [tension ${u.tension.toFixed(2)}, couleurs ${u.relation}]` : ""} — ${u.annotations.map((a: any) => `${a.author} : ${a.position ?? "couleur hors grille"}${a.note ? ` (« ${a.note} »)` : ""}`).join(" ; ")}`;
     const divergent = (collaboration.divergent ?? []).slice(0, Math.ceil(maxPassages * 0.6));
     const convergent = (collaboration.convergent ?? []).slice(0, maxPassages - divergent.length);
 
@@ -33,31 +34,18 @@ export const themesStep = createStep({
     }
 
     console.log("🧠 Agent : Thèmes de discussion...");
-    const res = await discussionAgent.generate(`Propose ${count} thèmes de discussion.
-
-<grille>
-${exploGrid().positions.map(p => `- ${p.name} = ${p.position} : ${p.instruction}`).join("\n")}
-</grille>
-
-<participation>
-${(participation.collaborators ?? []).map((c: any) => `- ${c.name} : ${c.annotations} surlignage(s), ${c.notes} note(s), ${c.documents} document(s)`).join("\n")}
-</participation>
-
-<passages_divergents description="même passage, significations différentes">
-${divergent.map(passage).join("\n") || "(aucun)"}
-</passages_divergents>
-
-<passages_convergents description="même passage, même signification">
-${convergent.map(passage).join("\n") || "(aucun)"}
-</passages_convergents>
-
-<commentaires_et_notes>
-${formatAnnotations(commented, 8000, exploGrid()) || "(aucun)"}
-</commentaires_et_notes>
-
-<marqueurs>
-${[...tags].sort((a, b) => b[1] - a[1]).slice(0, 40).map(([t, n]) => `${t} (${n})`).join(", ") || "(aucun)"}
-</marqueurs>`);
+    // demande de l'agent : celle par défaut ou celle modifiée dans l'onglet Workflow (agents.config.json)
+    const prompt = agentText("discussion-agent", "prompt", DISCUSSION_PROMPT);
+    const vars: Record<string, string> = {
+      count: String(count),
+      grille: exploGrid().positions.map(p => `- ${p.name} = ${p.position} : ${p.instruction}`).join("\n"),
+      participation: (participation.collaborators ?? []).map((c: any) => `- ${c.name} : ${c.annotations} surlignage(s), ${c.notes} note(s), ${c.documents} document(s)`).join("\n"),
+      passages_divergents: divergent.map(passage).join("\n") || "(aucun)",
+      passages_convergents: convergent.map(passage).join("\n") || "(aucun)",
+      commentaires: formatAnnotations(commented, 8000, exploGrid()) || "(aucun)",
+      marqueurs: [...tags].sort((a, b) => b[1] - a[1]).slice(0, 40).map(([t, n]) => `${t} (${n})`).join(", ") || "(aucun)",
+    };
+    const res = await discussionAgent.generate(prompt.replace(/\{\{(\w+)\}\}/g, (m, k) => vars[k] ?? m));
     recordUsage("Thèmes de discussion (discussionAgent)", workflowConfig.models.analytics, (res as any).totalUsage ?? res.usage);
     return { themes: res.text, participation, collaboration };
   },

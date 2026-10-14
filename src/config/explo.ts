@@ -45,6 +45,20 @@ export const defaultExploConfig = {
     minPassagesForKappa: 5,
   },
 
+  // tension entre deux lectures d'un même passage (0 : aucune, 1 : maximale), selon le rapport entre les deux couleurs
+  // de la grille sur le cercle chromatique ; une tension fixée pour une paire de significations remplace ce rapport
+  tension: {
+    relations: {
+      identique: 0, // même couleur
+      analogue: 0.2, // teintes voisines (écart < 45°)
+      carre: 0.5, // teintes en carré (écart autour de 90°)
+      triadique: 0.75, // teintes en triade (écart autour de 120°)
+      complementaire: 1, // teintes opposées (écart > 150°)
+      achromatique: 0.3, // l'une des couleurs est un gris
+    },
+    pairs: [{ a: "Accord", b: "Désaccord", tension: 1 }],
+  },
+
   themes: {
     // nombre de thèmes de discussion à proposer
     count: 6,

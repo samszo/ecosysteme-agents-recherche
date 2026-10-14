@@ -3,6 +3,7 @@ import { z } from "zod";
 import { positionForColor } from "../lib/analysis/annotationPositions";
 import { words, jaccard } from "./fetchOmekaAnnotations";
 import { fleissKappa, cohenKappa, interpretKappa } from "./calculateFleissKappa";
+import { tensionBetween, RELATION_LABELS } from "../lib/analysis/colorTension";
 import { exploConfig, exploGrid } from "../config/explo";
 
 const CollaborationSchema = z.object({
@@ -62,19 +63,30 @@ export const analyzeCollaboration = new Tool({
         for (const x of u.annotations) byPerson.set(x.author, x);
         return { ...u, people: [...byPerson.values()] };
       })
-      .filter(u => u.people.filter(p => p.author !== unassignedLabel).length >= 2);
+      .filter(u => u.people.filter(p => p.author !== unassignedLabel).length >= 2)
+      .map(u => {
+        // tension du passage : la plus forte entre deux lectures
+        let best: { tension: number; relation: string } | null = null;
+        for (let i = 0; i < u.people.length; i++) {
+          for (let j = i + 1; j < u.people.length; j++) {
+            const t = tensionBetween(u.people[i]!, u.people[j]!, grid, exploConfig.tension);
+            if (t && (!best || t.tension > best.tension)) best = t;
+          }
+        }
+        return { ...u, tension: best?.tension ?? null, relation: best ? RELATION_LABELS[best.relation as keyof typeof RELATION_LABELS] : null };
+      });
 
     // ==========================================
     // Paires de collaborateurs
     // ==========================================
     const names = [...docsByPerson.keys()].filter(n => n !== unassignedLabel).sort();
     const pairKey = (x: string, y: string) => (x < y ? `${x}|${y}` : `${y}|${x}`);
-    const pairs = new Map<string, { a: string; b: string; sharedDocuments: number; sharedPassages: number; samePosition: number; differentPosition: number }>();
+    const pairs = new Map<string, { a: string; b: string; sharedDocuments: number; sharedPassages: number; samePosition: number; differentPosition: number; tensionSum: number; tensionCount: number }>();
     for (let i = 0; i < names.length; i++) {
       for (let j = i + 1; j < names.length; j++) {
         const a = names[i]!, b = names[j]!;
         const docsA = docsByPerson.get(a)!, docsB = docsByPerson.get(b)!;
-        pairs.set(pairKey(a, b), { a, b, sharedDocuments: [...docsA].filter(d => docsB.has(d)).length, sharedPassages: 0, samePosition: 0, differentPosition: 0 });
+        pairs.set(pairKey(a, b), { a, b, sharedDocuments: [...docsA].filter(d => docsB.has(d)).length, sharedPassages: 0, samePosition: 0, differentPosition: 0, tensionSum: 0, tensionCount: 0 });
       }
     }
     for (const u of shared) {
@@ -86,11 +98,17 @@ export const analyzeCollaboration = new Tool({
           pair.sharedPassages++;
           if (ps[i]!.position && ps[i]!.position === ps[j]!.position) pair.samePosition++;
           else pair.differentPosition++;
+          const t = tensionBetween(ps[i]!, ps[j]!, grid, exploConfig.tension);
+          if (t) { pair.tensionSum += t.tension; pair.tensionCount++; }
         }
       }
     }
     const pairList = [...pairs.values()]
-      .map(p => ({ ...p, agreement: p.sharedPassages ? p.samePosition / p.sharedPassages : null }))
+      // tension moyenne des lectures de la paire sur ses passages communs
+      .map(({ tensionSum, tensionCount, ...p }) => ({
+        ...p, agreement: p.sharedPassages ? p.samePosition / p.sharedPassages : null,
+        tension: tensionCount ? Number((tensionSum / tensionCount).toFixed(3)) : null,
+      }))
       .sort((x, y) => y.sharedPassages - x.sharedPassages || y.sharedDocuments - x.sharedDocuments);
 
     // ==========================================
@@ -119,14 +137,19 @@ export const analyzeCollaboration = new Tool({
     }
 
     const describe = (u: (typeof shared)[number]) => ({
-      document: u.docTitle, docKey: u.docKey, phrase: u.phrase,
+      document: u.docTitle, docKey: u.docKey, phrase: u.phrase, tension: u.tension, relation: u.relation,
       annotations: u.people.map(p => ({ author: p.author, position: p.position, color: p.color, note: p.note, page: p.page })),
     });
-    const divergent = shared.filter(u => new Set(u.people.map(p => p.position ?? "hors grille")).size > 1).map(describe);
+    // les passages les plus tendus d'abord
+    const divergent = shared.filter(u => new Set(u.people.map(p => p.position ?? "hors grille")).size > 1).map(describe)
+      .sort((x, y) => (y.tension ?? -1) - (x.tension ?? -1));
+    const tensions = divergent.map(u => u.tension).filter((t): t is number => t !== null);
+    const byRelation: Record<string, number> = {};
+    for (const u of divergent) if (u.relation) byRelation[u.relation] = (byRelation[u.relation] ?? 0) + 1;
     const convergent = shared.filter(u => new Set(u.people.map(p => p.position ?? "hors grille")).size === 1).map(describe);
 
     // ==========================================
-    // Réseau collaborateurs–documents (visualisation sigma.js)
+    // Réseau collaborateurs–documents (visualisation d3.js)
     // ==========================================
     const graph = {
       nodes: [
@@ -136,11 +159,11 @@ export const analyzeCollaboration = new Tool({
       edges: [
         ...[...annotationsByPersonDoc].map(([k, n]) => {
           const [who, doc] = k.split("|");
-          return { source: `c:${who}`, target: `d:${doc}`, relation: `annote (${n})` };
+          return { source: `c:${who}`, target: `d:${doc}`, weight: n, relation: `annote (${n})` };
         }),
         ...pairList.filter(p => p.sharedPassages).map(p => ({
-          source: `c:${p.a}`, target: `c:${p.b}`,
-          relation: `${p.sharedPassages} passage(s) commun(s), accord ${Math.round((p.agreement ?? 0) * 100)} %`,
+          source: `c:${p.a}`, target: `c:${p.b}`, weight: p.sharedPassages, ...(p.tension !== null ? { tension: p.tension } : {}),
+          relation: `${p.sharedPassages} passage(s) commun(s), accord ${Math.round((p.agreement ?? 0) * 100)} %${p.tension !== null ? `, tension ${p.tension.toFixed(2)}` : ""}`,
         })),
       ],
     };
@@ -153,8 +176,15 @@ export const analyzeCollaboration = new Tool({
         names,
         sharedPassages: names.map(a => names.map(b => (a === b ? null : pairs.get(pairKey(a, b))?.sharedPassages ?? 0))),
         agreement: names.map(a => names.map(b => (a === b ? null : pairList.find(p => pairKey(p.a, p.b) === pairKey(a, b))?.agreement ?? null))),
+        tension: names.map(a => names.map(b => (a === b ? null : pairList.find(p => pairKey(p.a, p.b) === pairKey(a, b))?.tension ?? null))),
       },
       kappa,
+      // tension des passages divergents : moyenne, maximum et nombre de passages par rapport de couleurs
+      tension: {
+        mean: tensions.length ? Number((tensions.reduce((x, y) => x + y, 0) / tensions.length).toFixed(3)) : null,
+        max: tensions.length ? Math.max(...tensions) : null,
+        byRelation,
+      },
       divergent,
       convergent,
       graph,

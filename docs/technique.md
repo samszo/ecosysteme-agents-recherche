@@ -51,7 +51,7 @@ flowchart LR
 ```
 
 - **Interface** (`src/ui/server.ts`) : serveur `node:http` sans dépendance, lancé une fois par application (voir *Un serveur par application*), qui gère les connexions et la configuration de son application, lance son workflow dans un **processus enfant** (la configuration et les connexions sont ainsi relues à chaque exécution), diffuse le journal en **Server-Sent Events** et sert les résultats.
-- **Lanceurs** (`src/runners/paper.ts`, `src/runners/explo.ts`) : enregistrent la configuration dans Omeka S, exécutent le workflow Mastra, produisent les fichiers de résultats (graphe ou réseau sigma.js, rapport de traitement…) et importent les documents de fin d'analyse dans l'item de configuration de l'exécution.
+- **Lanceurs** (`src/runners/paper.ts`, `src/runners/explo.ts`) : enregistrent la configuration dans Omeka S, exécutent le workflow Mastra, produisent les fichiers de résultats (graphe sigma.js ou réseau d3.js, rapport de traitement…) et importent les documents de fin d'analyse dans l'item de configuration de l'exécution.
 - **Paramètres de connexion** : page commune `src/ui/public/settings.html`, servie par chaque serveur sur `/parametres` ; elle enregistre les connexions de l'application qui la sert (`.env`, ou `.env.explo` pour exploZoteroAnno). Les pages des applications n'enregistrent que leur configuration.
 - **RAG Albert** (exploZoteroAnno) : l'indexation est une étape du workflow (processus enfant) ; la consultation, les modèles de prompt et l'enregistrement des réponses sont des routes du serveur (`src/lib/rag/ragQuery.ts`), qui appellent directement Albert et Omeka S avec les connexions du serveur.
 - **Répertoire de données** : le répertoire courant. En local c'est la racine du projet ; dans Docker c'est le volume `/data`, le code étant dans `/app`.
@@ -94,13 +94,15 @@ Défini dans `src/workflow/paperProductionWorkflow.ts`, étapes dans `src/workfl
 | `draft-paper` | `draftPaperStep.ts` | graphe + `getStepResult` | `draft` (PropAPP), `proposal` |
 | `review-paper` | `reviewPaperStep.ts` | PropAPP, AttenduAPP | `finalReview` |
 
+**Instructions des agents.** Chaque agent exporte ses instructions par défaut (`XXX_INSTRUCTIONS`) et les passe à Mastra par `overridable(id, défaut)` (`src/agents/overrides.ts`) : un argument dynamique, évalué à chaque génération, qui lit `agents.config.json` (`AGENTS_CONFIG_FILE`, commun aux trois applications ; seuls les textes différents des défauts y sont gardés). Une demande peut aussi y être modifiée quand l'étape la construit avec `agentText(id, "prompt", défaut)` (Animateur de discussion). L'onglet **Workflow** de chaque application les modifie : `GET /api/workflow` renvoie le diagramme de l'application (`DIAGRAMS` et `AGENTS` dans `src/workflow/diagrams.ts`, à tenir à jour avec les `.then()` / `.parallel()` des workflows) avec les textes en vigueur, `POST /api/workflow/agent` enregistre ou rétablit (`reset`) ceux d'un agent ; le dessin et le formulaire sont dans `src/ui/public/workflowDiagram.js`. L'assistant RAG d'exploZoteroAnno (appel direct à Albert, `ragQuery`) y figure sous l'id `rag-assistant` : ses instructions par défaut sont `rag.system`.
+
 Les outils sont appelés **directement** par les étapes (`outil.execute({ data })`) : les données brutes circulent entre les étapes sans passer par un modèle. Les agents ne reçoivent que ce qu'ils doivent rédiger ou analyser.
 
 ## 3. Organisation du code
 
 ```
 src/
-├── agents/                   agents Mastra, un fichier par agent (index.ts ré-exporte)
+├── agents/                   agents Mastra, un fichier par agent (index.ts ré-exporte) ; overrides : instructions et demandes modifiées (agents.config.json)
 ├── config/
 │   ├── index.ts              configuration de l'Atelier (defaultWorkflowConfig, workflowConfig, outputPath)
 │   ├── explo.ts              configuration d'exploZoteroAnno (defaultExploConfig, exploConfig, exploGrid)
@@ -109,13 +111,13 @@ src/
 │   └── store.ts              fusion avec workflow.config.json / explo.config.json
 ├── lib/                      fonctions et clients utilisés par les outils et les étapes (hors outils Mastra)
 │   ├── chaoticum/            slides (présentations, #numSlide-max, copies d'écran), citations, partition, grist, random
-│   ├── analysis/             cleanGraph, annotationPositions (grille de couleurs), codebook (grille kappa)
+│   ├── analysis/             cleanGraph, annotationPositions (grille de couleurs), colorTension (tension entre couleurs), codebook (grille kappa)
 │   ├── extraction/           pdfExtract, attachmentExtract, zip, chunkText
 │   ├── metrics/              usage (tokens), impact (énergie, carbone, argent)
 │   ├── omeka/                omk (client), oaAnnotations, conceptIndex, conceptStore, zoteroCollections, verify
 │   ├── albert/               albert (client de l'API Albert : collections, documents, recherche, complétions)
 │   ├── rag/                  ragIndex (indexation d'une collection), ragQuery (modèles de prompt, consultation, réponses)
-│   ├── visualization/        graphViz (graphology, sigma.js)
+│   ├── visualization/        graphViz (graphology, sigma.js), forceGraphHtml (d3.js)
 │   └── zotero/               zotero (client), zoteroToOmeka (correspondance des métadonnées), duplicates (doublons)
 ├── tools/                    outils Mastra uniquement (index.ts ré-exporte)
 ├── workflow/
@@ -485,7 +487,7 @@ flowchart TD
         R[rag-index<br/>indexCollectionForRag<br/>→ collections Albert]
     end
     PAR --> T[themes<br/>discussionAgent + formatAnnotations]
-    T --> OUT([rapport, thèmes, réseau sigma.js,<br/>données JSON, guide → Omeka])
+    T --> OUT([rapport, thèmes, réseau d3.js,<br/>données JSON, guide → Omeka])
 ```
 
 | Élément | Rôle | Réutilise |
@@ -493,10 +495,10 @@ flowchart TD
 | `fetch-literature` | collection, annotations (auteur, couleur, date), notes, Omeka | étape et outil de l'Atelier d'articles |
 | `groupDuplicates` (`src/lib/zotero/duplicates.ts`) | doublons de la collection (option `analysis.mergeDuplicates`, transmise par `fetch-literature` à `fetchZoteroData`) | clés d'identité `md5`, DOI (aussi dans `extra`), URL normalisée, titre normalisé + année (titres d'au moins 15 caractères) ; regroupement union-find ; exemplaire principal : fichier plutôt que lien, PDF, puis le plus ancien. Seul le principal est extrait et enregistré dans Omeka (`dcterms:identifier` = toutes les clés Zotero) ; annotations du lecteur, notes, annotations incrustées dans les PDF et marqueurs des doublons lui sont ajoutés (dédoublonnés sur passage, note, auteur, code) ; `articles[].duplicates` décrit les exemplaires fusionnés |
 | `computeParticipation` | par collaborateur, document, couleur de la grille, semaine | `positionForColor` avec la grille de l'exploration |
-| `analyzeCollaboration` | passages communs, paires, convergences et divergences, kappa, réseau | `words` / `jaccard`, `fleissKappa` / `cohenKappa`, `interpretKappa` |
+| `analyzeCollaboration` | passages communs, paires, convergences et divergences, kappa, tension des lectures (passages, paires, liens du réseau), réseau | `words` / `jaccard`, `fleissKappa` / `cohenKappa`, `interpretKappa`, `tensionBetween` (`src/lib/analysis/colorTension.ts` : rapport chromatique des deux couleurs de la grille — identiques, analogues < 45°, en carré < 105°, triadiques < 150°, complémentaires, achromatique si saturation < 0,15 — pondéré par `tension.relations`, ou tension fixée dans `tension.pairs`) |
 | `rag-index` (`src/lib/rag/ragIndex.ts`) | dépôt des documents dans les collections privées Albert (option `rag.enabled`) | voir *RAG Albert* ci-dessous |
-| `discussionAgent` | thèmes de discussion (modèle analytique) | `formatAnnotations` (grille en paramètre), comptage des tokens |
-| `src/runners/explo.ts` | lancement (`npm run explo`), fichiers, Omeka, coût | `saveWorkflowConfig`, `updateWorkflowStatus`, `attachDocuments`, `generateGraphHtml`, `usageReport`, `estimateImpact` |
+| `discussionAgent` | thèmes de discussion (modèle analytique) ; instructions et demande dans `agents.discussion` (`instructions`, `prompt` à variables `{{…}}`), modifiables dans l'onglet Grille | `formatAnnotations` (grille en paramètre), comptage des tokens |
+| `src/runners/explo.ts` | lancement (`npm run explo`), fichiers, Omeka, coût | `saveWorkflowConfig`, `updateWorkflowStatus`, `attachDocuments`, `generateForceGraphHtml` (page autonome qui inclut `src/ui/public/forceGraph.js`, le module d3.js de l'onglet Collaborations ; le graphe reste aussi dans `collaborations.json`), `usageReport`, `estimateImpact` |
 | `src/workflow/reports/annotationGuide.ts` | guide d'annotation à partir de la grille | — |
 
 Fichiers produits dans `resultats/explo/` (réglage `outputDir`) : `guide_annotation.md`, `participation.json`, `collaborations.json`, `reseau_collaborations.html`, `themes_discussion.md`, `rapport_explo.md`, `rag_indexation.json` (bilan de l'indexation). Ces fichiers sont ceux de la **dernière analyse** ; chaque analyse est aussi archivée dans `resultats/explo/analyses/<runId>/` (copie des fichiers et `analyse.json` : statut, dates, collection, item de configuration, tokens, coût, totaux, configuration).

@@ -86,6 +86,10 @@
   .empty { color: var(--muted); padding: 24px; text-align: center; border: 1px dashed var(--line); border-radius: 10px; }
   .toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 8px 16px; border-radius: 8px; font-size: 14px; opacity: 0; transition: opacity .2s; pointer-events: none; }
   .toast.show { opacity: 1; }
+  table.tension td.cell { min-width: 44px; }
+  .tension-h { display: inline-flex; align-items: center; gap: 5px; }
+  .tbadge { display: inline-block; font-size: 12px; padding: 1px 8px; border-radius: 999px; color: #fff; margin-left: 6px; font-variant-numeric: tabular-nums; }
+  #collab-graph { margin-top: 6px; }
   .hidden { display: none !important; }
   @media (max-width: 600px) { .bars .row { grid-template-columns: 90px 1fr 40px; } }
 </style>
@@ -105,6 +109,7 @@
   </div>
   <nav>
     <button data-tab="grid" class="active">Grille</button>
+    <button data-tab="workflow">Workflow</button>
     <button data-tab="run">Exécution</button>
     <button data-tab="runs">Analyses</button>
     <button data-tab="participation">Participation</button>
@@ -148,6 +153,14 @@
     </section>
 
     <section class="card">
+      <h2>Tension entre les couleurs</h2>
+      <p class="lead">Quand deux personnes surlignent le même passage avec des couleurs différentes, leurs lectures sont plus ou moins en tension (0 : aucune, 1 : maximale). La tension dépend du rapport entre les deux couleurs sur le cercle chromatique ; elle peut être fixée pour une paire de significations. Elle ordonne les passages divergents, colore les liens du réseau et oriente les thèmes de discussion.</p>
+      <div class="grid" id="tension-relations"></div>
+      <div class="field wide" style="margin-top:12px"><label>Tensions fixées pour une paire de significations</label><div id="tension-pairs"></div></div>
+      <div class="field wide" style="margin-top:12px"><label>Tensions entre les significations de la grille</label><div class="table-wrap" id="tension-matrix"></div><span class="help">Survoler une case pour voir le rapport des couleurs.</span></div>
+    </section>
+
+    <section class="card">
       <h2>RAG Albert</h2>
       <p class="lead">À chaque analyse, le texte des documents est déposé dans une collection privée d'Albert portant le nom de la collection Zotero, pour être interrogé dans l'onglet RAG. Un document en double n'est déposé qu'une fois ; la trace du dépôt est enregistrée (fichier JSON) sur l'item Omeka S du document.</p>
       <div class="grid">
@@ -157,7 +170,6 @@
         <div class="field"><label for="r-overlap">Chevauchement des extraits (caractères)</label><input id="r-overlap" type="number" step="50" min="0"></div>
         <div class="field"><label for="r-limit">Extraits par question</label><input id="r-limit" type="number" step="1" min="1" max="100"></div>
         <div class="field"><label for="r-method">Recherche</label><select id="r-method"><option value="hybrid">hybride (sens et mots)</option><option value="semantic">sémantique</option><option value="lexical">lexicale</option></select></div>
-        <div class="field wide"><label for="r-system">Instructions générales du modèle</label><textarea id="r-system" rows="3"></textarea></div>
       </div>
     </section>
 
@@ -186,6 +198,15 @@
         <button id="btn-download" class="btn">Télécharger (.md)</button>
       </div>
       <div id="guide" class="md"></div>
+    </section>
+  </div>
+
+  <!-- ======================= WORKFLOW ======================= -->
+  <div id="tab-workflow" class="hidden">
+    <section class="card">
+      <h2>Workflow</h2>
+      <p class="lead">Étapes du traitement dans l'ordre d'exécution et agents impliqués. Cliquer sur un agent pour lire et modifier ses instructions (prompt système) et, quand elle est modifiable, la demande qui lui est envoyée. Les textes enregistrés valent pour les traitements suivants.</p>
+      <div id="workflow" class="muted">Chargement…</div>
     </section>
   </div>
 
@@ -310,12 +331,23 @@ const personColor = (names, n) => PEOPLE_COLORS[names.indexOf(n) % PEOPLE_COLORS
 document.querySelectorAll("nav button").forEach(b => b.onclick = () => showTab(b.dataset.tab));
 function showTab(tab) {
   document.querySelectorAll("nav button").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
-  for (const t of ["grid", "run", "runs", "participation", "collab", "themes", "rag", "report"]) $(`#tab-${t}`).classList.toggle("hidden", t !== tab);
+  for (const t of ["grid", "workflow", "run", "runs", "participation", "collab", "themes", "rag", "report"]) $(`#tab-${t}`).classList.toggle("hidden", t !== tab);
   const results = ["participation", "collab", "themes", "report"].includes(tab);
   $("#run-banner").classList.toggle("hidden", !(results && currentRun));
   if (results) loadResults();
   if (tab === "runs") loadRuns();
   if (tab === "rag") loadRag();
+  if (tab === "workflow") loadWorkflow();
+}
+
+// diagramme du workflow et édition des prompts des agents (module partagé /workflowDiagram.js)
+let workflowLoaded = false;
+async function loadWorkflow() {
+  if (workflowLoaded) return;
+  workflowLoaded = true;
+  const { workflowDiagram } = await import("/workflowDiagram.js");
+  $("#workflow").className = "";
+  workflowDiagram($("#workflow"), { toast });
 }
 
 // ==========================================
@@ -329,12 +361,75 @@ function renderGridTable() {
   rows.forEach((r, i) => tbody.append(el("tr", {},
     el("td", {}, el("input", { type: "color", value: r.color, oninput: e => { r.color = e.target.value; refreshGuide(); } })),
     el("td", {}, el("input", { value: r.name, oninput: e => { r.name = e.target.value; refreshGuide(); } })),
-    el("td", {}, el("input", { value: r.position, oninput: e => { r.position = e.target.value; refreshGuide(); } })),
+    el("td", {}, el("input", { value: r.position, oninput: e => {
+      // les tensions fixées suivent le changement de nom de la signification
+      for (const p of config.tension.pairs) { if (p.a === r.position) p.a = e.target.value; if (p.b === r.position) p.b = e.target.value; }
+      r.position = e.target.value; refreshGuide();
+    }, onchange: () => renderTensionPairs() })),
     el("td", { style: "min-width:260px" }, el("input", { value: r.instruction, oninput: e => { r.instruction = e.target.value; refreshGuide(); } })),
     el("td", {}, el("button", { className: "link", textContent: "Supprimer", onclick: () => { rows.splice(i, 1); renderGridTable(); refreshGuide(); } })))));
   $("#grid-table").replaceChildren(
     el("table", { className: "data" }, el("thead", {}, el("tr", {}, ["Couleur", "Nom", "Signification", "Quand l'utiliser", ""].map(h => el("th", { textContent: h })))), tbody),
     el("button", { className: "link", textContent: "+ Ajouter une couleur", onclick: () => { rows.push({ color: "#888888", name: "", position: "", instruction: "" }); renderGridTable(); } }));
+}
+
+// ==========================================
+// Tension entre les couleurs
+// ==========================================
+// rapports entre deux couleurs sur le cercle chromatique (écart de teinte de l'exemple affiché)
+const RELATIONS = [
+  ["identique", "Identiques", "même couleur", 0],
+  ["analogue", "Analogues", "teintes voisines (écart < 45°)", 30],
+  ["carre", "En carré", "écart de teinte autour de 90°", 90],
+  ["triadique", "Triadiques", "écart de teinte autour de 120°", 120],
+  ["complementaire", "Complémentaires", "teintes opposées (écart > 150°)", 180],
+  ["achromatique", "Avec un gris", "l'une des couleurs est peu saturée", null],
+];
+// couleur d'une tension (0 : gris, 1 : rouge), la même que dans le réseau
+const tensionColor = t => `color-mix(in srgb, #d0312d ${Math.round(Math.max(0, Math.min(1, t)) * 100)}%, #9aa0aa)`;
+const tensionBadge = (t, title = "") => t == null ? el("span", { className: "muted", textContent: "—" }) : el("span", { className: "tbadge", style: `background:${tensionColor(t)}`, textContent: t.toFixed(2), title });
+const dot = c => el("i", { className: "sw", style: `background:${c}` });
+
+function renderTension() {
+  const t = config.tension;
+  $("#tension-relations").replaceChildren(...RELATIONS.map(([key, label, help, delta]) => el("div", { className: "field" },
+    el("label", { htmlFor: `tr-${key}`, className: "tension-h" }, dot("hsl(210 70% 50%)"), dot(delta === null ? "#aaaaaa" : `hsl(${210 + delta} 70% 50%)`), ` ${label}`),
+    el("input", { id: `tr-${key}`, type: "number", min: 0, max: 1, step: 0.05, value: t.relations[key] ?? 0, oninput: e => { t.relations[key] = Number(e.target.value); refreshTension(); } }),
+    el("span", { className: "help", textContent: help }))));
+  renderTensionPairs();
+}
+
+function renderTensionPairs() {
+  const pairs = config.tension.pairs;
+  const positions = config.grid.positions.map(p => p.position).filter(Boolean);
+  const select = (value, set) => el("select", { onchange: e => { set(e.target.value); refreshTension(); } },
+    [...new Set([value, ...positions])].map(p => el("option", { value: p, textContent: p, selected: p === value })));
+  $("#tension-pairs").replaceChildren(
+    pairs.length ? el("table", { className: "data" },
+      el("thead", {}, el("tr", {}, ["Signification", "Signification", "Tension", ""].map(h => el("th", { textContent: h })))),
+      el("tbody", {}, pairs.map((p, i) => el("tr", {},
+        el("td", {}, select(p.a, v => p.a = v)), el("td", {}, select(p.b, v => p.b = v)),
+        el("td", { style: "width:110px" }, el("input", { type: "number", min: 0, max: 1, step: 0.05, value: p.tension, oninput: e => { p.tension = Number(e.target.value); refreshTension(); } })),
+        el("td", {}, el("button", { className: "link", textContent: "Supprimer", onclick: () => { pairs.splice(i, 1); renderTensionPairs(); refreshTension(); } })))))) : el("p", { className: "help", textContent: "Aucune : la tension suit le rapport des couleurs." }),
+    el("button", { className: "link", textContent: "+ Fixer la tension d'une paire", onclick: () => { pairs.push({ a: positions[0] ?? "", b: positions[1] ?? "", tension: 1 }); renderTensionPairs(); refreshTension(); } }));
+}
+
+// aperçu des tensions entre significations, calculé par le serveur avec les réglages en cours d'édition
+let tensionTimer = null;
+function refreshTension() {
+  clearTimeout(tensionTimer);
+  tensionTimer = setTimeout(async () => {
+    let m;
+    try { m = await api("/api/explo/tension", { method: "POST", body: { config } }); }
+    catch (e) { $("#tension-matrix").textContent = "Aperçu indisponible : " + e.message; return; }
+    const head = p => el("span", { className: "tension-h" }, dot(p.color), p.position);
+    $("#tension-matrix").replaceChildren(el("table", { className: "data matrix tension" },
+      el("thead", {}, el("tr", {}, el("th"), m.positions.map(p => el("th", {}, head(p))))),
+      el("tbody", {}, m.positions.map((a, i) => el("tr", {}, el("th", {}, head(a)), m.cells[i].map((c, j) => i === j || !c
+        ? el("td", { className: "cell muted", textContent: "·" })
+        : el("td", { className: "cell", title: `${a.position} – ${m.positions[j].position} : couleurs ${c.label}, tension ${c.tension}`,
+            style: `background:color-mix(in srgb, #d0312d ${Math.round(c.tension * 60)}%, transparent)`, textContent: c.tension.toFixed(2) })))))));
+  }, 250);
 }
 
 function renderSettings() {
@@ -353,9 +448,9 @@ function renderSettings() {
   $("#r-overlap").value = config.rag.chunkOverlap;
   $("#r-limit").value = config.rag.limit;
   $("#r-method").value = config.rag.method;
-  $("#r-system").value = config.rag.system;
   $("#config-file").textContent = `Modifications enregistrées dans ${settings.configFile}`;
   renderGridTable();
+  renderTension();
   refreshGuide();
 }
 const bind = (sel, set, num = false) => $(sel).oninput = e => { set(num ? Number(e.target.value) : e.target.value); refreshGuide(); };
@@ -374,7 +469,6 @@ bind("#r-chunk", v => config.rag.chunkSize = v, true);
 bind("#r-overlap", v => config.rag.chunkOverlap = v, true);
 bind("#r-limit", v => config.rag.limit = v, true);
 $("#r-method").onchange = e => { config.rag.method = e.target.value; };
-bind("#r-system", v => config.rag.system = v);
 $("#collection").onchange = e => { config.input.zoteroCollection = e.target.value; refreshGuide(); };
 
 let collectionsRequest = 0;
@@ -423,6 +517,7 @@ async function loadCollections() {
 
 let guideText = "", guideTimer = null;
 function refreshGuide() {
+  refreshTension();
   clearTimeout(guideTimer);
   guideTimer = setTimeout(async () => {
     const name = collections.find(c => c.key === config.input.zoteroCollection)?.name;
@@ -568,7 +663,7 @@ $("#run-latest").onclick = () => openRun(null);
 // recopie la collection, la grille et les paramètres d'une analyse dans l'onglet Grille (à enregistrer pour confirmer)
 function reuseRun(r) {
   if (!confirm(`Reprendre la collection, la grille et les paramètres de l'analyse « ${runLabel(r)} » ? Les réglages affichés dans l'onglet Grille seront remplacés (rien n'est enregistré avant « Enregistrer »).`)) return;
-  for (const k of ["grid", "analysis", "themes"]) if (r.config[k]) config[k] = structuredClone({ ...config[k], ...r.config[k] });
+  for (const k of ["grid", "tension", "analysis", "themes"]) if (r.config[k]) config[k] = structuredClone({ ...config[k], ...r.config[k] });
   if (r.collection?.key) {
     if (collections.some(c => c.key === r.collection.key)) { config.input.zoteroCollection = r.collection.key; $("#collection").value = r.collection.key; }
     else toast(`Collection ${collectionLabel(r.collection)} absente de la bibliothèque actuelle : collection inchangée`);
@@ -648,6 +743,7 @@ function renderCollab(c) {
   const k = c.kappa;
   const tiles = el("div", { className: "tiles" },
     [[c.passages.shared, "passages annotés en commun"], [c.passages.convergent, "convergents"], [c.passages.divergent, "divergents"], [k.fleiss ?? "—", `kappa (${k.interpretation})`]]
+      .concat(c.tension ? [[c.tension.mean != null ? c.tension.mean.toFixed(2) : "—", "tension moyenne des divergences"]] : [])
       .map(([v, l]) => el("div", { className: "tile" }, el("div", { className: "v", textContent: v }), el("div", { className: "l", textContent: l }))));
 
   const names = c.matrix.names;
@@ -657,30 +753,46 @@ function renderCollab(c) {
     el("tbody", {}, names.map((a, i) => el("tr", {}, el("th", { textContent: a }), names.map((b, j) => {
       const v = c.matrix.sharedPassages[i][j];
       if (v === null) return el("td", { className: "cell muted", textContent: "·" });
-      const agr = c.matrix.agreement[i][j];
-      return el("td", { className: "cell", title: `${a} – ${b} : ${v} passage(s) en commun, accord ${fmtPct(agr)}`,
+      const agr = c.matrix.agreement[i][j], ten = c.matrix.tension?.[i][j];
+      return el("td", { className: "cell", title: `${a} – ${b} : ${v} passage(s) en commun, accord ${fmtPct(agr)}${ten != null ? `, tension ${ten.toFixed(2)}` : ""}`,
         style: v ? `background: color-mix(in srgb, var(--accent) ${Math.round(12 + (v / maxShared) * 55)}%, transparent)` : "",
         textContent: v ? `${v} · ${fmtPct(agr)}` : "0" });
     })))));
 
   const pairs = el("table", { className: "data" },
-    el("thead", {}, el("tr", {}, ["Paire", "Documents en commun", "Passages en commun", "Même signification", "Accord"].map(h => el("th", { textContent: h })))),
+    el("thead", {}, el("tr", {}, ["Paire", "Documents en commun", "Passages en commun", "Même signification", "Accord", ...(c.tension ? ["Tension moyenne"] : [])].map(h => el("th", { textContent: h })))),
     el("tbody", {}, c.pairs.map(p => el("tr", {}, el("td", { textContent: `${p.a} – ${p.b}` }),
-      ...[p.sharedDocuments, p.sharedPassages, p.samePosition].map(v => el("td", { className: "num", textContent: v })), el("td", { className: "num", textContent: fmtPct(p.agreement) })))));
+      ...[p.sharedDocuments, p.sharedPassages, p.samePosition].map(v => el("td", { className: "num", textContent: v })), el("td", { className: "num", textContent: fmtPct(p.agreement) }),
+      c.tension ? el("td", { className: "num" }, tensionBadge(p.tension)) : null))));
 
   const quotes = list => list.slice(0, 30).map(u => el("div", { className: "quote" },
     el("div", { textContent: `« ${u.phrase} »` }),
-    el("div", { className: "who" }, `${u.document} — `, u.annotations.map(a => el("span", { className: "chip" }, el("i", { className: "sw", style: `background:${a.color ?? "var(--line)"}` }), `${a.author} : ${a.position ?? "hors grille"}${a.note ? ` — « ${a.note} »` : ""}`)))));
+    el("div", { className: "who" }, `${u.document}`, u.tension != null && u.tension > 0 ? tensionBadge(u.tension, `tension des lectures : couleurs ${u.relation}`) : null, " — ", u.annotations.map(a => el("span", { className: "chip" }, el("i", { className: "sw", style: `background:${a.color ?? "var(--line)"}` }), `${a.author} : ${a.position ?? "hors grille"}${a.note ? ` — « ${a.note} »` : ""}`)))));
 
+  // réseau : dessiné ici avec d3.js ; les analyses antérieures (graphe absent des données) gardent leur page autonome
   const hasGraph = files.some(f => f.name === "reseau_collaborations.html");
+  const graphBox = c.graph?.nodes?.length ? el("div", { id: "collab-graph", className: "muted", textContent: "Chargement du réseau…" }) : null;
   box.replaceChildren(tiles,
     el("section", { className: "card" }, el("h2", { textContent: "Matrice des passages en commun" }), el("p", { className: "lead", textContent: "Nombre de passages annotés par les deux personnes et part où elles leur donnent la même signification." }), el("div", { className: "table-wrap" }, matrix)),
     el("section", { className: "card" }, el("h2", { textContent: "Paires de collaborateurs" }), el("div", { className: "table-wrap" }, pairs)),
-    el("section", { className: "card" }, el("h2", { textContent: `Passages aux lectures divergentes (${c.divergent.length})` }), el("p", { className: "lead", textContent: "Même passage, significations différentes : ce sont les meilleurs points de départ d'une discussion." }), c.divergent.length ? quotes(c.divergent) : el("p", { className: "muted", textContent: "Aucun." })),
+    el("section", { className: "card" }, el("h2", { textContent: `Passages aux lectures divergentes (${c.divergent.length})` }), el("p", { className: "lead", textContent: c.tension ? "Même passage, significations différentes, du plus tendu au moins tendu (tension selon le rapport entre les couleurs, réglable dans l'onglet Grille) : ce sont les meilleurs points de départ d'une discussion." : "Même passage, significations différentes : ce sont les meilleurs points de départ d'une discussion." }), c.divergent.length ? quotes(c.divergent) : el("p", { className: "muted", textContent: "Aucun." })),
     el("section", { className: "card" }, el("h2", { textContent: `Passages convergents (${c.convergent.length})` }), c.convergent.length ? quotes(c.convergent) : el("p", { className: "muted", textContent: "Aucun." })),
-    hasGraph ? el("section", { className: "card" }, el("h2", { textContent: "Réseau collaborateurs – documents" }),
-      el("p", { className: "lead" }, "Cliquer sur un nœud pour afficher ses liens. ", el("a", { href: fileUrl("reseau_collaborations.html", true), target: "_blank", textContent: "Ouvrir en plein écran" })),
-      el("iframe", { className: "frame", src: fileUrl("reseau_collaborations.html", true), sandbox: "allow-scripts allow-popups allow-popups-to-escape-sandbox" })) : null);
+    graphBox || hasGraph ? el("section", { className: "card" }, el("h2", { textContent: "Réseau collaborateurs – documents" }),
+      el("p", { className: "lead" }, "Glisser un nœud pour le déplacer, survoler pour voir ses voisins, cliquer pour afficher ses liens. L'épaisseur d'un lien suit le nombre d'annotations ou de passages communs ; la couleur des liens entre personnes, la tension de leurs lectures. ",
+        hasGraph ? el("a", { href: fileUrl("reseau_collaborations.html", true), target: "_blank", textContent: "Ouvrir en plein écran" }) : null),
+      graphBox ?? el("iframe", { className: "frame", src: fileUrl("reseau_collaborations.html", true), sandbox: "allow-scripts allow-popups allow-popups-to-escape-sandbox" })) : null);
+  if (graphBox) drawGraph(graphBox, c.graph);
+}
+
+// réseau d3.js (module partagé avec la page autonome reseau_collaborations.html)
+let graphView = null;
+async function drawGraph(container, graph) {
+  graphView?.destroy();
+  try {
+    const { forceGraph } = await import("/forceGraph.js");
+    container.className = "";
+    graphView = forceGraph(container, graph, { title: "Collaborations", omekaAdminUrl: graph.omekaAdminUrl ?? "", height: 600 });
+  } catch (e) { container.textContent = "Réseau indisponible : " + e.message; }
 }
 
 // ==========================================

@@ -8,7 +8,7 @@ import { buildGuide } from "../workflow/reports/annotationGuide";
 import { buildExploReport } from "../workflow/reports/exploReport";
 import { saveWorkflowConfig, updateWorkflowStatus } from "../workflow/runs/saveWorkflowConfig";
 import { attachDocuments, type SynthesisDocument } from "../workflow/runs/importSynthesis";
-import { generateGraphHtml } from "../lib/visualization/graphViz";
+import { generateForceGraphHtml } from "../lib/visualization/forceGraphHtml";
 import { usageSummary } from "../lib/metrics/usage";
 import { estimateImpact, fmtCo2, fmtEnergy, fmtMoney } from "../lib/metrics/impact";
 import { getOmk } from "../lib/omeka/omk";
@@ -59,16 +59,15 @@ async function main() {
     documents.push({ filePath: out("participation.json"), title: "Participation des collaborateurs (données)", type: "application/json" });
   }
   if (collaboration) {
-    const { graph, ...rest } = collaboration;
-    await fs.writeFile(out("collaborations.json"), JSON.stringify(rest, null, 2));
+    const { graph } = collaboration;
+    const omk = graph?.nodes?.length ? await getOmk().catch(() => null) : null;
+    const omekaAdminUrl = omk ? omk.publicApi.replace("/api/", "/admin/item/") : "";
+    // le graphe reste dans les données : l'onglet Collaborations le dessine directement (d3.js)
+    await fs.writeFile(out("collaborations.json"), JSON.stringify({ ...collaboration, ...(graph ? { graph: { ...graph, omekaAdminUrl } } : {}) }, null, 2));
     documents.push({ filePath: out("collaborations.json"), title: "Collaborations (données)", type: "application/json" });
     if (graph?.nodes?.length) {
-      const omk = await getOmk().catch(() => null);
-      await fs.writeFile(out("reseau_collaborations.html"), generateGraphHtml(graph, {
-        title: `Collaborations – ${collectionName}`,
-        ...(omk ? { omekaAdminUrl: omk.publicApi.replace("/api/", "/admin/item/") } : {}),
-      }));
-      documents.push({ filePath: out("reseau_collaborations.html"), title: "Réseau des collaborations (sigma.js)", type: "text/html" });
+      await fs.writeFile(out("reseau_collaborations.html"), generateForceGraphHtml(graph, { title: `Collaborations – ${collectionName}`, omekaAdminUrl, nodeLabel: "nœud" }));
+      documents.push({ filePath: out("reseau_collaborations.html"), title: "Réseau des collaborations (d3.js)", type: "text/html" });
     }
   }
   if (rag) {

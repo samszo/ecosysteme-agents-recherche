@@ -423,7 +423,7 @@ interface ExploRun {
   config: any;
   source: string;
 }
-const runSettings = (c: any) => (c ? { grid: c.grid, analysis: c.analysis, themes: c.themes } : null);
+const runSettings = (c: any) => (c ? { grid: c.grid, tension: c.tension, analysis: c.analysis, themes: c.themes } : null);
 
 function localExploRuns(): ExploRun[] {
   const dir = path.join(ROOT, currentExploConfig().outputDir, RUNS_DIR);
@@ -503,6 +503,27 @@ async function omekaExploFiles(runId: string) {
     omekaRunMedia.set(runId, files);
   }
   return omekaRunMedia.get(runId)!;
+}
+
+// suppression d'une analyse : item de configuration dans Omeka S (avec ses médias), puis archive locale ;
+// Omeka S d'abord, pour ne rien supprimer si la suppression y échoue
+async function deleteExploRun(runId: string, withOmeka: boolean) {
+  if (!validRunId(runId)) throw new Error("Identifiant d'analyse invalide");
+  const dir = exploDir(runId);
+  const local = fs.existsSync(dir);
+  let omekaItem: number | null = null;
+  if (withOmeka) {
+    const omk = await serverOmk();
+    // seulement un item de configuration d'exploZoteroAnno portant cet identifiant d'analyse
+    const item = (await omk.searchItemsByProp("dcterms:identifier", runId)).find((it: any) => {
+      try { return JSON.parse(it["dcterms:description"]?.[0]?.["@value"] ?? "{}").workflowId === defaultExploConfig.workflowId; } catch { return false; }
+    });
+    if (item) { await omk.deleteResource(item["o:id"]); omekaItem = item["o:id"]; }
+    omekaRunMedia.delete(runId);
+  }
+  if (local) fs.rmSync(dir, { recursive: true, force: true });
+  if (!local && !omekaItem) throw new Error(`Analyse ${runId} introuvable${withOmeka ? "" : " dans l'archive locale"}`);
+  return { local, omekaItem };
 }
 
 // fichiers d'une analyse : dernière analyse (sans run), archive locale, sinon médias Omeka S
@@ -779,6 +800,13 @@ const routes: Record<string, (req: http.IncomingMessage, res: http.ServerRespons
   // analyses déjà effectuées (archive locale et Omeka S)
   "GET /api/explo/runs": async (_req, res) => sendJson(res, 200, await exploRuns()),
 
+  // supprime une analyse ({ runId, omeka }) : archive locale et, si omeka, son item de configuration dans Omeka S
+  "POST /api/explo/runs/delete": async (req, res) => {
+    const { runId, omeka } = await readBody(req);
+    try { sendJson(res, 200, { ok: true, ...(await deleteExploRun(String(runId ?? ""), !!omeka)) }); }
+    catch (e) { sendJson(res, 400, { error: (e as Error).message }); }
+  },
+
   // collection Albert de la collection Zotero (même nom) : existence et nombre de documents
   "GET /api/explo/rag/status": async (_req, res, url) => {
     const key = url.searchParams.get("collection") || currentExploConfig().input.zoteroCollection;
@@ -914,7 +942,7 @@ const APP_ONLY: Record<string, AppName> = {
   "POST /api/cfp-file": "paper", "GET /api/results": "paper", "GET /api/history": "paper", "GET /api/file": "paper",
   "GET /api/explo/settings": "explo", "POST /api/explo/settings": "explo", "POST /api/explo/guide": "explo",
   "POST /api/explo/tension": "explo",
-  "GET /api/explo/results": "explo", "GET /api/explo/file": "explo", "GET /api/explo/runs": "explo",
+  "GET /api/explo/results": "explo", "GET /api/explo/file": "explo", "GET /api/explo/runs": "explo", "POST /api/explo/runs/delete": "explo",
   "GET /api/explo/rag/status": "explo", "GET /api/explo/rag/prompts": "explo", "POST /api/explo/rag/prompts": "explo",
   "POST /api/explo/rag/prompts/defaults": "explo", "POST /api/explo/rag/query": "explo", "POST /api/explo/rag/save": "explo",
   "GET /api/explo/rag/answers": "explo",

@@ -258,6 +258,7 @@ Les onglets de résultats affichent par défaut la **dernière analyse**. L'ongl
 
 - **Charger** affiche les résultats de l'analyse choisie dans les onglets Participation, Collaborations, Thèmes et Rapport. Un bandeau rappelle quelle analyse est affichée ; **Revenir à la dernière analyse** rétablit l'affichage courant. Rien n'est recalculé : les fichiers de l'analyse sont relus (archive locale, sinon médias de son item de configuration dans Omeka S).
 - **Reprendre les réglages** recopie la collection, la grille et les paramètres de cette analyse dans l'onglet Grille, pour la relancer à l'identique ou comparer ; rien n'est enregistré avant **Enregistrer**.
+- **Supprimer** efface l'analyse après confirmation : son archive locale et, case cochée par défaut, son item de configuration dans Omeka S avec ses médias (rapport, guide, réseau, données). Décocher la case garde l'item dans Omeka S : l'analyse reste alors dans la liste. La suppression est définitive ; les documents et annotations enregistrés dans Omeka S ne sont pas touchés.
 
 Recharger des analyses successives d'une même collection permet de suivre l'évolution de l'annotation (participation, convergences) d'une séance à l'autre. À la fin d'un nouveau traitement, l'affichage revient à la dernière analyse.
 

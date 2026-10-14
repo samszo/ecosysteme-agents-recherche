@@ -90,6 +90,12 @@
   .tension-h { display: inline-flex; align-items: center; gap: 5px; }
   .tbadge { display: inline-block; font-size: 12px; padding: 1px 8px; border-radius: 999px; color: #fff; margin-left: 6px; font-variant-numeric: tabular-nums; }
   #collab-graph { margin-top: 6px; }
+  dialog#del-run { border: 1px solid var(--line); border-radius: 10px; background: var(--panel); color: var(--ink); padding: 18px 20px; max-width: min(520px, calc(100vw - 32px)); }
+  dialog#del-run::backdrop { background: rgb(0 0 0 / .35); }
+  dialog#del-run h2 { margin: 0 0 8px; font-size: 17px; }
+  dialog#del-run p { margin: 6px 0; font-size: 14px; }
+  dialog#del-run label { display: flex; gap: 8px; align-items: flex-start; font-size: 14px; margin: 12px 0 4px; }
+  dialog#del-run label input { width: auto; margin-top: 3px; }
   .hidden { display: none !important; }
   @media (max-width: 600px) { .bars .row { grid-template-columns: 90px 1fr 40px; } }
 </style>
@@ -220,7 +226,7 @@
   <div id="tab-runs" class="hidden">
     <section class="card">
       <h2>Analyses déjà effectuées</h2>
-      <p class="lead">Chaque analyse est archivée localement et dans Omeka S (item de configuration et ses médias). <strong>Charger</strong> affiche ses résultats dans les onglets Participation, Collaborations, Thèmes et Rapport ; <strong>Reprendre les réglages</strong> recopie sa collection, sa grille et ses paramètres d'analyse dans l'onglet Grille.</p>
+      <p class="lead">Chaque analyse est archivée localement et dans Omeka S (item de configuration et ses médias). <strong>Charger</strong> affiche ses résultats dans les onglets Participation, Collaborations, Thèmes et Rapport ; <strong>Reprendre les réglages</strong> recopie sa collection, sa grille et ses paramètres d'analyse dans l'onglet Grille ; <strong>Supprimer</strong> efface son archive locale et, au choix, son item de configuration dans Omeka S.</p>
       <div class="toolbar"><button id="runs-refresh" class="btn">Actualiser</button><span id="runs-info" class="muted" style="font-size:13px"></span></div>
       <div id="runs" class="muted">Chargement…</div>
     </section>
@@ -299,6 +305,21 @@
   </div>
 </main>
 <div class="toast" id="toast"></div>
+<!-- confirmation de la suppression d'une analyse -->
+<dialog id="del-run">
+  <form method="dialog">
+    <h2>Supprimer l'analyse</h2>
+    <p id="del-run-label"></p>
+    <p id="del-run-local" class="muted"></p>
+    <label id="del-run-omeka-row"><input type="checkbox" id="del-run-omeka"> <span id="del-run-omeka-text"></span></label>
+    <p class="help" id="del-run-help"></p>
+    <p class="ko" style="font-size:13px">Cette suppression est définitive.</p>
+    <div class="toolbar" style="margin-top:14px;justify-content:flex-end">
+      <button value="cancel" class="btn">Annuler</button>
+      <button value="confirm" id="del-run-ok" class="btn primary" style="background:var(--err);border-color:var(--err)">Supprimer</button>
+    </div>
+  </form>
+</dialog>
 
 <script src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js"></script>
 <script type="module">
@@ -647,9 +668,35 @@ async function loadRuns(force = false) {
         r.configItemId && data.omekaAdmin ? el("a", { href: data.omekaAdmin + r.configItemId, target: "_blank", textContent: "Omeka S", style: "color:var(--accent)" }) : (r.source.includes("omeka") ? "Omeka S" : "")),
       el("td", { style: "min-width:150px" },
         el("button", { className: "btn primary", style: "margin:0 4px 4px 0", textContent: "Charger", onclick: () => openRun(r) }),
-        r.config?.grid ? el("button", { className: "btn", textContent: "Reprendre les réglages", onclick: () => reuseRun(r) }) : null)))))));
+        r.config?.grid ? el("button", { className: "btn", style: "margin:0 4px 4px 0", textContent: "Reprendre les réglages", onclick: () => reuseRun(r) }) : null,
+        el("button", { className: "btn danger", textContent: "Supprimer", onclick: () => deleteRun(r) }))))))));
 }
 $("#runs-refresh").onclick = () => loadRuns(true);
+
+// suppression d'une analyse : archive locale et, au choix, son item de configuration dans Omeka S (avec ses médias)
+function deleteRun(r) {
+  const dlg = $("#del-run"), box = $("#del-run-omeka");
+  const local = r.source.includes("local"), omeka = r.source.includes("omeka") || !!r.configItemId;
+  $("#del-run-label").textContent = runLabel(r);
+  $("#del-run-local").textContent = local ? "L'archive locale (fichiers de résultats et description de l'analyse) sera supprimée." : "Cette analyse n'est pas dans l'archive locale.";
+  $("#del-run-omeka-row").classList.toggle("hidden", !omeka);
+  $("#del-run-omeka-text").textContent = `Supprimer aussi l'item de configuration${r.configItemId ? ` n°${r.configItemId}` : ""} dans Omeka S, avec ses médias (rapport, guide, réseau, données)`;
+  // analyse seulement dans Omeka S : sans cette case, il n'y a rien à supprimer
+  box.checked = omeka; box.disabled = omeka && !local;
+  const help = () => { $("#del-run-help").textContent = omeka && !box.checked ? "L'analyse restera dans la liste, rechargée depuis Omeka S." : ""; };
+  box.onchange = help; help();
+  dlg.onclose = async () => {
+    if (dlg.returnValue !== "confirm") return;
+    try {
+      const res = await api("/api/explo/runs/delete", { method: "POST", body: { runId: r.runId, omeka: omeka && box.checked } });
+      toast(`Analyse supprimée${res.omekaItem ? ` (et l'item ${res.omekaItem} dans Omeka S)` : ""}`);
+      if (currentRun?.runId === r.runId) { currentRun = null; resultsLoaded = false; }
+      loadRuns(true);
+    } catch (e) { toast("Suppression impossible : " + e.message); }
+  };
+  dlg.returnValue = "";
+  dlg.showModal();
+}
 
 // affiche une analyse archivée dans les onglets de résultats
 function openRun(r) {

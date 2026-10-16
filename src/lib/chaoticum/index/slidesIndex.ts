@@ -21,6 +21,17 @@ const VisionSchema = z.object({
 
 const estimate = (t: string) => Math.ceil(t.length / 4);
 
+export { VisionSchema as SlideVisionSchema };
+
+// document Albert d'une diapo (indexation et correction depuis l'éditeur d'écran)
+export function slideDocument(e: Pick<SlideEntry, "path" | "name" | "diapo" | "max" | "url" | "title" | "keywords" | "description">, context: string) {
+  return {
+    content: `# ${e.name} — diapo ${e.diapo} : ${e.title}\n\nMots-clés : ${e.keywords.join(" ; ")}\n\n${e.description}\n\nPrésentation « ${e.name} » : ${context}\n\n${e.url}\n`,
+    fileName: `diapo ${e.name} ${e.diapo}.md`, name: `diapo ${e.path}#${e.diapo}`,
+    metadata: chunkMetadata({ kind: "diapo", path: e.path, name: e.name, diapo: e.diapo, max: e.max, title: e.title }),
+  };
+}
+
 export async function indexSlides(c: ChaoticumConfig, limit = c.rag.slidesPerRun) {
   const albert = new Albert(workflowConfig.models.provider, process.env.ALBERT_API_KEY ?? "");
   const store = loadStore("diapos", emptySlides(), c);
@@ -52,13 +63,13 @@ export async function indexSlides(c: ChaoticumConfig, limit = c.rag.slidesPerRun
         ] }],
       });
       const url = diapoUrl(c.slides, slide.path, n);
-      const content = `# ${slide.name} — diapo ${n} : ${object.titre}\n\nMots-clés : ${object.motsCles.join(" ; ")}\n\n${object.description}\n\nPrésentation « ${slide.name} » : ${context}\n\n${url}\n`;
+      const doc = slideDocument({ path: slide.path, name: slide.name, diapo: n, max, url, title: object.titre, keywords: object.motsCles, description: object.description }, context);
+      const content = doc.content;
       const previous = store.items[key]?.docId;
       if (previous) await albert.deleteDocument(previous).catch(() => {});
       const docId = await albert.createDocument({
-        collectionId: collection.id, content, fileName: `diapo ${slide.name} ${n}.md`, name: `diapo ${slide.path}#${n}`,
-        chunkSize: c.rag.chunkSize, chunkOverlap: c.rag.chunkOverlap, presetSeparators: "markdown",
-        metadata: chunkMetadata({ kind: "diapo", path: slide.path, name: slide.name, diapo: n, max, title: object.titre }),
+        collectionId: collection.id, content, fileName: doc.fileName, name: doc.name,
+        chunkSize: c.rag.chunkSize, chunkOverlap: c.rag.chunkOverlap, presetSeparators: "markdown", metadata: doc.metadata,
       });
       tokens += estimate(content);
       const entry: SlideEntry = { path: slide.path, name: slide.name, diapo: n, max, url, screenshot: path.relative(indexDir(c), file), title: object.titre, keywords: object.motsCles, description: object.description, docId, indexedAt: new Date().toISOString() };
@@ -119,4 +130,45 @@ export async function indexSlides(c: ChaoticumConfig, limit = c.rag.slidesPerRun
   const pendingPresentations = slides.filter(s => store.presentations[s.path] === undefined).length;
   console.log(`✅ [DIAPOS] ${done} diapo(s) décrite(s) et indexée(s) (${errors} erreur(s)) ; index : ${indexed} diapo(s) sur ${total} connue(s)${pendingPresentations ? `, ${pendingPresentations} présentation(s) pas encore ouverte(s)` : ""}${done >= limit ? " — relancer l'indexation pour continuer" : ""}`);
   return { done, errors, indexed, total, pendingPresentations, complete: done < limit && !pendingPresentations };
+}
+
+// ==========================================
+// Correction depuis l'éditeur d'écran : description corrigée ou nouvelle analyse de la copie d'écran
+// ==========================================
+
+// nouvelle analyse de la copie d'écran d'une diapo indexée (proposition, non enregistrée)
+export async function analyzeSlide(c: ChaoticumConfig, key: string) {
+  const e = loadStore("diapos", emptySlides(), c).items[key];
+  if (!e?.screenshot) throw new Error("Diapo absente de l'index ou sans copie d'écran");
+  const png = fs.readFileSync(path.join(indexDir(c), e.screenshot));
+  const { object } = await askAgent(slideDescriberAgent, {
+    model: c.models.vision, source: "Éditeur : nouvelle description de diapo (slideDescriberAgent)", schema: VisionSchema,
+    prompt: [{ role: "user", content: [
+      { type: "text", text: `Diapositive ${e.diapo} de la présentation « ${e.name} ».` },
+      { type: "file", data: png, mediaType: "image/png", filename: path.basename(e.screenshot) },
+    ] }],
+  });
+  return { title: object.titre, keywords: object.motsCles, description: object.description };
+}
+
+// description corrigée d'une diapo : enregistrée dans l'index et redéposée dans la collection Albert
+export async function correctSlide(c: ChaoticumConfig, key: string, data: { title: string; keywords: string[]; description: string }) {
+  const store = loadStore("diapos", emptySlides(), c);
+  const e = store.items[key];
+  if (!e) throw new Error("Diapo absente de l'index");
+  if (!store.collectionId) throw new Error("Index des diapos pas encore construit");
+  const albert = new Albert(workflowConfig.models.provider, process.env.ALBERT_API_KEY ?? "");
+  const clean = (t: string) => String(t ?? "").replace(/\s+/g, " ").trim();
+  const updated: SlideEntry = { ...e, title: clean(data.title), keywords: data.keywords.map(clean).filter(Boolean), description: clean(data.description), editedAt: new Date().toISOString() };
+  const context = await slideText(c.slides, { path: e.path, name: e.name } as any, 300).catch(() => "");
+  const doc = slideDocument(updated, context);
+  if (e.docId) await albert.deleteDocument(e.docId).catch(() => {});
+  const docId = await albert.createDocument({
+    collectionId: store.collectionId, content: doc.content, fileName: doc.fileName, name: doc.name,
+    chunkSize: c.rag.chunkSize, chunkOverlap: c.rag.chunkOverlap, presetSeparators: "markdown", metadata: doc.metadata,
+  });
+  store.items[key] = { ...updated, docId, indexedAt: new Date().toISOString() };
+  saveStore("diapos", store, c);
+  recordUsage("Index des diapos : correction (vectorisation, estimation)", "BAAI/bge-m3", { inputTokens: estimate(doc.content), outputTokens: 0, totalTokens: estimate(doc.content) });
+  return store.items[key]!;
 }

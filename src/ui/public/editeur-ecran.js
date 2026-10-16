@@ -24,6 +24,32 @@ const words = s => String(s ?? "").trim().split(/\s+/).filter(Boolean).length;
 // Diagrammes : nœuds et liens ↔ Mermaid (même format que src/lib/chaoticum/mermaid.ts)
 // ==========================================
 const lab = (s, max = 70) => { const t = String(s ?? "").replace(/["“”]/g, "'").replace(/[|\r\n]+/g, " ").replace(/\s+/g, " ").trim(); return t.length > max ? `${t.slice(0, max - 1)}…` : t; };
+// formulaire de correction d'une entrée d'index (diapo, image Diigo) : champs, nouvelle analyse par le modèle de vision,
+// enregistrement qui met à jour l'index et le document du RAG
+function indexForm({ fields, analyze, save, toast, onClose }) {
+  const inputs = {};
+  const status = el("span", { className: "ed-help" });
+  const box = el("div", { className: "ed-fix" },
+    ...fields.map(f => {
+      const v = f.list ? (f.value ?? []).join(" ; ") : f.value ?? "";
+      inputs[f.key] = f.rows ? el("textarea", { rows: f.rows, value: v }) : el("input", { value: v });
+      return el("label", {}, el("span", { textContent: f.label }), inputs[f.key]);
+    }));
+  const read = () => Object.fromEntries(fields.map(f => [f.key, f.list ? inputs[f.key].value.split(/[;,]/).map(x => x.trim()).filter(Boolean) : inputs[f.key].value.trim()]));
+  const fill = o => { for (const f of fields) if (o[f.key] !== undefined) inputs[f.key].value = f.list ? o[f.key].join(" ; ") : o[f.key]; };
+  const btn = (text, primary, onclick) => el("button", { type: "button", className: `ed-btn${primary ? " primary" : ""}`, textContent: text, onclick });
+  const busy = async (label, fn) => {
+    const buttons = box.querySelectorAll("button");
+    buttons.forEach(b => (b.disabled = true)); status.textContent = label;
+    try { await fn(); status.textContent = ""; } catch (e) { status.textContent = e.message; toast("Erreur : " + e.message); } finally { buttons.forEach(b => (b.disabled = false)); }
+  };
+  box.append(el("div", { className: "ed-row" },
+    btn("Nouvelle analyse (modèle de vision)", false, () => busy("Analyse en cours…", async () => { fill(await analyze()); toast("Nouvelle analyse proposée : relire puis enregistrer"); })),
+    btn("Enregistrer et mettre à jour le RAG", true, () => busy("Mise à jour de l'index et du RAG…", async () => { await save(read()); })),
+    btn("Annuler", false, onClose), status));
+  return box;
+}
+
 export function buildMermaid(nodes, edges, direction = "TD") {
   const ids = new Map(), lines = [`flowchart ${direction}`];
   const add = (id, text) => { const k = String(id).trim(); if (!ids.has(k)) { ids.set(k, `n${ids.size + 1}`); lines.push(`    ${ids.get(k)}["${lab(text || k)}"]`); } return ids.get(k); };
@@ -103,21 +129,86 @@ export function openScreenEditor(opts) {
         creators: el("input", { value: c.source?.creators ?? "" }), year: el("input", { value: c.source?.year ?? "" }),
         title: el("input", { value: c.source?.title ?? "" }), page: el("input", { value: c.page ?? "" }),
       };
+      // lien vers la page web et image de la citation (Diigo) : ceux de l'écran, puis ceux de la citation reprise
+      const media = el("div", { className: "ed-cite-media" });
+      const showMedia = () => {
+        const x = state.pick ?? c, link = state.dropLink ? null : x.source?.url, img = state.dropImage ? null : x.image;
+        media.replaceChildren(...[
+          img?.url ? el("img", { src: img.url, alt: img.title || "image de la page", loading: "lazy" }) : null,
+          el("div", {},
+            link ? el("div", {}, el("a", { href: link, target: "_blank", rel: "noopener", textContent: "Page web ↗" }), " ", el("button", { type: "button", className: "ed-link", textContent: "retirer le lien", onclick: () => { state.dropLink = true; showMedia(); } })) : el("div", { className: "ed-help", textContent: "Pas de lien vers une page web." }),
+            img?.url ? el("div", {}, el("button", { type: "button", className: "ed-link", textContent: "retirer l'image", onclick: () => { state.dropImage = true; showMedia(); } })) : el("div", { className: "ed-help", textContent: "Pas d'image." }))].filter(Boolean));
+      };
+      showMedia();
       const results = el("div", { className: "ed-results" });
-      const q = el("input", { placeholder: "mots à chercher dans les passages, notes, titres, mots-clés…" });
+      const q = el("input", { placeholder: "mots à chercher dans les passages, notes, titres, mots-clés, images…" });
+      const source = el("select", { title: "Source des citations" },
+        [["", "Toutes les sources"], ["zotero", "Zotero"], ["diigo", "Diigo (passages surlignés)"], ["diigo-images", "Images Diigo"]].map(([v, t]) => el("option", { value: v, textContent: t })));
       const search = async () => {
         results.replaceChildren(el("span", { className: "ed-help", textContent: "Recherche…" }));
         try {
-          const list = await api(`/api/chaoticum/index/search?kind=citation&q=${encodeURIComponent(q.value)}`);
-          results.replaceChildren(...(list.length ? list.map(x => el("button", { className: "ed-result", type: "button", onclick: () => {
+          const list = await api(`/api/chaoticum/index/search?kind=citation&source=${source.value}&q=${encodeURIComponent(q.value)}`);
+          const pick = x => {
             I.text.value = x.text; I.comment.value = x.comment ?? ""; I.creators.value = x.source.creators ?? ""; I.year.value = x.source.year ?? ""; I.title.value = x.source.title ?? ""; I.page.value = x.page ?? "";
-            state.pick = x; toast("Citation reprise (enregistrer pour confirmer)");
-          } }, el("span", { textContent: `« ${x.text.slice(0, 160)}${x.text.length > 160 ? "…" : ""} »` }), el("small", { textContent: ` — ${[x.source.creators, x.source.year, x.source.title].filter(Boolean).join(", ")}` }))) : [el("span", { className: "ed-help", textContent: "Aucun résultat (l'index de la bibliothèque est-il construit ?)" })]));
+            state.pick = x; state.dropLink = state.dropImage = false; showMedia();
+            toast("Citation reprise (enregistrer pour confirmer)");
+          };
+          // images Diigo : fiches avec l'image et ses données d'indexation (titre, mots-clés, description, texte visible)
+          if (source.value === "diigo-images") {
+            results.className = "ed-imgcards";
+            const card = x => {
+              const box = el("div", { className: "ed-imgcard" });
+              const show = () => box.replaceChildren(...body().filter(Boolean));
+              const body = () => {
+                const a = x.analysis ?? {};
+                return [
+                  x.image?.url ? el("a", { href: x.image.original || x.image.url, target: "_blank", rel: "noopener", title: "Image en grand" }, el("img", { src: x.image.url, alt: a.titre || "", loading: "lazy" })) : el("div", { className: "ed-help", textContent: "Image indisponible" }),
+                  el("strong", { textContent: a.titre || "(sans titre)" }),
+                  a.motsCles?.length ? el("div", { className: "ed-tags" }, a.motsCles.map(k => el("span", { textContent: k }))) : null,
+                  a.description ? el("p", { textContent: a.description }) : null,
+                  a.texte ? el("details", {}, el("summary", { textContent: `Texte visible (${a.texte.length} car.)` }), el("p", { className: "ed-visible", textContent: a.texte })) : el("div", { className: "ed-help", textContent: "Pas de texte visible." }),
+                  el("small", {}, `${x.source.title}${x.source.creators ? ` — annotée par ${x.source.creators}` : ""}`, x.source.url ? [" · ", el("a", { href: x.source.url, target: "_blank", rel: "noopener", textContent: "page web ↗" })] : null),
+                  el("small", { className: "ed-help", textContent: `média Omeka ${a.mediaId ?? x.image?.mediaId ?? "?"}${a.analyzedAt ? ` · analysée le ${new Date(a.analyzedAt).toLocaleDateString("fr-FR")}` : ""}${a.editedAt ? " · corrigée" : ""}` }),
+                  el("div", { className: "ed-row" },
+                    el("button", { type: "button", className: "ed-btn", textContent: "Reprendre cette image", onclick: () => pick(x) }),
+                    el("button", { type: "button", className: "ed-btn", textContent: "Corriger l'index", onclick: () => box.replaceChildren(body()[0], indexForm({
+                      toast, onClose: show,
+                      fields: [{ key: "titre", label: "Titre", value: a.titre }, { key: "motsCles", label: "Mots-clés (séparés par ;)", value: a.motsCles, list: true },
+                        { key: "description", label: "Description", value: a.description, rows: 5 }, { key: "texte", label: "Texte visible", value: a.texte, rows: 4 }],
+                      analyze: () => api("/api/chaoticum/index/diigo-image/analyze", { method: "POST", body: { mediaId: a.mediaId } }),
+                      save: async v => {
+                        const r = await api("/api/chaoticum/index/diigo-image", { method: "POST", body: { mediaId: a.mediaId, ...v } });
+                        x.analysis = { ...a, ...r.analysis };
+                        // la citation reprise de cette image suit la correction
+                        x.text = r.analysis.texte || r.analysis.description; x.comment = r.analysis.texte ? r.analysis.description : "";
+                        show();
+                        toast(`Index et RAG mis à jour (page « ${r.page.title.slice(0, 40)} », document Albert ${r.page.docId})`);
+                      },
+                    })) })),
+                ];
+              };
+              show();
+              return box;
+            };
+            results.replaceChildren(...(list.length ? list.map(card) : [el("span", { className: "ed-help", textContent: "Aucune image analysée ne correspond (l'index Diigo avec analyse des images est-il construit ?)" })]));
+            return;
+          }
+          results.className = "ed-results";
+          results.replaceChildren(...(list.length ? list.map(x => el("div", { className: `ed-result${x.image?.url ? " with-img" : ""}`, role: "button", tabIndex: 0, onclick: e => {
+            if (!e.target.closest("a")) pick(x);
+          } },
+            x.image?.url ? el("img", { src: x.image.url, alt: x.image.title || "", loading: "lazy" }) : null,
+            el("div", {},
+              el("span", { textContent: `${x.kind === "image" ? "🖼 " : ""}« ${x.text.slice(0, 160)}${x.text.length > 160 ? "…" : ""} »` }),
+              el("small", { textContent: ` — ${[x.source.creators, x.source.year, x.source.title].filter(Boolean).join(", ")}${x.source.diigo ? " (Diigo)" : ""}` }),
+              x.source.url ? el("small", {}, " · ", el("a", { href: x.source.url, target: "_blank", rel: "noopener", textContent: "page web ↗" })) : null))) : [el("span", { className: "ed-help", textContent: "Aucun résultat (l'index de cette source est-il construit ?)" })]));
         } catch (e) { results.replaceChildren(el("span", { className: "ed-help", textContent: e.message })); }
       };
       q.onkeydown = e => { if (e.key === "Enter") { e.preventDefault(); search(); } };
+      source.onchange = () => { if (q.value.trim()) search(); };
       return [field("Citation", I.text, true), field("Commentaire", I.comment, true), field("Auteurs", I.creators), field("Année", I.year), field("Titre de la référence", I.title), field("Page", I.page),
-        el("div", { className: "ed-field wide" }, el("label", { textContent: "Choisir une autre citation dans l'index de la bibliothèque" }), el("div", { className: "ed-row" }, q, el("button", { type: "button", className: "ed-btn", textContent: "Chercher", onclick: search })), results)];
+        el("div", { className: "ed-field wide" }, el("label", { textContent: "Lien et image (citations Diigo)" }), media),
+        el("div", { className: "ed-field wide" }, el("label", { textContent: "Choisir une autre citation dans les index" }), el("div", { className: "ed-row" }, source, q, el("button", { type: "button", className: "ed-btn", textContent: "Chercher", onclick: search })), results)];
     },
     diapo() {
       const d = s().diapo ?? {};
@@ -134,16 +225,47 @@ export function openScreenEditor(opts) {
       const step = k => { I.diapo.value = Math.max(0, Number(I.diapo.value) + k); preview(); };
       I.path.onchange = () => { I.diapo.value = 0; max.textContent = ""; preview(); };
       I.diapo.onchange = preview;
-      const results = el("div", { className: "ed-thumbs" });
-      const q = el("input", { placeholder: "mots à chercher dans les descriptions des diapos indexées…" });
+      const results = el("div", { className: "ed-imgcards" });
+      const q = el("input", { placeholder: "mots à chercher dans les titres, mots-clés et descriptions des diapos indexées…" });
       const search = async () => {
         results.replaceChildren(el("span", { className: "ed-help", textContent: "Recherche…" }));
         try {
           const list = await api(`/api/chaoticum/index/search?kind=diapo&q=${encodeURIComponent(q.value)}`);
-          results.replaceChildren(...(list.length ? list.map(x => el("button", { className: "ed-thumb", type: "button", title: x.description, onclick: () => {
+          const pick = x => {
             if (![...I.path.options].some(o => o.value === x.path)) I.path.append(el("option", { value: x.path, textContent: x.name }));
             I.path.value = x.path; I.diapo.value = x.diapo; max.textContent = `sur ${x.max}`; preview();
-          } }, x.thumb ? el("img", { src: x.thumb, loading: "lazy", alt: "" }) : null, el("small", { textContent: `${x.name} ${x.diapo} · ${x.title}` }))) : [el("span", { className: "ed-help", textContent: "Aucun résultat (l'index des diapos est-il construit ?)" })]));
+            toast(`Diapo ${x.name} ${x.diapo} reprise (enregistrer pour confirmer)`);
+          };
+          // fiches : copie d'écran et données d'indexation (titre, mots-clés, description, adresse, date), correction
+          const card = x => {
+            const box = el("div", { className: "ed-imgcard" });
+            const show = () => box.replaceChildren(...body().filter(Boolean));
+            const body = () => [
+              x.thumb ? el("img", { src: x.thumb, loading: "lazy", alt: x.title || "" }) : el("div", { className: "ed-help", textContent: "Pas de copie d'écran" }),
+              el("small", { textContent: `${x.name} · diapo ${x.diapo}${x.max != null ? ` / ${x.max}` : ""}` }),
+              el("strong", { textContent: x.title || "(sans titre)" }),
+              x.keywords?.length ? el("div", { className: "ed-tags" }, x.keywords.map(k => el("span", { textContent: k }))) : null,
+              x.description ? el("p", { textContent: x.description }) : null,
+              el("small", {}, x.url ? el("a", { href: x.url, target: "_blank", rel: "noopener", textContent: "voir la diapo ↗" }) : null,
+                `${x.url ? " · " : ""}indexée le ${x.indexedAt ? new Date(x.indexedAt).toLocaleDateString("fr-FR") : "?"}${x.editedAt ? " · corrigée" : ""}${x.docId ? ` · document Albert ${x.docId}` : ""}`),
+              el("div", { className: "ed-row" },
+                el("button", { type: "button", className: "ed-btn", textContent: "Reprendre cette diapo", onclick: () => pick(x) }),
+                el("button", { type: "button", className: "ed-btn", textContent: "Corriger l'index", onclick: () => box.replaceChildren(body()[0], indexForm({
+                  toast, onClose: show,
+                  fields: [{ key: "title", label: "Titre", value: x.title }, { key: "keywords", label: "Mots-clés (séparés par ;)", value: x.keywords, list: true }, { key: "description", label: "Description", value: x.description, rows: 6 }],
+                  analyze: () => api("/api/chaoticum/index/slide/analyze", { method: "POST", body: { key: x.key } }),
+                  save: async v => {
+                    const r = await api("/api/chaoticum/index/slide", { method: "POST", body: { key: x.key, ...v } });
+                    Object.assign(x, { title: r.entry.title, keywords: r.entry.keywords, description: r.entry.description, docId: r.entry.docId, indexedAt: r.entry.indexedAt, editedAt: r.entry.editedAt });
+                    show();
+                    toast(`Index et RAG mis à jour (document Albert ${r.entry.docId})`);
+                  },
+                })) })),
+            ];
+            show();
+            return box;
+          };
+          results.replaceChildren(...(list.length ? list.map(card) : [el("span", { className: "ed-help", textContent: "Aucun résultat (l'index des diapos est-il construit ?)" })]));
         } catch (e) { results.replaceChildren(el("span", { className: "ed-help", textContent: e.message })); }
       };
       q.onkeydown = e => { if (e.key === "Enter") { e.preventDefault(); search(); } };
@@ -237,7 +359,8 @@ export function openScreenEditor(opts) {
   const changesOf = () => {
     const I = state.I ?? {}, v = k => I[k]?.value;
     const ch = { duration: Number(durationInput.value), ...(type !== s().type ? { type } : {}) };
-    if (type === "citation") ch.citation = { text: v("text"), comment: v("comment"), creators: v("creators"), year: v("year"), title: v("title"), page: v("page") };
+    if (type === "citation") ch.citation = { text: v("text"), comment: v("comment"), creators: v("creators"), year: v("year"), title: v("title"), page: v("page"),
+      ...(state.pick ? { pick: state.pick } : {}), ...(state.dropLink ? { dropLink: true } : {}), ...(state.dropImage ? { dropImage: true } : {}) };
     if (type === "diapo") ch.diapo = { path: v("path"), diapo: Number(v("diapo")) };
     if (type === "question") ch.question = { text: v("text"), intention: v("intention") };
     if (type === "diagramme") ch.diagramme = { title: v("title"), mermaid: state.getCode?.() ?? v("code") };
@@ -289,6 +412,21 @@ export const editorCss = `
 .ed-btn.primary { background:var(--accent); color:var(--accent-ink, #fff); border-color:var(--accent); font-weight:600; }
 .ed-btn.on { border-color:var(--accent); color:var(--accent); font-weight:600; }
 .ed-btn.danger { color:var(--err, #b3261e); } .ed-btn:disabled { opacity:.45; cursor:default; }
+.ed-imgcards { display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:8px; max-height:520px; overflow:auto; }
+.ed-imgcard { display:flex; flex-direction:column; gap:5px; border:1px solid var(--line); background:var(--bg); border-radius:8px; padding:8px; font-size:13px; }
+.ed-imgcard img { width:100%; max-height:170px; object-fit:contain; background:#fff; border-radius:6px; display:block; }
+.ed-imgcard p { margin:0; line-height:1.4; }
+.ed-imgcard small { color:var(--muted); }
+.ed-imgcard a { color:var(--accent); }
+.ed-imgcard details summary { cursor:pointer; color:var(--muted); font-size:12px; }
+.ed-imgcard .ed-visible { white-space:pre-wrap; font-size:12px; max-height:140px; overflow:auto; }
+.ed-imgcard .ed-btn { align-self:flex-start; margin-top:auto; }
+.ed-fix { display:flex; flex-direction:column; gap:6px; }
+.ed-fix label { display:flex; flex-direction:column; gap:2px; font-size:12px; color:var(--muted); }
+.ed-fix input, .ed-fix textarea { font:inherit; font-size:13px; color:var(--ink); background:var(--panel); border:1px solid var(--line); border-radius:6px; padding:5px 7px; }
+.ed-fix .ed-row, .ed-imgcard .ed-row { flex-wrap:wrap; }
+.ed-tags { display:flex; flex-wrap:wrap; gap:3px; }
+.ed-tags span { font-size:11.5px; border:1px solid var(--line); border-radius:999px; padding:0 7px; color:var(--muted); }
 .ed-link { display:block; background:none; border:0; color:var(--accent); cursor:pointer; font:inherit; font-size:13px; padding:2px 0 8px; text-align:left; }
 .ed-field > div > label { display:block; margin-top:8px; }
 .ed-frame { width:100%; height:300px; border:1px solid var(--line); border-radius:8px; background:#fff; }
@@ -298,6 +436,12 @@ export const editorCss = `
 .ed-results { display:flex; flex-direction:column; gap:4px; max-height:240px; overflow:auto; }
 .ed-result { text-align:left; font:inherit; font-size:13px; border:1px solid var(--line); background:var(--bg); color:var(--ink); border-radius:6px; padding:6px 8px; cursor:pointer; }
 .ed-result small { color:var(--muted); }
+.ed-result.with-img { display:grid; grid-template-columns:96px 1fr; gap:8px; align-items:start; }
+.ed-result img { width:96px; max-height:72px; object-fit:cover; border-radius:4px; background:#fff; }
+.ed-result a, .ed-cite-media a { color:var(--accent); }
+.ed-cite-media { display:flex; gap:12px; align-items:flex-start; font-size:13px; }
+.ed-cite-media img { max-width:220px; max-height:160px; border-radius:6px; background:#fff; border:1px solid var(--line); }
+.ed-link { background:none; border:0; padding:0; color:var(--muted); font:inherit; font-size:12px; text-decoration:underline; cursor:pointer; }
 .ed-thumbs { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:6px; max-height:300px; overflow:auto; }
 .ed-thumb { font:inherit; font-size:11px; border:1px solid var(--line); background:var(--bg); color:var(--ink); border-radius:6px; padding:4px; cursor:pointer; text-align:left; }
 .ed-thumb img { width:100%; display:block; border-radius:4px; margin-bottom:3px; }

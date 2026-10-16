@@ -2,11 +2,17 @@ import { createOpenAI } from "@ai-sdk/openai";
 import { workflowConfig } from ".";
 
 // 1. Ajoutez l'option compatibility: "compatible"
+// la clé est lue à chaque requête : le serveur de l'interface charge ses fichiers de connexion après l'import des modules
 const albertProvider = createOpenAI({
   baseURL: workflowConfig.models.provider,
-  apiKey: process.env.ALBERT_API_KEY,
+  apiKey: process.env.ALBERT_API_KEY || "albert",
   compatibility: "compatible", // 👈 CRUCIAL : Désactive les endpoints exclusifs à OpenAI
-});
+  fetch: (url: RequestInfo | URL, init?: RequestInit) => {
+    const headers = new Headers(init?.headers);
+    if (process.env.ALBERT_API_KEY) headers.set("Authorization", `Bearer ${process.env.ALBERT_API_KEY}`);
+    return fetch(url, { ...init, headers });
+  },
+} as any);
 
 // 2. Utilisez explicitement .chat() au lieu de l'appel direct au provider
 export const ALBERT_MODEL_ANALYTICS = albertProvider.chat(workflowConfig.models.analytics);

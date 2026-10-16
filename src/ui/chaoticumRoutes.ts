@@ -10,7 +10,10 @@ import { PARTITIONS_DIR, type ChaoticumConfig } from "../config/chaoticum";
 import { deleteContribution, frameable, readContributions, updateContribution } from "../lib/chaoticum/grist";
 import { uploadWithFallback } from "../workflow/runs/importSynthesis";
 import { listSlides } from "../lib/chaoticum/slides";
-import { emptySlides, emptyZotero, indexDir, loadStore } from "../lib/chaoticum/index/store";
+import { emptyImages, emptySlides, emptyZotero, indexDir, loadStore } from "../lib/chaoticum/index/store";
+import { diigoMediaImages, diigoPageImages } from "../lib/chaoticum/diigoMedia";
+import { analyzeSlide, correctSlide } from "../lib/chaoticum/index/slidesIndex";
+import { analyzeDiigoImage, correctDiigoImage, QuotaError } from "../lib/chaoticum/index/diigoIndex";
 import { regenerate } from "../lib/chaoticum/regenerate";
 import { createAuth } from "./auth";
 import { createLive } from "./liveRoutes";
@@ -128,6 +131,12 @@ export function chaoticumRoutes(ctx: Ctx): Record<string, Handler> {
   // ==========================================
 
   const str = (v: unknown, max = 5000) => String(v ?? "").slice(0, max);
+  // erreur d'un appel au modèle de vision : quota quotidien d'Albert expliqué (statut 429)
+  const visionError = (res: http.ServerResponse, e: unknown) => {
+    const err = e as any, text = [err?.message, err?.responseBody, err?.cause?.responseBody].filter(Boolean).join(" ");
+    const quota = e instanceof QuotaError || /per day exceeded/i.test(text);
+    ctx.sendJson(res, quota ? 429 : 502, { error: quota ? `Quota quotidien du modèle de vision atteint (${/\d+ requests per day/i.exec(text)?.[0] ?? "Albert"}) : réessayer demain, ou choisir un autre modèle pour l'agent dans l'onglet Workflow.` : String(err?.message ?? e) });
+  };
   function applyScreenChanges(p: any, index: number, ch: any) {
     const s = p.screens?.[index];
     if (!s) throw new Error(`Écran ${index + 1} introuvable`);
@@ -143,8 +152,18 @@ export function chaoticumRoutes(ctx: Ctx): Record<string, Handler> {
     if (s.type === "contribution" && ch.contribution) { s.contribution = { instruction: str(ch.contribution.instruction, 300) }; changed.push("consigne"); }
     if (s.type === "citation" && ch.citation) {
       const c = ch.citation;
-      s.citation = { ...(s.citation ?? { key: "manuel", kind: "note", color: null, author: null, date: null }), text: str(c.text), comment: str(c.comment, 1000), page: str(c.page, 40),
-        source: { ...(s.citation?.source ?? { key: null, url: null }), creators: str(c.creators, 300), year: str(c.year, 10), title: str(c.title, 500) } };
+      // citation reprise de l'index (pick) : sa clé, sa source, son lien et son image ; sinon modification du texte
+      const pick = c.pick && typeof c.pick === "object" ? c.pick : null;
+      const http = (u: unknown) => (typeof u === "string" && /^https?:\/\//.test(u) ? u.slice(0, 1000) : null);
+      const base = pick
+        ? { key: str(pick.key, 40), kind: ["annotation", "note", "image"].includes(pick.kind) ? pick.kind : "annotation", color: pick.color ? str(pick.color, 20) : null, author: pick.author ? str(pick.author, 200) : null, date: pick.date ? str(pick.date, 40) : null,
+            source: { key: pick.source?.key ? str(pick.source.key, 40) : null, url: http(pick.source?.url) },
+            image: pick.image && http(pick.image.url) ? { url: http(pick.image.url)!, original: http(pick.image.original) ?? undefined, mediaId: Number(pick.image.mediaId) || undefined, title: str(pick.image.title ?? "", 300) } : null }
+        : (s.citation ?? { key: "manuel", kind: "note", color: null, author: null, date: null, source: { key: null, url: null } });
+      s.citation = { ...base, text: str(c.text), comment: str(c.comment, 1000), page: str(c.page, 40),
+        // lien et image retirés à la demande (éditeur)
+        ...(c.dropImage ? { image: null } : {}),
+        source: { ...(base.source ?? { key: null, url: null }), ...(c.dropLink ? { url: null } : {}), creators: str(c.creators, 300), year: str(c.year, 10), title: str(c.title, 500) } };
       changed.push("citation");
     }
     if (s.type === "diapo" && ch.diapo) {
@@ -498,6 +517,37 @@ export function chaoticumRoutes(ctx: Ctx): Record<string, Handler> {
       catch (e) { ctx.sendJson(res, 502, { error: (e as Error).message }); }
     },
 
+    // ---------- correction des index depuis l'éditeur d'écran (diapos, images Diigo) et mise à jour du RAG ----------
+    // erreur d'analyse : quota quotidien d'Albert expliqué
+    // nouvelle analyse par le modèle de vision : proposition à relire, non enregistrée
+    "POST /api/chaoticum/index/slide/analyze": async (req, res) => {
+      const { key } = await ctx.readBody(req);
+      try { ctx.sendJson(res, 200, await analyzeSlide(ctx.config(), String(key ?? ""))); }
+      catch (e) { visionError(res, e); }
+    },
+    // description corrigée : index local et document Albert remplacés
+    "POST /api/chaoticum/index/slide": async (req, res) => {
+      const { key, title, keywords, description } = await ctx.readBody(req);
+      if (!str(title, 300)) return ctx.sendJson(res, 400, { error: "Titre vide" });
+      try {
+        const e = await correctSlide(ctx.config(), String(key ?? ""), { title: str(title, 300), keywords: (Array.isArray(keywords) ? keywords : []).map((k: unknown) => str(k, 80)).slice(0, 20), description: str(description, 3000) });
+        ctx.sendJson(res, 200, { ok: true, entry: { ...e, key } });
+      } catch (e) { ctx.sendJson(res, 502, { error: (e as Error).message }); }
+    },
+    "POST /api/chaoticum/index/diigo-image/analyze": async (req, res) => {
+      const { mediaId } = await ctx.readBody(req);
+      try { ctx.sendJson(res, 200, await analyzeDiigoImage(ctx.config(), Number(mediaId))); }
+      catch (e) { visionError(res, e); }
+    },
+    // analyse corrigée d'une image : cache des analyses et document de sa page dans Albert
+    "POST /api/chaoticum/index/diigo-image": async (req, res) => {
+      const { mediaId, titre, motsCles, description, texte } = await ctx.readBody(req);
+      if (!str(titre, 300)) return ctx.sendJson(res, 400, { error: "Titre vide" });
+      try {
+        ctx.sendJson(res, 200, { ok: true, ...(await correctDiigoImage(ctx.config(), Number(mediaId), { titre: str(titre, 300), motsCles: (Array.isArray(motsCles) ? motsCles : []).map((k: unknown) => str(k, 80)).slice(0, 20), description: str(description, 3000), texte: str(texte, 1500) })) });
+      } catch (e) { visionError(res, e); }
+    },
+
     // recherche dans les index locaux (citations ou diapos) pour l'éditeur d'écran : sans appel à Albert
     "GET /api/chaoticum/index/search": async (_req, res, url) => {
       const c = ctx.config(), kind = url.searchParams.get("kind"), q = (url.searchParams.get("q") ?? "").toLowerCase().trim();
@@ -507,17 +557,49 @@ export function chaoticumRoutes(ctx: Ctx): Record<string, Handler> {
         const items = Object.values(loadStore("diapos", emptySlides(), c).items).filter(e => e.description)
           .map(e => ({ e, s: score(`${e.name} ${e.title} ${e.keywords.join(" ")} ${e.description}`) })).filter(x => x.s > 0)
           .sort((a, b) => b.s - a.s).slice(0, 24)
-          .map(({ e }) => ({ path: e.path, name: e.name, diapo: e.diapo, max: e.max, title: e.title, description: e.description, thumb: e.screenshot ? `/api/chaoticum/index/screenshot?path=${encodeURIComponent(e.path)}&diapo=${e.diapo}` : null }));
+          // données d'indexation affichées par l'éditeur : mots-clés, adresse de la diapo, date, document Albert
+          .map(({ e }) => ({ path: e.path, name: e.name, diapo: e.diapo, max: e.max, title: e.title, description: e.description, keywords: e.keywords, url: e.url, indexedAt: e.indexedAt, editedAt: e.editedAt ?? null, docId: e.docId, key: `${e.path}#${e.diapo}`,
+            thumb: e.screenshot ? `/api/chaoticum/index/screenshot?path=${encodeURIComponent(e.path)}&diapo=${e.diapo}` : null }));
         return ctx.sendJson(res, 200, items);
       }
       if (kind === "citation") {
-        // bibliothèque Zotero et annotations Diigo
-        const items = [...Object.values(loadStore("bibliotheque", emptyZotero(), c).items), ...Object.values(loadStore("diigo", emptyZotero(), c).items)].flatMap(r => Object.values(r.annotations).map(a => ({ a, r })))
+        // source : zotero (bibliothèque), diigo (passages surlignés), diigo-images (images analysées) ; vide : toutes
+        const source = url.searchParams.get("source") ?? "";
+        const want = (x: string) => !source || source === x;
+        const diigo = loadStore("diigo", emptyZotero(), c);
+        const refs = [...(want("zotero") ? Object.values(loadStore("bibliotheque", emptyZotero(), c).items) : []), ...(want("diigo") ? Object.values(diigo.items) : [])];
+        const texts = refs.flatMap(r => Object.values(r.annotations).map(a => ({ a, r })))
           .filter(x => (x.a.text || x.a.comment).length >= 20)
           .map(x => ({ ...x, s: score(`${x.a.text} ${x.a.comment} ${x.r.title} ${x.r.creators} ${x.r.tags.join(" ")}`) })).filter(x => x.s > 0)
           .sort((a, b) => b.s - a.s).slice(0, 30)
-          .map(({ a, r }) => ({ key: a.key, kind: a.kind, text: a.text || a.comment, comment: a.text ? a.comment : "", page: a.page, color: a.color, author: a.author, date: a.date, source: { key: r.key, title: r.title, creators: r.creators, year: r.year, ...(r.source === "diigo" ? { url: r.url ?? null, diigo: true } : {}) } }));
-        return ctx.sendJson(res, 200, items);
+          .map(({ a, r }) => ({ key: a.key, kind: a.kind, text: a.text || a.comment, comment: a.text ? a.comment : "", page: a.page, color: a.color, author: a.author, date: a.date,
+            source: { key: r.key, title: r.title, creators: r.creators, year: r.year, url: r.source === "diigo" ? r.url ?? null : null, ...(r.source === "diigo" ? { diigo: true } : {}) }, image: null as any }));
+        // images analysées des pages Diigo : la description et le texte visible tiennent lieu de citation
+        const imageCits: typeof texts = [];
+        if (source === "diigo-images" || !source) {
+          const analyses = new Map(Object.values(loadStore("diigo-images", emptyImages(), c).items).map(d => [d.mediaId, d]));
+          for (const r of Object.values(diigo.items)) for (const m of r.media ?? []) {
+            const d = m.type === "image" ? analyses.get(m.id) : undefined;
+            if (!d) continue;
+            const sc = score(`${d.titre} ${d.motsCles.join(" ")} ${d.description} ${d.texte} ${r.title} ${r.tags.join(" ")}`);
+            if (sc > 0) imageCits.push({ key: `I${m.id}`, kind: "image", text: d.texte || d.description, comment: d.texte ? d.description : "", page: "", color: null, author: r.creators || null, date: d.analyzedAt,
+              source: { key: r.key, title: r.title, creators: r.creators, year: r.year, url: r.url ?? null, diigo: true }, image: { mediaId: m.id, title: d.titre },
+              // données d'indexation de l'image (affichées par l'éditeur quand la source est « images Diigo »)
+              analysis: { titre: d.titre, motsCles: d.motsCles, description: d.description, texte: d.texte, analyzedAt: d.analyzedAt, editedAt: d.editedAt ?? null, mediaId: m.id }, s: sc } as any);
+          }
+          imageCits.sort((a: any, b: any) => b.s - a.s).splice(30);
+        }
+        const items = source === "diigo-images" ? imageCits : !source ? [...texts, ...imageCits].slice(0, 40) : texts;
+        // images (vignettes Omeka S) : celle de l'image analysée, sinon la première image de la page Diigo
+        try {
+          const media = await diigoMediaImages(c.diigo.apiUrl, items.filter(x => x.image?.mediaId).map(x => x.image.mediaId));
+          const pages = await diigoPageImages(c.diigo.apiUrl, items.filter(x => x.source.diigo && !x.image).map(x => Number(String(x.source.key).slice(1))));
+          for (const x of items) {
+            const img = x.image?.mediaId ? media.get(x.image.mediaId) : x.source.diigo ? pages.get(Number(String(x.source.key).slice(1)))?.[0] : undefined;
+            x.image = img ? { url: img.url, original: img.original, mediaId: img.mediaId, title: x.image?.title || img.title } : null;
+          }
+        } catch (e) { for (const x of items) if (!x.image?.url) x.image = null; }
+        return ctx.sendJson(res, 200, items.map(({ s: _s, ...x }: any) => x));
       }
       ctx.sendJson(res, 400, { error: "kind = citation ou diapo" });
     },

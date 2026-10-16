@@ -16,6 +16,8 @@ export interface SlideEntry {
   description: string;
   docId: number | null;
   indexedAt: string;
+  // correction manuelle depuis l'éditeur d'écran
+  editedAt?: string;
 }
 
 export interface AnnotationEntry {
@@ -56,7 +58,7 @@ const file = (name: string, c = chaoticumConfig) => path.join(indexDir(c), `${na
 export type StoreName = "diapos" | "bibliotheque" | "diigo" | "diigo-images";
 
 // analyses des images des pages Diigo (par empreinte SHA-256 du fichier) : une image n'est analysée qu'une fois
-export interface ImageDescription { mediaId: number; titre: string; motsCles: string[]; description: string; texte: string; analyzedAt: string }
+export interface ImageDescription { mediaId: number; titre: string; motsCles: string[]; description: string; texte: string; analyzedAt: string; editedAt?: string }
 export interface ImagesStore { items: Record<string, ImageDescription>; updatedAt: string | null }
 export const emptyImages = (): ImagesStore => ({ items: {}, updatedAt: null });
 

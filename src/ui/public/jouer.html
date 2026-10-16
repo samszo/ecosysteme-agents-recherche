@@ -37,6 +37,11 @@
   blockquote.citation { font-size: clamp(22px, 3.2vw, 44px); line-height: 1.35; margin: 0; font-family: Georgia, "Times New Roman", serif; }
   blockquote.citation::before { content: "« "; color: var(--t-citation); }
   blockquote.citation::after { content: " »"; color: var(--t-citation); }
+  .cite-media { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); gap: 3vw; align-items: center; }
+  .cite-media img { width: 100%; max-height: 72vh; object-fit: contain; background: #fff; border-radius: 10px; display: block; }
+  blockquote.citation.from-image { font-size: clamp(18px, 2.2vw, 32px); }
+  .ref a.page-link { color: var(--accent); }
+  @media (max-width: 800px) { .cite-media { grid-template-columns: 1fr; } }
   .ref { margin-top: 3vh; font-size: clamp(15px, 1.5vw, 22px); color: var(--muted); }
   .comment { margin-top: 2vh; font-size: clamp(14px, 1.3vw, 19px); border-left: 3px solid var(--t-citation); padding-left: 12px; color: var(--ink); opacity: .85; }
   .question { font-size: clamp(26px, 4vw, 58px); line-height: 1.25; font-weight: 650; }
@@ -352,10 +357,18 @@ async function render() {
 
   if (s.type === "citation" && s.citation) {
     const ci = s.citation;
-    stage.append(el("div", { className: "center" },
-      el("blockquote", { className: "citation", textContent: ci.text }),
+    // citation Diigo : image de la page (ou image analysée) et lien vers la page web
+    const text = [
+      el("blockquote", { className: `citation${ci.kind === "image" ? " from-image" : ""}`, textContent: ci.text }),
       ci.comment ? el("div", { className: "comment", textContent: ci.comment }) : null,
-      el("div", { className: "ref" }, refOf(ci), ci.page ? `, p. ${ci.page}` : "", ci.author ? ` · surligné par ${ci.author}` : "")));
+      el("div", { className: "ref" }, refOf(ci), ci.page ? `, p. ${ci.page}` : "", ci.author ? ` · ${ci.kind === "image" ? "image annotée par" : "surligné par"} ${ci.author}` : "",
+        // lien vers la page web : citations Diigo seulement (pages annotées : clé O<id> ; le lien Zotero n'est pas projeté)
+        ci.source?.url && /^O\d+$/.test(ci.source.key ?? "") ? [" · ", el("a", { href: ci.source.url, target: "_blank", rel: "noopener", textContent: "page web ↗", className: "page-link" })] : null)];
+    stage.append(ci.image?.url
+      ? el("div", { className: "center cite-media" },
+          el("a", { href: ci.image.original || ci.image.url, target: "_blank", rel: "noopener", title: "Image en grand" }, el("img", { src: ci.image.url, alt: ci.image.title || "image de la page" })),
+          el("div", {}, text))
+      : el("div", { className: "center" }, text));
   } else if (s.type === "diapo" && s.diapo) {
     stage.className = "stage full";
     stage.append(el("iframe", { className: "slide", src: s.diapo.url, title: `${s.diapo.name}, diapo ${s.diapo.diapo}`, allow: "fullscreen" }));

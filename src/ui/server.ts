@@ -112,6 +112,12 @@ const parseEnv = (file: string): Record<string, string> => (fs.existsSync(file) 
 function readEnv(): Record<string, string> {
   return Object.assign({}, ...ENV_PATHS.map(parseEnv));
 }
+
+// connexions de ce serveur dans son environnement (appels directs aux agents : éditeur d'écran, correction des index)
+// (les variables déjà fixées au lancement — ports, adresses de débogage, Docker — gardent leur valeur)
+const LAUNCH_ENV = new Set(Object.keys(process.env));
+const syncEnv = () => { for (const [k, v] of Object.entries(readEnv())) if (v && !LAUNCH_ENV.has(k)) process.env[k] = v; };
+syncEnv();
 // valeurs héritées des fichiers précédents (exploZoteroAnno : .env)
 const inheritedEnv = (): Record<string, string> => Object.assign({}, ...ENV_PATHS.slice(0, -1).map(parseEnv));
 
@@ -708,6 +714,7 @@ const routes: Record<string, (req: http.IncomingMessage, res: http.ServerRespons
       values[f.key] = String(v.value ?? "").trim();
     }
     writeEnv(values);
+    syncEnv();
     const saved = config ? writeConfigOverride(APP_CONFIG.defaults, config, APP_CONFIG.file) : undefined;
     sendJson(res, 200, { ok: true, override: saved });
   },

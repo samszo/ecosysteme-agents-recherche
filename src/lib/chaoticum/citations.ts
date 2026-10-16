@@ -6,7 +6,8 @@ import type { Rng } from "./random";
 
 export interface Citation {
   key: string;
-  kind: "annotation" | "note";
+  // image : citation tirée d'une image d'une page Diigo (description et texte visible)
+  kind: "annotation" | "note" | "image";
   text: string;
   comment: string;
   page: string;
@@ -15,6 +16,8 @@ export interface Citation {
   date: string | null;
   // notice Zotero d'où vient la citation
   source: { key: string | null; title: string; creators: string; year: string; url: string | null };
+  // image affichée avec la citation (page Diigo illustrée, image analysée) : vignette Omeka S
+  image?: { url: string; original?: string; mediaId?: number; title?: string } | null;
 }
 
 type CitationsConfig = ChaoticumConfig["citations"];

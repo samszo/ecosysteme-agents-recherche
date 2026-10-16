@@ -15,6 +15,7 @@ import { Zotero, collectionWithDescendants, zoteroWebUrl } from "../zotero/zoter
 import { emptySlides, emptyZotero, indexDir, loadStore, type AnnotationEntry, type ReferenceEntry, type SlideEntry } from "./index/store";
 import { hasTheme, themeBlock, type Theme } from "./theme";
 import { buildMermaid } from "./mermaid";
+import { diigoPageImages } from "./diigoMedia";
 import { diagramFields, shortenQuestion } from "./generation";
 import { shuffle, type Rng } from "./random";
 import type { Citation } from "./citations";
@@ -190,6 +191,17 @@ ${!cScreens.length && !dScreens.length && (previous.citations.length || previous
 
     // affectation aux écrans ; copies d'écran de l'index recopiées dans la partition
     const chosenCits = pickC.map(x => toCitation(x, c.citations.maxLength));
+    // citations Diigo : image de la page annotée (première image), affichée avec la citation
+    const diigoPages = pickC.filter(x => x.r.source === "diigo").map(x => Number(x.r.key.slice(1)));
+    if (diigoPages.length) {
+      try {
+        const imgs = await diigoPageImages(c.diigo.apiUrl, diigoPages);
+        pickC.forEach((x, i) => {
+          const im = x.r.source === "diigo" ? imgs.get(Number(x.r.key.slice(1)))?.[0] : undefined;
+          if (im && chosenCits[i]) chosenCits[i]!.image = { url: im.url, original: im.original, mediaId: im.mediaId, title: im.title };
+        });
+      } catch (e) { console.warn("⚠️ [RAG] Images des pages Diigo indisponibles :", (e as Error).message.split("\n")[0]); }
+    }
     cScreens.forEach((s, i) => { if (chosenCits[i]) { s.citation = chosenCits[i]; usedCit.add(pickC[i]!.a.key); } });
     dScreens.forEach((s, i) => {
       const e = pickD[i];

@@ -37,6 +37,11 @@ export interface ReferenceEntry {
   collections: string[];
   tags: string[];
   annotations: Record<string, AnnotationEntry>;
+  // source de la référence (Zotero par défaut) et adresse de la page (Diigo)
+  source?: "zotero" | "diigo";
+  url?: string | null;
+  // médias dont le texte est dans le document (Diigo)
+  media?: { id: number; title: string; type: string; chars: number }[];
   hash: string;
   docId: number | null;
   indexedAt: string;
@@ -48,11 +53,18 @@ export interface ZoteroStore { collectionId: number | null; library: string; ite
 export const indexDir = (c = chaoticumConfig) => path.resolve(process.cwd(), c.outputDir, "index");
 const file = (name: string, c = chaoticumConfig) => path.join(indexDir(c), `${name}.json`);
 
-export function loadStore<T>(name: "diapos" | "bibliotheque", empty: T, c = chaoticumConfig): T {
+export type StoreName = "diapos" | "bibliotheque" | "diigo" | "diigo-images";
+
+// analyses des images des pages Diigo (par empreinte SHA-256 du fichier) : une image n'est analysée qu'une fois
+export interface ImageDescription { mediaId: number; titre: string; motsCles: string[]; description: string; texte: string; analyzedAt: string }
+export interface ImagesStore { items: Record<string, ImageDescription>; updatedAt: string | null }
+export const emptyImages = (): ImagesStore => ({ items: {}, updatedAt: null });
+
+export function loadStore<T>(name: StoreName, empty: T, c = chaoticumConfig): T {
   try { return { ...empty, ...JSON.parse(fs.readFileSync(file(name, c), "utf-8")) }; } catch { return empty; }
 }
 
-export function saveStore(name: "diapos" | "bibliotheque", data: any, c = chaoticumConfig) {
+export function saveStore(name: StoreName, data: any, c = chaoticumConfig) {
   fs.mkdirSync(indexDir(c), { recursive: true });
   const target = file(name, c);
   fs.writeFileSync(`${target}.tmp`, JSON.stringify({ ...data, updatedAt: new Date().toISOString() }));

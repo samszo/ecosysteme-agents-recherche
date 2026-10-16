@@ -136,18 +136,32 @@
       <div class="grid" style="margin-top:12px">
         <div class="field"><label>Bibliothèque</label><span id="idx-zotero" class="help">—</span><div><button id="b-idx-zotero" class="btn">Indexer la bibliothèque</button></div></div>
         <div class="field"><label>Diapos</label><span id="idx-slides" class="help">—</span><div><button id="b-idx-slides" class="btn">Indexer les diapos</button></div></div>
+        <div class="field"><label>Annotations Diigo</label><span id="idx-diigo" class="help">—</span><div><button id="b-idx-diigo" class="btn">Indexer les annotations Diigo</button></div></div>
       </div>
     </section>
 
     <section class="card">
-      <h2>Citations (Zotero)</h2>
-      <p class="lead">Passages surlignés (annotations) et notes, tirés au hasard. La bibliothèque est celle de la page Paramètres.</p>
+      <h2>Citations (Zotero et Diigo)</h2>
+      <p class="lead">Passages surlignés (annotations) et notes, tirés au hasard. La bibliothèque Zotero est celle de la page Paramètres ; les annotations Diigo sont des items Omeka S (voir ci-dessous).</p>
       <div class="grid">
+        <div class="field wide"><label>Sources des citations</label><div style="display:flex;gap:16px;flex-wrap:wrap"><label class="check"><input id="ci-src-zotero" type="checkbox"> Bibliothèque Zotero</label><label class="check"><input id="ci-src-diigo" type="checkbox"> Annotations Diigo</label></div><span class="help">Avec les index RAG : candidats cherchés dans les deux collections et proposés ensemble au modèle. La portée (collection) ne concerne que Zotero.</span></div>
         <div class="field"><label for="ci-scope">Source</label><select id="ci-scope"><option value="collection">une collection</option><option value="library">toute la bibliothèque</option></select></div>
         <div class="field"><label for="ci-collection">Collection</label><select id="ci-collection"></select><span class="help" id="ci-collection-help"></span></div>
         <div class="field"><label class="check"><input id="ci-notes" type="checkbox"> Inclure les notes</label></div>
         <div class="field"><label for="ci-min">Longueur minimale (caractères)</label><input id="ci-min" type="number" min="0" step="10"></div>
         <div class="field"><label for="ci-max">Longueur maximale (caractères)</label><input id="ci-max" type="number" min="50" step="50"></div>
+      </div>
+      <h2 style="margin-top:14px;font-size:15px">Annotations Diigo (Omeka S)</h2>
+      <p class="lead">Les pages viennent d'une collection Omeka S (références de veille : titre, mots-clés <code>skos:semanticRelation</code>, médias) ; seules celles qui ont des médias ou des passages surlignés sont indexées. Un passage surligné est un item du modèle « Diigo highlight » (<code>bibo:content</code>, couleur <code>schema:color</code>) relié à sa page par <code>dcterms:isPartOf</code>. L'index RAG dépose un document par page dans Albert.</p>
+      <div class="grid">
+        <div class="field wide"><label for="dg-api">API Omeka S</label><input id="dg-api" placeholder="https://…/api"><span class="help">Lecture publique ; pour des items privés : DIIGO_OMKS_KEY_IDENTITY et DIIGO_OMKS_KEY_CREDENTIAL dans le fichier de connexions.</span></div>
+        <div class="field"><label for="dg-itemset">Collection des pages (identifiant)</label><input id="dg-itemset" type="number" min="1" step="1"><span class="help">Pages retenues : celles qui ont des médias ou des passages surlignés.</span></div>
+        <div class="field"><label for="dg-template">Modèle « Diigo highlight » (identifiant)</label><input id="dg-template" type="number" min="1" step="1"></div>
+        <div class="field"><label for="dg-collection">Collection Albert</label><input id="dg-collection"></div>
+        <div class="field"><label class="check"><input id="dg-media" type="checkbox"> Indexer le texte des médias des pages</label><span class="help">Fichiers et instantanés web, extraits comme les pièces jointes Zotero.</span></div>
+        <div class="field"><label class="check"><input id="dg-images" type="checkbox"> Analyser les images des pages</label><span class="help">Captures Diigo, figures, schémas : décrites par le modèle de vision (titre, mots-clés, description, texte visible), une seule fois par image. Modèle et instructions dans l'onglet Workflow (agent « Descripteur d'images »).</span></div>
+        <div class="field"><label for="dg-mediamax">Texte des médias par page (caractères)</label><input id="dg-mediamax" type="number" min="0" step="10000"></div>
+        <div class="field"><label for="dg-perrun">Pages déposées par indexation (0 = toutes)</label><input id="dg-perrun" type="number" min="0" step="100"><span class="help">L'indexation reprend où elle s'est arrêtée.</span></div>
       </div>
     </section>
 
@@ -182,6 +196,39 @@
           <div id="g-result" class="help" style="margin-top:6px"></div>
         </div>
       </div>
+    </section>
+
+    <section class="card">
+      <h2>Transcription de la parole (lecteur)</h2>
+      <p class="lead">Pendant la séance, le bouton 🎙 du lecteur (touche T) transcrit la parole du présentateur : le texte est enregistré avec la séance (et dans Omeka S), affiché en sous-titres (touche S) et rejoué avec la séance.</p>
+      <div class="grid">
+        <div class="field"><label for="tr-engine">Moteur par défaut</label><select id="tr-engine"><option value="albert">Albert (audio envoyé au serveur par tranches)</option><option value="navigateur">Navigateur (texte immédiat)</option></select><span class="help">Le navigateur envoie l'audio à son propre service (Google pour Chrome, Apple pour Safari). Modifiable dans le lecteur.</span></div>
+        <div class="field"><label for="tr-model">Modèle de reconnaissance vocale (Albert)</label><input id="tr-model" list="albert-models"></div>
+        <div class="field"><label for="tr-language">Langue</label><input id="tr-language" placeholder="fr"></div>
+        <div class="field"><label for="tr-chunk">Durée des tranches (s)</label><input id="tr-chunk" type="number" min="5" max="60" step="1"><span class="help">Plus court : texte plus réactif ; plus long : phrases moins coupées.</span></div>
+        <div class="field"><label for="tr-silence">Niveau sonore minimal (0 à 1)</label><input id="tr-silence" type="number" min="0" max="0.5" step="0.005"><span class="help">Une tranche plus silencieuse n'est pas envoyée (le modèle inventerait du texte).</span></div>
+        <div class="field"><label class="check"><input id="tr-captions" type="checkbox"> Afficher les sous-titres par défaut</label></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Grille d'annotation (suivi de la présentation)</h2>
+      <p class="lead">Les personnes qui suivent la présentation sur leur appareil (bouton 👥 du lecteur) tracent des traits sur les écrans et surlignent la transcription avec ces couleurs ; chaque couleur a une signification commune, comme dans exploZoteroAnno. Les annotations sont enregistrées avec la séance.</p>
+      <div class="table-wrap" id="ann-grid"></div>
+      <div class="toolbar" style="margin-top:8px"><button id="ann-explo" class="btn">Reprendre la grille d'exploZoteroAnno</button></div>
+    </section>
+
+    <section class="card">
+      <h2>Connexion des personnes qui suivent</h2>
+      <p class="lead">Le suivi (<code>/public/suivre</code>) demande une connexion : Google ou GitHub (identifiants à saisir sur la page <a href="/parametres" style="color:var(--accent)">⚙ Paramètres</a>, groupe « Suivi de la présentation ») ou un compte local créé ici.</p>
+      <div id="auth-providers" class="help"></div>
+      <div class="table-wrap" id="auth-users" style="margin-top:8px"></div>
+      <div class="grid" style="margin-top:8px">
+        <div class="field"><label for="u-login">Identifiant</label><input id="u-login" autocomplete="off"></div>
+        <div class="field"><label for="u-name">Nom affiché</label><input id="u-name" autocomplete="off"></div>
+        <div class="field"><label for="u-password">Mot de passe (8 caractères au moins)</label><input id="u-password" type="password" autocomplete="new-password"><span class="help">Pour un compte existant : vide = inchangé.</span></div>
+      </div>
+      <div class="toolbar" style="margin-top:8px"><button id="u-save" class="btn">Créer ou modifier le compte</button></div>
     </section>
 
     <section class="card">
@@ -331,6 +378,8 @@ const FIELDS = [
   ["#s-site", "slides.siteUrl"], ["#s-local", "slides.localDir"], ["#s-repo", "slides.repo"], ["#s-settle", "slides.settleMs", true],
   ["#g-form", "grist.formUrl"], ["#g-responses", "grist.responsesUrl"], ["#g-url", "grist.urlColumn"], ["#g-name", "grist.nameColumn"], ["#g-date", "grist.dateColumn"], ["#g-poll", "grist.pollSeconds", true],
   ["#m-vision", "models.vision"], ["#m-analytics", "models.analytics"],
+  ["#tr-engine", "transcription.engine"], ["#tr-model", "transcription.model"], ["#tr-language", "transcription.language"], ["#tr-chunk", "transcription.chunkSeconds", true], ["#tr-silence", "transcription.silenceLevel", true],
+  ["#dg-api", "diigo.apiUrl"], ["#dg-itemset", "diigo.itemSetId", true], ["#dg-template", "diigo.highlightTemplateId", true], ["#dg-collection", "diigo.collection"], ["#dg-mediamax", "diigo.mediaMaxChars", true], ["#dg-perrun", "diigo.perRun", true],
   ["#r-perrun", "rag.slidesPerRun", true], ["#r-kw", "rag.keywordsWeight", true], ["#r-notes", "rag.notesWeight", true], ["#r-limit", "rag.searchLimit", true],
 ];
 const getPath = (o, p) => p.split(".").reduce((x, k) => x?.[k], o);
@@ -341,11 +390,62 @@ function renderSettings() {
   $("#c-bytheme").checked = config.selection?.byTheme !== false;
   $("#r-enabled").checked = config.rag?.enabled !== false;
   $("#g-moderation").checked = config.grist.moderation !== false;
+  $("#tr-captions").checked = config.transcription?.captions !== false;
+  for (const src of ["zotero", "diigo"]) $(`#ci-src-${src}`).checked = (config.citations.sources ?? ["zotero"]).includes(src);
+  $("#dg-media").checked = config.diigo?.indexMedia !== false;
+  $("#dg-images").checked = config.diigo?.indexImages !== false;
   $("#s-exclude").value = (config.slides.exclude ?? []).join("\n");
   $("#ci-collection").disabled = config.citations.scope !== "collection";
   $("#config-file").textContent = `Modifications enregistrées dans ${settings.configFile}`;
-  renderPattern(); renderPreview(); renderQr();
+  renderPattern(); renderPreview(); renderQr(); renderAnnotationGrid();
 }
+
+// grille d'annotation des séances (couleur, nom, signification, consigne)
+function renderAnnotationGrid() {
+  const rows = config.annotation.grid;
+  $("#ann-grid").replaceChildren(
+    el("table", { className: "data" },
+      el("thead", {}, el("tr", {}, ["Couleur", "Nom", "Signification", "Quand l'utiliser", ""].map(h => el("th", { textContent: h })))),
+      el("tbody", {}, rows.map((r, i) => el("tr", {},
+        el("td", {}, el("input", { type: "color", value: r.color, style: "width:48px;padding:2px;height:32px", oninput: e => { r.color = e.target.value; } })),
+        el("td", {}, el("input", { value: r.name, oninput: e => { r.name = e.target.value; } })),
+        el("td", {}, el("input", { value: r.position, oninput: e => { r.position = e.target.value; } })),
+        el("td", { style: "min-width:240px" }, el("input", { value: r.instruction ?? "", oninput: e => { r.instruction = e.target.value; } })),
+        el("td", {}, el("button", { className: "link", textContent: "Supprimer", onclick: () => { rows.splice(i, 1); renderAnnotationGrid(); } })))))),
+    el("button", { className: "link", textContent: "+ Ajouter une couleur", onclick: () => { rows.push({ color: "#888888", name: "", position: "", instruction: "" }); renderAnnotationGrid(); } }));
+}
+$("#ann-explo").onclick = async () => {
+  try {
+    const { grid } = await api("/api/chaoticum/explo-grid");
+    if (!confirm(`Remplacer la grille d'annotation par celle d'exploZoteroAnno (${grid.map(g => g.position).join(", ")}) ?`)) return;
+    config.annotation.grid = grid.map(g => ({ ...g }));
+    renderAnnotationGrid(); toast("Grille reprise — enregistrer pour confirmer");
+  } catch (e) { toast("Grille indisponible : " + e.message); }
+};
+
+// comptes locaux des personnes qui suivent la présentation
+async function loadUsers() {
+  let d;
+  try { d = await api("/api/auth/users"); } catch (e) { $("#auth-users").textContent = "Comptes indisponibles : " + e.message; return; }
+  $("#auth-providers").replaceChildren(
+    `Google : ${d.providers.google ? "configuré" : "non configuré"} (retour : ${d.callbacks.google}) · GitHub : ${d.providers.github ? "configuré" : "non configuré"} (retour : ${d.callbacks.github})`);
+  $("#auth-users").replaceChildren(d.users.length ? el("table", { className: "data" },
+    el("thead", {}, el("tr", {}, ["Identifiant", "Nom", "Créé le", ""].map(h => el("th", { textContent: h })))),
+    el("tbody", {}, d.users.map(u => el("tr", {},
+      el("td", { textContent: u.login }), el("td", { textContent: u.name }), el("td", { textContent: new Date(u.createdAt).toLocaleDateString("fr-FR") }),
+      el("td", {},
+        el("button", { className: "link", textContent: "Modifier", onclick: () => { $("#u-login").value = u.login; $("#u-name").value = u.name; $("#u-password").value = ""; $("#u-password").focus(); } }), " ",
+        el("button", { className: "link", textContent: "Supprimer", onclick: async () => { if (!confirm(`Supprimer le compte ${u.login} ?`)) return; await api("/api/auth/users/delete", { method: "POST", body: { login: u.login } }); loadUsers(); } }))))))
+    : el("p", { className: "muted", textContent: "Aucun compte local." }));
+}
+$("#u-save").onclick = async () => {
+  try {
+    const r = await api("/api/auth/users", { method: "POST", body: { login: $("#u-login").value, name: $("#u-name").value, password: $("#u-password").value } });
+    toast(r.created ? "Compte créé" : "Compte modifié");
+    $("#u-login").value = $("#u-name").value = $("#u-password").value = "";
+    loadUsers();
+  } catch (e) { toast("Erreur : " + e.message); }
+};
 for (const [sel, p, num] of FIELDS) $(sel).addEventListener("input", e => {
   setPath(config, p, num ? Number(e.target.value) : e.target.value);
   if (["screens", "durationMinutes"].includes(p)) renderPreview();
@@ -362,12 +462,13 @@ const fmtDate = d => (d ? new Date(d).toLocaleString("fr-FR") : "jamais");
 async function loadIndexStatus() {
   try {
     const r = await api("/api/chaoticum/index");
-    const z = r.bibliotheque, s = r.diapos;
+    const z = r.bibliotheque, s = r.diapos, dg = r.diigo;
+    $("#idx-diigo").textContent = dg?.pages ? `${dg.pages} page(s), ${dg.citations} citation(s) possible(s), ${dg.media} média(s) dont ${dg.images ?? 0} image(s) analysée(s) · mise à jour : ${fmtDate(dg.updatedAt)}` : "Pas encore indexées.";
     $("#idx-zotero").textContent = z.references ? `${z.references} référence(s), ${z.citations} citation(s) possible(s) · ${z.library} · mise à jour : ${fmtDate(z.updatedAt)}` : "Pas encore indexée.";
     $("#idx-slides").textContent = s.indexed || s.presentationsOpened
       ? `${s.indexed} diapo(s) indexée(s) sur ${s.known} connue(s) · ${s.presentationsOpened}/${s.presentations} présentation(s) ouvertes · mise à jour : ${fmtDate(s.updatedAt)}${s.indexed < s.known || s.presentationsOpened < s.presentations ? " — relancer pour continuer" : ""}`
       : `Pas encore indexées (${s.presentations} présentation(s) sur le site).`;
-  } catch (e) { $("#idx-zotero").textContent = $("#idx-slides").textContent = `État indisponible : ${e.message}`; }
+  } catch (e) { $("#idx-zotero").textContent = $("#idx-slides").textContent = $("#idx-diigo").textContent = `État indisponible : ${e.message}`; }
 }
 const runTask = async (task, label) => {
   if (!confirm(`${label} ? Le traitement appelle Albert (modèle de vision pour les diapos) et dépose des documents dans une collection privée Albert ; il est suivi dans l'onglet Exécution.`)) return;
@@ -377,6 +478,11 @@ const runTask = async (task, label) => {
 $("#b-idx-zotero").onclick = () => runTask("index-bibliotheque", "Indexer la bibliothèque Zotero");
 $("#b-idx-slides").onclick = () => runTask("index-diapos", `Indexer jusqu'à ${config.rag.slidesPerRun} diapo(s)`);
 $("#g-moderation").onchange = e => { config.grist.moderation = e.target.checked; };
+$("#tr-captions").onchange = e => { config.transcription.captions = e.target.checked; };
+for (const src of ["zotero", "diigo"]) $(`#ci-src-${src}`).onchange = () => { config.citations.sources = ["zotero", "diigo"].filter(x => $(`#ci-src-${x}`).checked); };
+$("#dg-media").onchange = e => { config.diigo.indexMedia = e.target.checked; };
+$("#dg-images").onchange = e => { config.diigo.indexImages = e.target.checked; };
+$("#b-idx-diigo").onclick = () => runTask("index-diigo", `Indexer les annotations Diigo (${config.diigo.perRun ? `jusqu'à ${config.diigo.perRun} page(s)` : "toutes les pages"}${config.diigo.indexMedia ? `, avec le texte de leurs médias${config.diigo.indexImages ? " et l'analyse de leurs images par le modèle de vision" : ""}` : ""})`);
 $("#s-exclude").oninput = e => { config.slides.exclude = e.target.value.split("\n").map(s => s.trim()).filter(Boolean); };
 $("#ci-collection").onchange = e => { config.citations.collection = e.target.value; };
 function renderQr() { $("#qr").innerHTML = qrSvg(config.grist.formUrl); }
@@ -416,6 +522,7 @@ async function loadSettings() {
   renderSettings();
   loadCollections();
   loadIndexStatus();
+  loadUsers();
   api("/api/albert/models").then(ms => $("#albert-models").replaceChildren(...ms.map(m => el("option", { value: m.id, label: m.type ?? "" })))).catch(() => {});
 }
 async function save(silent = false) {

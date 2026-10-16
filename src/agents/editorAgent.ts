@@ -1,6 +1,5 @@
 import { Agent } from "@mastra/core/agent";
-import { overridable } from "./overrides";
-import { albertModel } from "../config/models";
+import { overridable, overridableModel } from "./overrides";
 import { workflowConfig } from "../config";
 
 export const EDITOR_INSTRUCTIONS = `Tu raccourcis des questions destinées à être projetées sur un grand écran : 15 mots au plus, sans en perdre
@@ -11,5 +10,5 @@ export const editorAgent = new Agent({
   id: "editor-agent",
   name: "Correcteur d'écran",
   instructions: overridable("editor-agent", EDITOR_INSTRUCTIONS),
-  model: ({ requestContext }: any) => albertModel(requestContext?.get?.("model") ?? workflowConfig.models.fast),
+  model: overridableModel("editor-agent", rc => rc?.get?.("model") ?? workflowConfig.models.fast),
 });

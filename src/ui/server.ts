@@ -14,7 +14,8 @@ import { chaoticumRoutes } from "./chaoticumRoutes";
 import { buildGuide } from "../workflow/reports/annotationGuide";
 import { tensionMatrix } from "../lib/analysis/colorTension";
 import { AGENTS, DIAGRAMS, type AgentInfo } from "../workflow/diagrams";
-import { readAgentOverrides, writeAgentOverride, AGENTS_CONFIG_FILE } from "../agents/overrides";
+import { readAgentOverrides, writeAgentOverride, agentModelId, AGENTS_CONFIG_FILE } from "../agents/overrides";
+import { agentEstimate, otherUsage, usageMatcher, usageRuns } from "../lib/metrics/usageHistory";
 import { mergeConfig, readConfigOverride, writeConfigOverride, CONFIG_FILE } from "../config/store";
 import { Zotero } from "../lib/zotero/zotero";
 import { Omk, containerUrl } from "../lib/omeka/omk";
@@ -86,7 +87,17 @@ const ENV_FIELDS = [
   { key: "OMKS_API_URL", label: "URL de l'API Omeka S", group: "Omeka S", help: "Ex. https://mon-omeka.fr/api" },
   { key: "OMKS_KEY_IDENTITY", label: "Identité de la clé Omeka S", group: "Omeka S", help: "Clé API d'un utilisateur Omeka S (Utilisateur > Clés API)." },
   { key: "OMKS_KEY_CREDENTIAL", label: "Secret de la clé Omeka S", secret: true, group: "Omeka S" },
-  ...(APP === "chaoticum" ? [{ key: "GRIST_API_KEY", label: "Clé API Grist", secret: true, group: "Grist", help: "Facultatif : nécessaire seulement si la table des réponses du formulaire n'est pas publique (Profil › Clé API sur Grist)." }] : []),
+  ...(APP === "chaoticum" ? [
+    { key: "GRIST_API_KEY", label: "Clé API Grist", secret: true, group: "Grist", help: "Facultatif : nécessaire seulement si la table des réponses du formulaire n'est pas publique (Profil › Clé API sur Grist)." },
+    // suivi de la présentation sur un autre appareil (pages /public/suivre) : connexion Google, GitHub ou compte local
+    { key: "GOOGLE_CLIENT_ID", label: "Identifiant client Google", group: "Suivi de la présentation", help: "Console Google Cloud › Identifiants › ID client OAuth (application Web) ; URI de redirection : <adresse publique>/public/auth/google/callback." },
+    { key: "GOOGLE_CLIENT_SECRET", label: "Secret client Google", secret: true, group: "Suivi de la présentation" },
+    { key: "GITHUB_CLIENT_ID", label: "Identifiant client GitHub", group: "Suivi de la présentation", help: "GitHub › Settings › Developer settings › OAuth Apps ; Authorization callback URL : <adresse publique>/public/auth/github/callback." },
+    { key: "GITHUB_CLIENT_SECRET", label: "Secret client GitHub", secret: true, group: "Suivi de la présentation" },
+    { key: "DIIGO_OMKS_KEY_IDENTITY", label: "Identité de la clé Omeka S (annotations Diigo)", group: "Annotations Diigo", help: "Facultatif : seulement si les items Diigo de l'Omeka S source ne sont pas publics." },
+    { key: "DIIGO_OMKS_KEY_CREDENTIAL", label: "Secret de la clé Omeka S (annotations Diigo)", secret: true, group: "Annotations Diigo" },
+    { key: "AUTH_ALLOWED", label: "Comptes autorisés", group: "Suivi de la présentation", help: "Facultatif : adresses, domaines (@univ-paris8.fr) ou comptes GitHub (github:identifiant), séparés par des virgules. Vide : tout compte Google ou GitHub. Les comptes locaux sont toujours autorisés." },
+  ] : []),
   { key: APP_DEF.portKey, label: "Port de cette interface", group: "Interface", help: `Pris en compte au prochain lancement du serveur (${APP_DEF.defaultPort} par défaut).` },
 ];
 const SECRET_KEYS = new Set(ENV_FIELDS.filter(f => f.secret).map(f => f.key));
@@ -156,6 +167,7 @@ const TASKS: Partial<Record<AppName, Record<string, { label: string; args: strin
   chaoticum: {
     "index-diapos": { label: "Indexation des diapos", args: [path.join(APP_DIR, "src", "runners", "chaoticumIndex.ts"), "diapos"] },
     "index-bibliotheque": { label: "Indexation de la bibliothèque", args: [path.join(APP_DIR, "src", "runners", "chaoticumIndex.ts"), "bibliotheque"] },
+    "index-diigo": { label: "Indexation des annotations Diigo", args: [path.join(APP_DIR, "src", "runners", "chaoticumIndex.ts"), "diigo"] },
   },
 };
 
@@ -621,26 +633,47 @@ const routes: Record<string, (req: http.IncomingMessage, res: http.ServerRespons
     // modèles utilisés par les agents et les étapes de ce workflow
     const roles = new Set([...ids.map(id => AGENTS[id]!.model), ...[...diagram.stages.flat(), ...diagram.outside].flatMap(s => (s.model ? [s.model] : []))]);
     const models = Object.fromEntries(Object.entries(allModels).filter(([role]) => roles.has(role as keyof typeof allModels)));
+    // modèle par défaut d'un agent : celui de son rôle (l'analyse des images Diigo a son propre modèle de vision)
+    const defaultModel = (id: string) => (id === "image-describer-agent" && chao?.diigo.visionModel) || allModels[AGENTS[id]!.model];
+    // coût estimé : consommation des exécutions passées (historique et rapports), sinon estimation par défaut
+    const runs = usageRuns(path.join(ROOT, "resultats"));
+    const workflowAgents = new Set(diagram.stages.flat().flatMap(s => s.agents ?? []));
     sendJson(res, 200, {
       ...diagram,
       models,
       configFile: path.relative(ROOT, AGENTS_CONFIG_FILE),
+      costs: wf.costs,
+      // traitements sans agent d'une exécution du workflow (extraction, vectorisation…) : consommation moyenne
+      other: otherUsage(runs, APP, src => Object.values(AGENTS).some(a => usageMatcher(a.usageTag, a.legacyUsage)(src))),
       agents: Object.fromEntries(ids.map(id => {
         const a = agentDefaults(id);
         const o = overrides[id] ?? {};
-        return [id, { ...a, defaults: { instructions: a.instructions, prompt: a.prompt }, instructions: o.instructions || a.instructions, prompt: a.prompt === undefined ? undefined : o.prompt || a.prompt, modified: !!(o.instructions || o.prompt) }];
+        return [id, {
+          ...a, defaults: { instructions: a.instructions, prompt: a.prompt, model: defaultModel(id) },
+          instructions: o.instructions || a.instructions, prompt: a.prompt === undefined ? undefined : o.prompt || a.prompt,
+          modelId: o.model || defaultModel(id), inWorkflow: workflowAgents.has(id),
+          usage: agentEstimate(runs, usageMatcher(a.usageTag, a.legacyUsage), a.estimate),
+          modified: !!(o.instructions || o.prompt || o.model),
+        }];
       })),
     });
   },
 
-  // enregistre les textes d'un agent ({ id, instructions, prompt }) ; reset:true rétablit ceux par défaut
+  // enregistre les textes et le modèle d'un agent ({ id, instructions, prompt, model }) ; reset:true rétablit ceux par défaut
   "POST /api/workflow/agent": async (req, res) => {
-    const { id, instructions, prompt, reset } = await readBody(req);
+    const { id, instructions, prompt, model, reset } = await readBody(req);
     if (!AGENTS[id]) return sendJson(res, 404, { error: `Agent inconnu : ${id}` });
     const a = agentDefaults(id);
-    const kept = writeAgentOverride(id, reset ? {} : { instructions, prompt }, { instructions: a.instructions, prompt: a.prompt });
+    const chao = APP === "chaoticum" ? currentChaoticumConfig() : null;
+    const wf = currentConfig();
+    const roleModel = { analytique: chao?.models.analytics ?? wf.models.analytics, rapide: wf.models.fast, vision: chao?.models.vision ?? wf.models.fast }[a.model];
+    const defModel = (id === "image-describer-agent" && chao?.diigo.visionModel) || roleModel;
+    const kept = writeAgentOverride(id, reset ? {} : { instructions, prompt, model: String(model ?? "").trim() || undefined }, { instructions: a.instructions, prompt: a.prompt, model: defModel });
     sendJson(res, 200, { ok: true, modified: Object.keys(kept).length > 0 });
   },
+
+  // grille de couleurs d'exploZoteroAnno (reprise comme grille d'annotation des séances de chaoticumSeminario)
+  "GET /api/chaoticum/explo-grid": (_req, res) => sendJson(res, 200, { grid: currentExploConfig().grid.positions }),
 
   // module du diagramme (partagé par les pages des trois applications)
   "GET /workflowDiagram.js": (_req, res) => {
@@ -844,7 +877,8 @@ const routes: Record<string, (req: http.IncomingMessage, res: http.ServerRespons
       if (!prompt) throw new Error("Modèle de prompt introuvable dans Omeka S");
       const answer = await queryRag({
         albert: serverAlbert(), rag: config.rag, costs: currentConfig().costs,
-        model: String(body.model || currentConfig().models.analytics),
+        // modèle choisi dans l'onglet RAG, sinon celui de l'assistant (onglet Workflow), sinon le modèle analytique
+        model: String(body.model || agentModelId("rag-assistant", currentConfig().models.analytics)),
         collection: await zoteroCollection(String(body.collection || config.input.zoteroCollection)),
         question: String(body.question ?? ""),
         prompt,
@@ -933,6 +967,7 @@ const routes: Record<string, (req: http.IncomingMessage, res: http.ServerRespons
 const CHAOTICUM_ROUTES = chaoticumRoutes({
   root: ROOT, publicDir: PUBLIC_DIR, readEnv, config: currentChaoticumConfig, serverOmk, sendJson, readBody,
   publicBase: () => readEnv().CHAOTICUM_URL || process.env.CHAOTICUM_URL || "",
+  albert: serverAlbert,
 });
 Object.assign(routes, CHAOTICUM_ROUTES);
 
@@ -941,7 +976,7 @@ const APP_ONLY: Record<string, AppName> = {
   ...Object.fromEntries(Object.keys(CHAOTICUM_ROUTES).map(k => [k, "chaoticum" as AppName])),
   "POST /api/cfp-file": "paper", "GET /api/results": "paper", "GET /api/history": "paper", "GET /api/file": "paper",
   "GET /api/explo/settings": "explo", "POST /api/explo/settings": "explo", "POST /api/explo/guide": "explo",
-  "POST /api/explo/tension": "explo",
+  "POST /api/explo/tension": "explo", "GET /api/chaoticum/explo-grid": "chaoticum",
   "GET /api/explo/results": "explo", "GET /api/explo/file": "explo", "GET /api/explo/runs": "explo", "POST /api/explo/runs/delete": "explo",
   "GET /api/explo/rag/status": "explo", "GET /api/explo/rag/prompts": "explo", "POST /api/explo/rag/prompts": "explo",
   "POST /api/explo/rag/prompts/defaults": "explo", "POST /api/explo/rag/query": "explo", "POST /api/explo/rag/save": "explo",

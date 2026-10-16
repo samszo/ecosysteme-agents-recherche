@@ -10,6 +10,7 @@ import { saveWorkflowConfig, updateWorkflowStatus } from "../workflow/runs/saveW
 import { importSynthesis, type SynthesisDocument } from "../workflow/runs/importSynthesis";
 import { buildProcessingReport } from "../workflow/reports/paperReport";
 import { getOmk } from "../lib/omeka/omk";
+import { appendUsageHistory } from "../lib/metrics/usageHistory";
 import { usageSummary } from "../lib/metrics/usage";
 import { estimateImpact, fmtEnergy, fmtCo2, fmtMoney } from "../lib/metrics/impact";
 import { appendHistory } from "../workflow/runs/history";
@@ -32,6 +33,8 @@ async function main() {
   const runResult = await run.start({ inputData });
   const endedAt = new Date();
   const usage = usageSummary();
+  // historique de la consommation (estimation du coût dans l'onglet Workflow)
+  appendUsageHistory("paper", usage);
   console.log(`🔢 Tokens consommés : ${usage.totalTokens.toLocaleString("fr-FR")} (${usage.calls} appel(s) aux modèles)`);
   const impact = estimateImpact(usage);
   console.log(`⚡ Coût estimé : ${fmtEnergy(impact.energyWh)}, ${fmtCo2(impact.co2g)}, équivalent API ${fmtMoney(impact.apiCost, impact.currency)}`);

@@ -4,6 +4,7 @@ import fs from "fs";
 import path from "path";
 import crypto from "crypto";
 import type { Omk } from "../lib/omeka/omk";
+import type { Albert } from "../lib/albert/albert";
 import { containerUrl } from "../lib/omeka/omk";
 import { PARTITIONS_DIR, type ChaoticumConfig } from "../config/chaoticum";
 import { deleteContribution, frameable, readContributions, updateContribution } from "../lib/chaoticum/grist";
@@ -11,6 +12,8 @@ import { uploadWithFallback } from "../workflow/runs/importSynthesis";
 import { listSlides } from "../lib/chaoticum/slides";
 import { emptySlides, emptyZotero, indexDir, loadStore } from "../lib/chaoticum/index/store";
 import { regenerate } from "../lib/chaoticum/regenerate";
+import { createAuth } from "./auth";
+import { createLive } from "./liveRoutes";
 
 type Handler = (req: http.IncomingMessage, res: http.ServerResponse, url: URL) => Promise<void> | void;
 interface Ctx {
@@ -23,6 +26,8 @@ interface Ctx {
   readBody: (req: http.IncomingMessage) => Promise<any>;
   // adresse publique de l'application (CHAOTICUM_URL), vide si non configurée
   publicBase: () => string;
+  // client de l'API Albert (transcription de la parole du présentateur)
+  albert: () => Albert;
 }
 
 const validId = (id: string | null): id is string => !!id && /^[\w-]{1,80}$/.test(id);
@@ -31,6 +36,21 @@ const FILE_NAME = /^(partition\.json|rapport_chaoticum\.md|diapo_[\w-]{1,40}\.pn
 const SCREEN_TYPES = ["citation", "diapo", "question", "contribution", "diagramme"];
 const TYPES: Record<string, string> = { ".json": "application/json", ".md": "text/markdown", ".png": "image/png" };
 const val = (it: any, t: string) => it?.[t]?.[0]?.["@value"] ?? null;
+
+// formats audio acceptés pour la transcription (MediaRecorder : webm/opus sous Chrome et Firefox, mp4 sous Safari)
+const AUDIO_EXT: Record<string, string> = { "audio/webm": "webm", "audio/ogg": "ogg", "audio/mp4": "mp4", "audio/mpeg": "mp3", "audio/wav": "wav", "audio/x-wav": "wav" };
+// phrases inventées par les modèles de type Whisper sur du silence ou du bruit (génériques de sous-titrage, remerciements)
+const HALLUCINATIONS = [/amara\.org/i, /sous-titr(age|es) (réalisés|par|ST)/i, /merci d'avoir regardé/i, /abonnez-vous/i, /^[\s\p{P}]*(merci[\s\p{P}]*)?$/iu];
+
+const headerText = (h: string | string[] | undefined) => { try { return decodeURIComponent(String(h ?? "")); } catch { return ""; } };
+
+// texte de la transcription d'une séance (média dans Omeka S) : horodatage, écran, texte
+function transcriptMarkdown(p: any) {
+  const t0 = new Date(p.startedAt).getTime();
+  const at = (iso: string) => { const s = Math.max(0, Math.round((new Date(iso).getTime() - t0) / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
+  return [`# Transcription – ${p.title ?? "séance"}`, "", `Séance du ${new Date(p.startedAt).toLocaleString("fr-FR")}.`, "",
+    ...(p.transcript ?? []).map((x: any) => `**[${at(x.at)}] écran ${x.screen + 1}** — ${x.text}`), ""].join("\n");
+}
 
 export function chaoticumRoutes(ctx: Ctx): Record<string, Handler> {
   const base = () => path.join(ctx.root, ctx.config().outputDir, PARTITIONS_DIR);
@@ -98,6 +118,10 @@ export function chaoticumRoutes(ctx: Ctx): Record<string, Handler> {
     return Buffer.from(await r.arrayBuffer());
   }
   const readPartition = async (runId: string) => JSON.parse((await readFile(runId, "partition.json")).toString("utf-8"));
+
+  // suivi en direct par des personnes authentifiées (Google, GitHub, comptes locaux) et annotations collectives
+  const auth = createAuth(ctx);
+  const live = createLive({ ...ctx, currentUser: auth.currentUser, partDir, readPartition, readFile });
 
   // ==========================================
   // Modification d'un écran de la partition (archive locale + nouveau média partition.json dans Omeka S)
@@ -241,16 +265,20 @@ export function chaoticumRoutes(ctx: Ctx): Record<string, Handler> {
   function summary(p: any) {
     const contributions = p.contributions?.length ?? 0;
     const late = (p.events ?? []).filter((e: any) => e.status === "danger").length;
-    return `Séance du ${new Date(p.startedAt).toLocaleString("fr-FR")} (${p.mode === "replay" ? "rejeu" : "en direct"}) : ${(p.events ?? []).length} passage(s) d'écran, ${Math.round((p.elapsedSeconds ?? 0) / 60)} min, ${contributions} contribution(s), ${late} écran(s) très dépassé(s).`;
+    return `Séance du ${new Date(p.startedAt).toLocaleString("fr-FR")} (${p.mode === "replay" ? "rejeu" : "en direct"}) : ${(p.events ?? []).length} passage(s) d'écran, ${Math.round((p.elapsedSeconds ?? 0) / 60)} min, ${contributions} contribution(s), ${late} écran(s) très dépassé(s)${p.transcript?.length ? `, transcription de ${p.transcript.length} passage(s)` : ""}${p.annotations?.length ? `, ${p.annotations.length} annotation(s) du public` : ""}.`;
   }
 
   async function saveParticipation(p: any) {
     if (!validId(p.runId)) throw new Error("Partition invalide");
     const id = `${new Date().toISOString().replace(/[:.]/g, "-")}-${crypto.randomBytes(3).toString("hex")}`;
     // jeton du lien public de rejeu (lecture seule, accessible sans authentification sous /public/)
-    const record: any = { ...p, id, savedAt: new Date().toISOString(), shareToken: crypto.randomBytes(16).toString("hex") };
+    // annotations des personnes qui ont suivi la séance (traits sur les écrans, surlignages de la transcription)
+    const annotations = live.sessionAnnotations(p.runId, p.startedAt);
+    const record: any = { ...p, ...(annotations.length ? { annotations } : {}), id, savedAt: new Date().toISOString(), shareToken: crypto.randomBytes(16).toString("hex") };
     fs.mkdirSync(partsDir(p.runId), { recursive: true });
     fs.writeFileSync(path.join(partsDir(p.runId), `${id}.json`), JSON.stringify(record, null, 2));
+    live.endSession(p.runId);
+    p = record;
 
     // Omeka S : item de la séance relié à la partition, données et fichier JSON complet
     let itemId: number | null = null, error: string | null = null;
@@ -271,6 +299,8 @@ export function chaoticumRoutes(ctx: Ctx): Record<string, Handler> {
       itemId = item["o:id"];
       await uploadWithFallback(omk, itemId!, { buffer: Buffer.from(JSON.stringify(record, null, 2), "utf-8"), fileName: `participation_${id}.json`, type: "application/json" },
         { "dcterms:title": `Participation ${id}`, "dcterms:identifier": `${p.runId}/participation_${id}.json`, "dcterms:format": "application/json" });
+      if (p.transcript?.length) await uploadWithFallback(omk, itemId!, { buffer: Buffer.from(transcriptMarkdown(p), "utf-8"), fileName: `transcription_${id}.md`, type: "text/markdown" },
+        { "dcterms:title": `Transcription ${id}`, "dcterms:identifier": `${p.runId}/transcription_${id}.md`, "dcterms:format": "text/markdown" });
       record.omekaItemId = itemId;
       fs.writeFileSync(path.join(partsDir(p.runId), `${id}.json`), JSON.stringify(record, null, 2));
     } catch (e) {
@@ -332,7 +362,10 @@ export function chaoticumRoutes(ctx: Ctx): Record<string, Handler> {
   function publicReplay(partition: any, participation: any) {
     const { grist, configItemId, edits, ...part } = partition;
     const { omekaItemId, configItemId: _c, shareToken, ...seance } = participation;
-    return { partition: { ...part, grist: null }, participation: seance };
+    // rejeu public : annotations anonymisées (ni nom ni identifiant de compte)
+    const ids = new Map<string, string>();
+    const anon = (a: any) => ({ ...a, author: a.author?.id === "presentateur" ? a.author : { id: ids.get(a.author?.id) ?? (ids.set(a.author?.id, `p${ids.size + 1}`), ids.get(a.author?.id)), name: "" } });
+    return { partition: { ...part, grist: null }, participation: { ...seance, ...(seance.annotations ? { annotations: seance.annotations.map(anon) } : {}) } };
   }
 
   async function listParticipations(runId: string) {
@@ -377,6 +410,8 @@ export function chaoticumRoutes(ctx: Ctx): Record<string, Handler> {
   // ==========================================
 
   return {
+    ...auth.routes,
+    ...live.routes,
     // lecteur de partition (plein écran)
     // éditeur d'écran (module partagé par la page de configuration et le lecteur)
     "GET /editeur-ecran.js": (_req, res) => {
@@ -476,11 +511,12 @@ export function chaoticumRoutes(ctx: Ctx): Record<string, Handler> {
         return ctx.sendJson(res, 200, items);
       }
       if (kind === "citation") {
-        const items = Object.values(loadStore("bibliotheque", emptyZotero(), c).items).flatMap(r => Object.values(r.annotations).map(a => ({ a, r })))
+        // bibliothèque Zotero et annotations Diigo
+        const items = [...Object.values(loadStore("bibliotheque", emptyZotero(), c).items), ...Object.values(loadStore("diigo", emptyZotero(), c).items)].flatMap(r => Object.values(r.annotations).map(a => ({ a, r })))
           .filter(x => (x.a.text || x.a.comment).length >= 20)
           .map(x => ({ ...x, s: score(`${x.a.text} ${x.a.comment} ${x.r.title} ${x.r.creators} ${x.r.tags.join(" ")}`) })).filter(x => x.s > 0)
           .sort((a, b) => b.s - a.s).slice(0, 30)
-          .map(({ a, r }) => ({ key: a.key, kind: a.kind, text: a.text || a.comment, comment: a.text ? a.comment : "", page: a.page, color: a.color, author: a.author, date: a.date, source: { key: r.key, title: r.title, creators: r.creators, year: r.year } }));
+          .map(({ a, r }) => ({ key: a.key, kind: a.kind, text: a.text || a.comment, comment: a.text ? a.comment : "", page: a.page, color: a.color, author: a.author, date: a.date, source: { key: r.key, title: r.title, creators: r.creators, year: r.year, ...(r.source === "diigo" ? { url: r.url ?? null, diigo: true } : {}) } }));
         return ctx.sendJson(res, 200, items);
       }
       ctx.sendJson(res, 400, { error: "kind = citation ou diapo" });
@@ -542,13 +578,14 @@ export function chaoticumRoutes(ctx: Ctx): Record<string, Handler> {
     // état des index RAG (diapos, bibliothèque)
     "GET /api/chaoticum/index": async (_req, res) => {
       const c = ctx.config();
-      const s = loadStore("diapos", emptySlides(), c), z = loadStore("bibliotheque", emptyZotero(), c);
+      const s = loadStore("diapos", emptySlides(), c), z = loadStore("bibliotheque", emptyZotero(), c), d = loadStore("diigo", emptyZotero(), c);
       const presentations = await listSlides(c.slides).catch(() => []);
       const known = Object.keys(s.presentations).length;
       ctx.sendJson(res, 200, {
         enabled: c.rag.enabled,
         diapos: { indexed: Object.values(s.items).filter(e => e.docId).length, known: Object.values(s.presentations).reduce((n, p) => n + p.max + 1, 0), presentations: presentations.length, presentationsOpened: known, collectionId: s.collectionId, updatedAt: s.updatedAt },
         bibliotheque: { references: Object.keys(z.items).length, citations: Object.values(z.items).reduce((n, r) => n + Object.keys(r.annotations).length, 0), library: z.library, collectionId: z.collectionId, updatedAt: z.updatedAt },
+        diigo: { pages: Object.keys(d.items).length, citations: Object.values(d.items).reduce((n, r) => n + Object.keys(r.annotations).length, 0), media: Object.values(d.items).reduce((n, r) => n + (r.media?.length ?? 0), 0), images: Object.values(d.items).reduce((n, r) => n + (r.media?.filter(m => m.type === "image").length ?? 0), 0), source: d.library, collectionId: d.collectionId, updatedAt: d.updatedAt },
       });
     },
 
@@ -560,6 +597,33 @@ export function chaoticumRoutes(ctx: Ctx): Record<string, Handler> {
 
     // une URL proposée par le public peut-elle s'afficher dans un iframe ?
     "GET /api/chaoticum/frameable": async (_req, res, url) => ctx.sendJson(res, 200, await frameable(url.searchParams.get("url") ?? "")),
+
+    // réglages de la transcription pour le lecteur
+    "GET /api/chaoticum/transcription": (_req, res) => {
+      const { engine, language, chunkSeconds, silenceLevel, captions } = ctx.config().transcription;
+      ctx.sendJson(res, 200, { engine, language, chunkSeconds, silenceLevel, captions });
+    },
+
+    // transcription d'une tranche d'audio du présentateur par Albert (corps : l'audio ; en-tête X-Transcription-Prompt :
+    // fin du texte précédent, encodé, pour la continuité)
+    "POST /api/chaoticum/transcribe": async (req, res) => {
+      const type = String(req.headers["content-type"] ?? "").split(";")[0]!.trim();
+      if (!AUDIO_EXT[type]) return ctx.sendJson(res, 415, { error: `Format audio non pris en charge (${type || "inconnu"})` });
+      const chunks: Buffer[] = [];
+      let size = 0;
+      for await (const chunk of req) {
+        size += chunk.length;
+        if (size > 20_000_000) return ctx.sendJson(res, 413, { error: "Tranche d'audio trop volumineuse (20 Mo maximum)" });
+        chunks.push(chunk);
+      }
+      if (!size) return ctx.sendJson(res, 400, { error: "Audio vide" });
+      const t = ctx.config().transcription;
+      try {
+        const r = await ctx.albert().transcribe({ audio: Buffer.concat(chunks), fileName: `tranche.${AUDIO_EXT[type]}`, type, model: t.model, language: t.language, prompt: headerText(req.headers["x-transcription-prompt"]).slice(-300) });
+        const text = HALLUCINATIONS.some(h => h.test(r.text)) ? "" : r.text;
+        ctx.sendJson(res, 200, { text });
+      } catch (e) { ctx.sendJson(res, 502, { error: (e as Error).message }); }
+    },
 
     "POST /api/chaoticum/participation": async (req, res) => {
       try { ctx.sendJson(res, 200, await saveParticipation(await ctx.readBody(req))); }

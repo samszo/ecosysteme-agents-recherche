@@ -14,12 +14,15 @@ export interface ModelImpact {
   known: boolean;
 }
 
+const normModel = (m: string) => String(m ?? "").toLowerCase().replace(/^.*\//, "").replace(/[^a-z0-9]/g, "");
+
 export function estimateImpact(usage: UsageSummary, costs = workflowConfig.costs) {
   const { flopsPerJoule, utilization, pue } = costs.hardware;
   const byModel = new Map<string, ModelImpact>();
 
   for (const e of usage.entries) {
-    const params = costs.models.find(m => m.model === e.model);
+    // identifiants comparés sans l'éditeur ni la ponctuation (alias d'Albert : « mistral-small-3-2-24b… »)
+    const params = costs.models.find(m => normModel(m.model) === normModel(e.model));
     const p = params ?? costs.fallback;
     // joules par token = 2 × paramètres actifs / (opérations utiles par joule) × PUE
     const joulesPerToken = (2 * p.activeParamsB * 1e9) / (flopsPerJoule * utilization) * pue;

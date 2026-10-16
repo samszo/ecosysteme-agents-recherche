@@ -3,6 +3,7 @@
 import path from "path";
 import { mergeConfig, readConfigOverride } from "./store";
 import { workflowConfig } from ".";
+import { defaultExploConfig } from "./explo";
 
 export const CHAOTICUM_CONFIG_FILE = path.resolve(process.cwd(), process.env.CHAOTICUM_CONFIG_FILE || "chaoticum.config.json");
 
@@ -71,6 +72,28 @@ export const defaultChaoticumConfig = {
     // longueur des citations retenues (caractères)
     minLength: 40,
     maxLength: 700,
+    // sources des citations : bibliothèque Zotero (portée ci-dessus) et annotations Diigo (index RAG « diigo »)
+    sources: ["zotero", "diigo"] as ("zotero" | "diigo")[],
+  },
+
+  // source « Annotations Diigo » : pages d'une collection Omeka S (références de veille Diigo : titre, mots-clés
+  // skos:semanticRelation, médias), indexées seulement si elles ont des médias ou des passages surlignés (items du
+  // modèle « Diigo highlight » : bibo:content, schema:color, reliés à la page par dcterms:isPartOf)
+  diigo: {
+    apiUrl: "https://samszo.humanum-p8.fr/api",
+    itemSetId: 1,
+    highlightTemplateId: 13,
+    // collection privée Albert (créée au besoin)
+    collection: "chaoticum-diigo",
+    // texte des médias de la page annotée (fichiers, instantanés web) ajouté à son document, comme pour Zotero
+    indexMedia: true,
+    mediaMaxChars: 100000,
+    // images des pages (captures Diigo, figures…) : analysées par le modèle de vision, leur description est indexée
+    indexImages: true,
+    // modèle de vision de l'analyse des images (plus précis que le modèle rapide pour transcrire le texte visible)
+    visionModel: "mistralai/Mistral-Small-3.2-24B-Instruct-2506",
+    // pages déposées par exécution d'indexation (0 : toutes ; l'indexation reprend où elle s'est arrêtée)
+    perRun: 1000,
   },
 
   // diapos : site ConfErrance (une présentation = un dossier contenant slide.html)
@@ -104,6 +127,27 @@ export const defaultChaoticumConfig = {
   models: {
     vision: workflowConfig.models.fast,
     analytics: workflowConfig.models.analytics,
+  },
+
+  // transcription de la parole du présentateur pendant la séance (lecteur) : enregistrée avec la séance et rejouée
+  // en sous-titres. "albert" : modèle de reconnaissance vocale d'Albert, l'audio est envoyé par tranches au serveur ;
+  // "navigateur" : reconnaissance vocale du navigateur (sous-titres immédiats, mais l'audio part chez son fournisseur)
+  transcription: {
+    engine: "albert" as "albert" | "navigateur",
+    model: "whisper-large-v3",
+    language: "fr",
+    // durée des tranches d'audio envoyées à Albert (secondes)
+    chunkSeconds: 15,
+    // niveau sonore minimal (0 à 1) d'une tranche pour l'envoyer : le silence ferait inventer du texte au modèle
+    silenceLevel: 0.02,
+    // sous-titres affichés sur l'écran projeté
+    captions: true,
+  },
+
+  // annotation collective pendant la séance (personnes qui suivent la présentation, présentateur) : traits de couleur
+  // sur les écrans et surlignage de la transcription ; grille équivalente à celle d'exploZoteroAnno
+  annotation: {
+    grid: defaultExploConfig.grid.positions.map(p => ({ ...p })),
   },
 
   // enregistrement des séances dans Omeka S

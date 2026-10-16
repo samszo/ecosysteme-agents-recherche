@@ -1,3 +1,4 @@
+import { agentModelId } from "../../../agents/overrides";
 import { createStep } from "@mastra/core/workflows";
 import fs from "fs/promises";
 import { writerAgent } from "../../../agents/writerAgent";
@@ -81,7 +82,7 @@ ${graphSummary(graph)}
 </graphe_de_concepts>`);
 
     // titre : premier titre de niveau 1 produit par le rédacteur
-    recordUsage("Rédaction PropAPP (writerAgent)", workflowConfig.models.analytics, (res as any).totalUsage ?? res.usage);
+    recordUsage("Rédaction PropAPP (writerAgent)", agentModelId("writer-agent", workflowConfig.models.analytics), (res as any).totalUsage ?? res.usage);
     let body = res.text.trim().replace(/^```(?:markdown)?\s*|\s*```$/g, "");
     const titleMatch = /^#\s+(.+)$/m.exec(body);
     const title = titleMatch?.[1]?.trim() ?? cfpStep.aapTitle ?? "Proposition d'article";

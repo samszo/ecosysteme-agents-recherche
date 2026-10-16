@@ -14,3 +14,6 @@ agents.config.json
 workflow.history.json
 # système
 .DS_Store
+users.json
+auth.secret
+usage.history.jsonl

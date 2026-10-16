@@ -52,8 +52,8 @@ export async function extractAttachment(buffer: Buffer, contentType: string, fil
 
   if (contentType === "text/html" || contentType === "application/xhtml+xml" || ext === ".html" || ext === ".htm") {
     // les snapshots Zotero sont téléchargés sous forme d'archive (page + ressources)
-    if (isZip(buffer)) return extractHtmlSnapshot(readZip(buffer), fileName);
-    return { format: "html", text: htmlToText(mainContent(buffer.toString("utf8"))), annotations: [], images: [], file };
+    if (isZip(buffer)) return extractHtmlSnapshot(zoteroNames(readZip(buffer)), fileName);
+    return { format: "html", text: htmlToText(mainContent(decodeHtml(buffer))), annotations: [], images: [], file };
   }
 
   if (contentType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" || ext === ".docx") {
@@ -161,6 +161,20 @@ export function htmlToText(html: string): string {
     .trim();
 }
 
+// anciens instantanés Zotero : noms des fichiers de l'archive encodés en base64 et suffixés de « %ZB64 »
+function zoteroNames(files: Map<string, Buffer>): Map<string, Buffer> {
+  return new Map([...files].map(([name, data]) => [name.endsWith("%ZB64") ? Buffer.from(name.slice(0, -5), "base64").toString("utf8") : name, data]));
+}
+
+// page HTML dans son encodage déclaré (pages anciennes en ISO-8859-1 ou windows-1252), UTF-8 par défaut
+function decodeHtml(buffer: Buffer): string {
+  const charset = /<meta[^>]+charset\s*=\s*["']?([\w-]+)/i.exec(buffer.subarray(0, 4096).toString("latin1"))?.[1]?.toLowerCase();
+  if (charset && !["utf-8", "utf8"].includes(charset)) {
+    try { return new TextDecoder(charset).decode(buffer); } catch { /* encodage inconnu : UTF-8 */ }
+  }
+  return buffer.toString("utf8");
+}
+
 function extractHtmlSnapshot(files: Map<string, Buffer>, fileName: string): AttachmentExtraction {
   // page principale : celle qui porte le nom du fichier Zotero, sinon la plus volumineuse
   const htmlFiles = [...files.keys()].filter(f => /\.x?html?$/i.test(f));
@@ -169,7 +183,7 @@ function extractHtmlSnapshot(files: Map<string, Buffer>, fileName: string): Atta
     htmlFiles.sort((a, b) => files.get(b)!.length - files.get(a)!.length)[0];
   if (!main) return { format: "html", text: "", annotations: [], images: [], file: { buffer: Buffer.alloc(0), fileName, type: "text/html" } };
 
-  const html = files.get(main)!.toString("utf8");
+  const html = decodeHtml(files.get(main)!);
   const content = mainContent(html);
   // images réellement affichées dans le contenu principal (et non toutes les ressources de l'archive)
   const srcs = [...content.matchAll(/<img\b[^>]*?\bsrc\s*=\s*["']([^"']+)["']/gi)].map(m => decodeURIComponent(decodeEntities(m[1]!)));

@@ -543,7 +543,7 @@ certbot --apache -d workflow.example.org --redirect
 
 Pour exploZoteroAnno, créer de la même façon un hôte virtuel `explo.example.org` (même authentification) qui renvoie vers `http://127.0.0.1:7273`, et pour chaoticumSeminario un hôte `chaoticum.example.org` vers `http://127.0.0.1:7276`, puis indiquer les adresses publiques dans `.env` pour les liens entre les applications : `PAPER_URL=https://workflow.example.org`, `EXPLO_URL=https://explo.example.org` et `CHAOTICUM_URL=https://chaoticum.example.org`. Le lecteur de partition (`/jouer`) est protégé par la même authentification : l'ouvrir sur le poste de présentation avant la séance ; le public n'y accède pas (il contribue par le formulaire Grist).
 
-**Rejeu public de chaoticumSeminario** : le QR code de fin de séance ouvre un rejeu en lecture seule sous `/public/` (page `/public/rejeu?t=<jeton>` et deux routes de lecture, sans aucune écriture). Pour le rendre accessible sans mot de passe, ajouter dans l'hôte virtuel HTTPS de chaoticumSeminario, **après** le bloc `<Location />` :
+**Rejeu public et suivi de chaoticumSeminario** : sous `/public/` se trouvent le rejeu en lecture seule ouvert par le QR code de fin de séance (`/public/rejeu?t=<jeton>`, sans aucune écriture) et le **suivi de la présentation** (`/public/suivre`, `/public/connexion`, `/public/auth/…`, `/public/api/suivre/…`). Le suivi n'est pas protégé par Apache mais par la connexion de l'application (Google, GitHub ou compte local) : ses routes d'écriture (annotations) exigent une session valide (cookie signé, `HttpOnly`, `Secure` en HTTPS). Pour rendre ces pages accessibles sans le mot de passe Apache, ajouter dans l'hôte virtuel HTTPS de chaoticumSeminario, **après** le bloc `<Location />` :
 
 ```apache
     <LocationMatch "^/public/">
@@ -552,6 +552,15 @@ Pour exploZoteroAnno, créer de la même façon un hôte virtuel `explo.example.
 ```
 
 Le reste de l'application reste protégé. Renseigner aussi `CHAOTICUM_URL=https://chaoticum.example.org` dans `.env` pour que le QR code contienne l'adresse publique (sinon, l'adresse de la page du lecteur est utilisée).
+
+Connexion des personnes qui suivent (page ⚙ Paramètres de chaoticumSeminario, groupe « Suivi de la présentation ») :
+
+- **Google** : dans la console Google Cloud, *API et services › Identifiants › Créer un ID client OAuth* (application Web), URI de redirection autorisé `https://chaoticum.example.org/public/auth/google/callback` ; renseigner `GOOGLE_CLIENT_ID` et `GOOGLE_CLIENT_SECRET`.
+- **GitHub** : *Settings › Developer settings › OAuth Apps › New OAuth App*, Authorization callback URL `https://chaoticum.example.org/public/auth/github/callback` ; renseigner `GITHUB_CLIENT_ID` et `GITHUB_CLIENT_SECRET`.
+- **Comptes locaux** : créés dans l'onglet Partition (carte « Connexion des personnes qui suivent ») ; enregistrés dans `data/users.json` (mots de passe hachés avec scrypt).
+- `AUTH_ALLOWED` (facultatif) limite les comptes Google et GitHub : adresses, domaines (`@univ-paris8.fr`) ou `github:identifiant`, séparés par des virgules.
+- Les sessions sont signées avec `AUTH_SECRET` s'il est défini dans `.env`, sinon avec une clé générée une fois dans `data/auth.secret`. `CHAOTICUM_URL` doit être l'adresse publique HTTPS : elle sert à construire les adresses de retour de Google et GitHub.
+- Le suivi utilise des flux Server-Sent Events (`/public/api/suivre/events`, `/api/chaoticum/live/events`) : avec `mod_proxy_http`, ils passent sans réglage particulier (le serveur envoie un signal toutes les 25 s pour garder la connexion ouverte).
 
 ### 8.10 Sauvegardes et mises à jour
 

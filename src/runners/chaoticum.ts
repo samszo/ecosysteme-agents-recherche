@@ -7,6 +7,7 @@ import { chaoticumConfig as c, PARTITIONS_DIR } from "../config/chaoticum";
 import { buildChaoticumReport } from "../workflow/reports/chaoticumReport";
 import { saveWorkflowConfig, updateWorkflowStatus } from "../workflow/runs/saveWorkflowConfig";
 import { attachDocuments, type SynthesisDocument } from "../workflow/runs/importSynthesis";
+import { appendUsageHistory } from "../lib/metrics/usageHistory";
 import { usageSummary } from "../lib/metrics/usage";
 import { estimateImpact, fmtCo2, fmtEnergy, fmtMoney } from "../lib/metrics/impact";
 import { newSeed } from "../lib/chaoticum/random";
@@ -37,6 +38,10 @@ async function main() {
   await fs.mkdir(dir, { recursive: true });
 
   const usage = usageSummary();
+
+  // historique de la consommation (estimation du coût dans l'onglet Workflow)
+
+  appendUsageHistory("chaoticum", usage);
   const impact = estimateImpact(usage);
   console.log(`🔢 Tokens : ${usage.totalTokens.toLocaleString("fr-FR")} · ⚡ ${fmtEnergy(impact.energyWh)}, ${fmtCo2(impact.co2g)}, équivalent API ${fmtMoney(impact.apiCost, impact.currency)}`);
 

@@ -20,3 +20,6 @@ install
 .kilo
 .DS_Store
 **/.DS_Store
+users.json
+auth.secret
+usage.history.jsonl

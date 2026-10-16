@@ -1,6 +1,5 @@
 import { Agent } from "@mastra/core/agent";
-import { overridable } from "./overrides";
-import { ALBERT_MODEL_ANALYTICS } from "../config/models";
+import { overridable, overridableModel } from "./overrides";
 import { fetchOmekaAnnotations } from "../tools/fetchOmekaAnnotations";
 import { calculateFleissKappa } from "../tools/calculateFleissKappa";
 import { workflowConfig } from "../config";
@@ -25,6 +24,6 @@ export const kappaAnalystAgent = new Agent({
   id: "kappa-analyst-agent",
   name: "Analyste de Convergence Algorithmique",
   instructions: overridable("kappa-analyst-agent", KAPPA_ANALYST_INSTRUCTIONS),
-  model: ALBERT_MODEL_ANALYTICS,
+  model: overridableModel("kappa-analyst-agent", () => workflowConfig.models.analytics),
   tools: { fetchOmekaAnnotations, calculateFleissKappa },
 });

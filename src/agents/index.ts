@@ -10,3 +10,4 @@ export { slideDescriberAgent } from "./slideDescriberAgent";
 export { curatorAgent } from "./curatorAgent";
 export { seminarioAgent } from "./seminarioAgent";
 export { editorAgent } from "./editorAgent";
+export { imageDescriberAgent } from "./imageDescriberAgent";

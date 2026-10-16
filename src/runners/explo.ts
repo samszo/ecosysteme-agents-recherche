@@ -9,6 +9,7 @@ import { buildExploReport } from "../workflow/reports/exploReport";
 import { saveWorkflowConfig, updateWorkflowStatus } from "../workflow/runs/saveWorkflowConfig";
 import { attachDocuments, type SynthesisDocument } from "../workflow/runs/importSynthesis";
 import { generateForceGraphHtml } from "../lib/visualization/forceGraphHtml";
+import { appendUsageHistory } from "../lib/metrics/usageHistory";
 import { usageSummary } from "../lib/metrics/usage";
 import { estimateImpact, fmtCo2, fmtEnergy, fmtMoney } from "../lib/metrics/impact";
 import { getOmk } from "../lib/omeka/omk";
@@ -49,6 +50,10 @@ async function main() {
   const rag = steps["rag-index"]?.output?.rag ?? null;
 
   const usage = usageSummary();
+
+  // historique de la consommation (estimation du coût dans l'onglet Workflow)
+
+  appendUsageHistory("explo", usage);
   const impact = estimateImpact(usage);
   console.log(`🔢 Tokens : ${usage.totalTokens.toLocaleString("fr-FR")} · ⚡ ${fmtEnergy(impact.energyWh)}, ${fmtCo2(impact.co2g)}, équivalent API ${fmtMoney(impact.apiCost, impact.currency)}`);
 

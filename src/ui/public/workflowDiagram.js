@@ -1,5 +1,7 @@
 // Diagramme du workflow de l'application (étapes dans l'ordre, étapes en parallèle, agents impliqués) ; un clic sur un
-// agent ouvre le formulaire de ses instructions et de sa demande, enregistrées dans agents.config.json (/api/workflow).
+// agent ouvre le formulaire de ses instructions, de sa demande et de son modèle, enregistrés dans agents.config.json
+// (/api/workflow). Coût estimé de chaque agent (par appel, par traitement) et du traitement complet, d'après la
+// consommation des exécutions passées et les hypothèses de coût de la configuration (énergie, carbone, prix).
 // Utilisé par paper.html, explo.html et chaoticum.html.
 
 const CSS = `
@@ -35,6 +37,16 @@ const CSS = `
 .wf-btn.primary { background: var(--accent); color: var(--accent-ink, #fff); border-color: var(--accent); font-weight: 600; }
 .wf-btn:disabled { opacity: .5; cursor: default; }
 .wf-state { font-size: 12.5px; color: var(--muted); }
+.wf-agent .wf-cost { margin-left: auto; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.wf-agent .wf-mod + .wf-cost { margin-left: 6px; }
+.wf-total { display: flex; flex-wrap: wrap; gap: 4px 18px; align-items: baseline; border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; margin: 0 0 12px; font-size: 13px; }
+.wf-total strong { font-size: 15px; }
+.wf-total .wf-help { font-size: 12px; color: var(--muted); }
+.wf-editor input.wf-model-input { width: 100%; max-width: 460px; box-sizing: border-box; font: 13px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; }
+.wf-costs { width: 100%; max-width: 640px; border-collapse: collapse; font-size: 13px; margin-top: 4px; }
+.wf-costs th, .wf-costs td { text-align: right; padding: 4px 8px; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+.wf-costs th:first-child, .wf-costs td:first-child { text-align: left; }
+.wf-costs th { font-size: 12px; color: var(--muted); font-weight: 600; }
 @media (max-width: 700px) {
   .wf-flow { flex-direction: column; align-items: stretch; overflow: visible; }
   .wf-arrow { flex-basis: 26px; } .wf-arrow svg { transform: rotate(90deg); }
@@ -50,6 +62,27 @@ const h = (tag, props = {}, ...children) => {
 };
 const ARROW = '<svg viewBox="0 0 26 14" aria-hidden="true"><path d="M1 7h21M16 1l7 6-7 6" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>';
 
+// ==========================================
+// Coût estimé : mêmes hypothèses que le rapport de traitement (src/lib/metrics/impact.ts)
+// ==========================================
+// identifiants de modèle comparés sans l'éditeur ni la ponctuation (« mistralai/Mistral-Small-3.2-24B… » = « mistral-small-3-2-24b… »)
+const norm = m => String(m ?? "").toLowerCase().replace(/^.*\//, "").replace(/[^a-z0-9]/g, "");
+function costOf(costs, model, inputTokens, outputTokens) {
+  const known = costs.models.find(x => norm(x.model) === norm(model));
+  const p = known ?? costs.fallback;
+  const { flopsPerJoule, utilization, pue } = costs.hardware;
+  const wh = ((inputTokens + outputTokens) * (2 * p.activeParamsB * 1e9) / (flopsPerJoule * utilization) * pue) / 3600;
+  return { eur: (inputTokens * p.inputPricePerM + outputTokens * p.outputPricePerM) / 1e6, wh, co2: (wh / 1000) * costs.carbonIntensity, known: !!known };
+}
+const addCost = (a, b) => ({ eur: a.eur + b.eur, wh: a.wh + b.wh, co2: a.co2 + b.co2, known: a.known && b.known });
+const scale = (c, n) => ({ ...c, eur: c.eur * n, wh: c.wh * n, co2: c.co2 * n });
+const ZERO = { eur: 0, wh: 0, co2: 0, known: true };
+const nf = (v, d) => v.toLocaleString("fr-FR", { maximumFractionDigits: d, minimumFractionDigits: 0 });
+// montants : quatre chiffres significatifs sous l'euro, « < 0,0001 » pour les coûts infimes
+const fmtEur = (v, cur) => (v > 0 && v < 0.0001 ? `< 0,0001 ${cur}` : `${v.toLocaleString("fr-FR", v >= 1 ? { minimumFractionDigits: 2, maximumFractionDigits: 2 } : { maximumSignificantDigits: 2 })} ${cur}`);
+const fmtWh = v => (v >= 1000 ? `${nf(v / 1000, 2)} kWh` : `${nf(v, v < 1 ? 3 : 1)} Wh`);
+const fmtCo2 = v => (v >= 1000 ? `${nf(v / 1000, 2)} kg CO₂e` : `${nf(v, v < 1 ? 3 : 1)} g CO₂e`);
+
 async function request(url, body) {
   const res = await fetch(url, body ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : {});
   const data = await res.json().catch(() => ({}));
@@ -61,7 +94,9 @@ async function request(url, body) {
 export async function workflowDiagram(container, options = {}) {
   if (!document.getElementById("wf-style")) document.head.append(h("style", { id: "wf-style", textContent: CSS }));
   const toast = options.toast ?? (m => console.log(m));
-  let data, selected = null, dirty = false;
+  let data, selected = null, dirty = false, albertModels = null;
+  // liste des modèles Albert (choix du modèle d'un agent), chargée une fois
+  const loadModels = async () => { albertModels ??= await request("/api/albert/models").catch(() => []); return albertModels; };
 
   async function load() {
     data = await request("/api/workflow");
@@ -70,6 +105,17 @@ export async function workflowDiagram(container, options = {}) {
 
   const color = id => PALETTE[Object.keys(data.agents).indexOf(id) % PALETTE.length];
   const usedBy = id => [...data.stages.flat(), ...data.outside].filter(s => s.agents?.includes(id)).map(s => s.label);
+  // coût d'un appel et d'un traitement pour un agent (modèle choisi, ou un autre en cours de choix)
+  const agentCost = (a, model = a.modelId) => {
+    const unit = costOf(data.costs, model, a.usage.inputTokens, a.usage.outputTokens);
+    return { unit, run: scale(unit, a.usage.callsPerRun) };
+  };
+  // traitement complet : agents du workflow et traitements sans agent (extraction, vectorisation…)
+  const totalCost = () => {
+    const agents = Object.values(data.agents).filter(a => a.inWorkflow).reduce((t, a) => addCost(t, agentCost(a).run), ZERO);
+    const other = data.other.entries.reduce((t, e) => addCost(t, costOf(data.costs, e.model, e.inputTokens, e.outputTokens)), ZERO);
+    return { agents, other, total: addCost(agents, other) };
+  };
 
   function step(s) {
     return h("div", { className: "wf-step" },
@@ -77,8 +123,11 @@ export async function workflowDiagram(container, options = {}) {
       h("p", { textContent: s.description }),
       s.agents?.length ? h("div", { className: "wf-agents" }, s.agents.map(id => {
         const a = data.agents[id];
-        return h("button", { type: "button", className: `wf-agent${selected === id ? " active" : ""}`, style: `--c:${color(id)}`, title: `Modifier les instructions de « ${a.name} »`, onclick: () => open(id) },
-          h("span", { textContent: a.name }), a.modified ? h("span", { className: "wf-mod", textContent: "modifié" }) : null);
+        const c = agentCost(a);
+        return h("button", { type: "button", className: `wf-agent${selected === id ? " active" : ""}`, style: `--c:${color(id)}`,
+          title: `Modifier « ${a.name} » (modèle ${a.modelId}) — coût estimé : ${fmtEur(c.unit.eur, data.costs.currency)} par appel, ${fmtEur(c.run.eur, data.costs.currency)} pour ${nf(a.usage.callsPerRun, 1)} appel(s) par traitement`, onclick: () => open(id) },
+          h("span", { textContent: a.name }), a.modified ? h("span", { className: "wf-mod", textContent: "modifié" }) : null,
+          h("span", { className: "wf-cost", textContent: `≈ ${fmtEur(c.run.eur, data.costs.currency)}` }));
       })) : null,
       s.model ? h("span", { className: "wf-model", textContent: `modèle ${s.model} (sans agent)` }) : null);
   }
@@ -89,9 +138,15 @@ export async function workflowDiagram(container, options = {}) {
       if (i) flow.append(h("div", { className: "wf-arrow", innerHTML: ARROW }));
       flow.append(h("div", { className: `wf-stage${stage.length > 1 ? " parallel" : ""}` }, stage.map(step)));
     });
+    const t = totalCost(), cur = data.costs.currency;
+    const runsBasis = Math.max(data.other.runs, ...Object.values(data.agents).filter(a => a.inWorkflow).map(a => a.usage.runs));
     container.replaceChildren(...[
-      h("p", { className: "wf-models" }, "Modèles : ", ...Object.entries(data.models).flatMap(([role, m], i) => [i ? " · " : "", `${role} `, h("code", { textContent: m })]),
-        ` — textes modifiés enregistrés dans ${data.configFile}.`),
+      h("p", { className: "wf-models" }, "Modèles par défaut : ", ...Object.entries(data.models).flatMap(([role, m], i) => [i ? " · " : "", `${role} `, h("code", { textContent: m })]),
+        ` — textes et modèles modifiés enregistrés dans ${data.configFile}.`),
+      h("div", { className: "wf-total" },
+        h("span", {}, "Coût estimé d'un traitement : ", h("strong", { textContent: fmtEur(t.total.eur, cur) })),
+        h("span", { textContent: `${fmtWh(t.total.wh)} · ${fmtCo2(t.total.co2)}` }),
+        h("span", { className: "wf-help", textContent: `agents ${fmtEur(t.agents.eur, cur)}${t.other.eur ? `, autres traitements (extraction, vectorisation…) ${fmtEur(t.other.eur, cur)}` : ""} · ${runsBasis ? `d'après les ${runsBasis} dernière(s) exécution(s)` : "estimation par défaut (aucune exécution connue)"}${t.total.known ? "" : " · tarif par défaut pour un modèle absent de la table des coûts"}` })),
       flow,
       data.outside.length ? h("div", { className: "wf-lane" }, h("h3", { textContent: "Hors du workflow : actions de l'interface et autres traitements" }), h("div", { className: "wf-row" }, data.outside.map(step))) : null,
       selected ? editor(selected) : null].filter(Boolean));
@@ -110,22 +165,41 @@ export async function workflowDiagram(container, options = {}) {
     const state = h("span", { className: "wf-state" });
     const fields = {};
     const save = h("button", { type: "button", className: "wf-btn primary", textContent: "Enregistrer", disabled: true });
-    const update = () => {
-      dirty = fields.instructions.value !== a.instructions || (fields.prompt && fields.prompt.value !== a.prompt);
-      save.disabled = !dirty;
-      const custom = fields.instructions.value !== a.defaults.instructions || (fields.prompt && fields.prompt.value !== a.defaults.prompt);
-      state.textContent = `${dirty ? "modifications non enregistrées · " : ""}${custom ? "différent des textes par défaut" : "textes par défaut"}`;
+    const modelOf = () => fields.model.value.trim() || a.defaults.model;
+    const costBox = h("div");
+    const renderCost = () => {
+      const c = agentCost(a, modelOf()), cur = data.costs.currency, u = a.usage;
+      const row = (label, x, tokens) => h("tr", {}, h("td", { textContent: label }), h("td", { textContent: tokens }), h("td", { textContent: fmtEur(x.eur, cur) }), h("td", { textContent: fmtWh(x.wh) }), h("td", { textContent: fmtCo2(x.co2) }));
+      costBox.replaceChildren(
+        h("table", { className: "wf-costs" },
+          h("thead", {}, h("tr", {}, ["", "Tokens (entrée + sortie)", "Coût", "Énergie", "Carbone"].map(x => h("th", { textContent: x })))),
+          h("tbody", {},
+            row("Par appel", c.unit, `${nf(u.inputTokens, 0)} + ${nf(u.outputTokens, 0)}`),
+            row(`Par traitement (${nf(u.callsPerRun, 1)} appel${u.callsPerRun > 1 ? "s" : ""})`, c.run, nf((u.inputTokens + u.outputTokens) * u.callsPerRun, 0)))),
+        h("div", { className: "wf-help", textContent: `${u.basis === "historique" ? `Consommation moyenne des ${u.runs} dernière(s) exécution(s) où l'agent a été appelé` : "Estimation par défaut : aucune exécution connue pour cet agent"} ; coût au prix du marché de référence du modèle « ${modelOf()} »${c.unit.known ? "" : " (absent de la table des coûts : tarif par défaut)"}. ${a.inWorkflow ? "Compté dans le coût d'un traitement." : "Hors du workflow : non compté dans le coût d'un traitement."}` }));
     };
+    const update = () => {
+      dirty = fields.instructions.value !== a.instructions || (fields.prompt && fields.prompt.value !== a.prompt) || modelOf() !== a.modelId;
+      save.disabled = !dirty;
+      const custom = fields.instructions.value !== a.defaults.instructions || (fields.prompt && fields.prompt.value !== a.defaults.prompt) || modelOf() !== a.defaults.model;
+      state.textContent = `${dirty ? "modifications non enregistrées · " : ""}${custom ? "différent des réglages par défaut" : "réglages par défaut"}`;
+      renderCost();
+    };
+    const listId = `wf-models-${id}`;
+    fields.model = h("input", { className: "wf-model-input", value: a.modelId === a.defaults.model ? "" : a.modelId, placeholder: `${a.defaults.model} (par défaut)`, spellcheck: false, oninput: update });
+    fields.model.setAttribute("list", listId);
+    const datalist = h("datalist", { id: listId });
+    loadModels().then(ms => datalist.replaceChildren(...ms.map(m => h("option", { value: m.id, label: m.type ?? "" }))));
     const area = (key, rows) => (fields[key] = h("textarea", { rows, value: a[key] ?? "", spellcheck: false, oninput: update }));
 
     save.onclick = async () => {
       try {
-        await request("/api/workflow/agent", { id, instructions: fields.instructions.value, ...(fields.prompt ? { prompt: fields.prompt.value } : {}) });
-        dirty = false; toast(`Instructions de « ${a.name} » enregistrées`); await load();
+        await request("/api/workflow/agent", { id, instructions: fields.instructions.value, model: fields.model.value.trim(), ...(fields.prompt ? { prompt: fields.prompt.value } : {}) });
+        dirty = false; toast(`Réglages de « ${a.name} » enregistrés`); await load();
       } catch (e) { toast("Erreur : " + e.message); }
     };
-    const reset = h("button", { type: "button", className: "wf-btn", textContent: "Rétablir les textes par défaut", onclick: async () => {
-      if (!confirm(`Rétablir les textes par défaut de « ${a.name} » ?`)) return;
+    const reset = h("button", { type: "button", className: "wf-btn", textContent: "Rétablir les réglages par défaut", onclick: async () => {
+      if (!confirm(`Rétablir les textes et le modèle par défaut de « ${a.name} » ?`)) return;
       try { await request("/api/workflow/agent", { id, reset: true }); dirty = false; toast("Textes par défaut rétablis"); await load(); }
       catch (e) { toast("Erreur : " + e.message); }
     } });
@@ -136,9 +210,12 @@ export async function workflowDiagram(container, options = {}) {
       h("div", { className: "wf-meta" },
         h("span", { textContent: a.role }),
         h("span", { textContent: `Étapes : ${usedBy(id).join(", ")}` }),
-        h("span", {}, "Modèle : ", h("code", { textContent: `${a.model} (${data.models[a.model]})` })),
+        h("span", {}, "Modèle : ", h("code", { textContent: a.modelId }), a.modelId !== a.defaults.model ? ` (par défaut : ${a.defaults.model})` : ` (${a.model})`),
         a.tools?.length ? h("span", { textContent: `Outils : ${a.tools.join(", ")}` }) : null,
         h("span", { className: "wf-id", textContent: `id : ${id}` })),
+      h("label", { textContent: "Modèle" }), fields.model, datalist,
+      h("div", { className: "wf-help", textContent: "Identifiant d'un modèle Albert (liste proposée) ; vide : modèle par défaut de l'agent. Vaut pour les prochains appels de l'agent." }),
+      h("label", { textContent: "Coût estimé" }), costBox,
       h("label", { textContent: "Instructions (prompt système)" }), area("instructions", 12),
       h("div", { className: "wf-help", textContent: "Rôle, consignes et format de la réponse. Valent pour les prochains appels de l'agent." }),
       a.prompt !== undefined ? [h("label", { textContent: "Demande envoyée à chaque exécution" }), area("prompt", 14), h("div", { className: "wf-help", textContent: a.promptHelp ?? "" })] : null,

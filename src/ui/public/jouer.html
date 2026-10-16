@@ -65,6 +65,11 @@
   footer span { flex: 1; opacity: .45; border-right: 1px solid var(--bg); position: relative; }
   footer span.visited { opacity: .75; }
   footer span.current { opacity: 1; box-shadow: inset 0 -4px 0 #fff; }
+  /* suivi : écran affiché par le présentateur */
+  footer span.live { opacity: 1; }
+  footer span.live::after { content: ""; position: absolute; left: 50%; top: 2px; width: 8px; height: 8px; margin-left: -4px; border-radius: 50%; background: var(--err); box-shadow: 0 0 0 2px var(--bg); }
+  #b-live.pulse { animation: pulse 1s ease-out 3; }
+  @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(240,87,74,.7); } 100% { box-shadow: 0 0 0 10px rgba(240,87,74,0); } }
   .overlay { position: absolute; inset: 0; background: rgba(10,11,14,.88); display: flex; align-items: center; justify-content: center; z-index: 10; }
   .overlay .box { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 24px 28px; max-width: 560px; text-align: center; }
   .overlay h2 { margin-top: 0; }
@@ -85,6 +90,33 @@
   .instruction { font-size: clamp(16px, 1.6vw, 22px); color: var(--ink); margin-bottom: 4px; }
   .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 8px 16px; border-radius: 8px; font-size: 14px; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 30; }
   .toast.show { opacity: 1; }
+  .captions { position: absolute; left: 50%; bottom: 26px; transform: translateX(-50%); width: max-content; max-width: min(1100px, 90%); background: rgba(0,0,0,.8); color: #fff; font-size: clamp(18px, 2vw, 30px); line-height: 1.35; padding: 8px 18px; border-radius: 8px; z-index: 6; text-align: center; pointer-events: none; }
+  .captions .interim { opacity: .7; font-style: italic; }
+  #b-mic.on { background: var(--err); border-color: var(--err); color: #fff; box-shadow: 0 0 0 calc(var(--lvl, 0) * 9px) rgba(240,87,74,.35); }
+  #b-cc.on { border-color: var(--accent); color: var(--accent); }
+  .tr-tools { display: grid; gap: 8px; margin: 10px 0 14px; font-size: 14px; }
+  .tr-tools label { display: flex; gap: 8px; align-items: center; }
+  .tr-tools .help { color: var(--muted); font-size: 12.5px; }
+  .tr-seg { margin: 8px 0; font-size: 14.5px; line-height: 1.45; }
+  .tr-seg .t { color: var(--muted); font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; margin-right: 6px; cursor: pointer; }
+  /* annotations : traits sur l'écran, palette de la grille, surlignage de la transcription */
+  canvas.ink { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 4; pointer-events: none; touch-action: none; }
+  canvas.ink.drawing { pointer-events: auto; cursor: crosshair; }
+  .palette { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); z-index: 7; display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; align-items: center; background: rgba(17,19,23,.92); border: 1px solid var(--line); border-radius: 10px; padding: 6px 8px; max-width: 94%; }
+  .palette .sw { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; padding: 3px 9px 3px 4px; }
+  .palette .sw i, .hl-pop i { width: 18px; height: 18px; border-radius: 50%; display: inline-block; border: 2px solid rgba(255,255,255,.3); }
+  .palette .sw.on { border-color: #fff; background: #2a2e36; }
+  .palette .tools { display: flex; gap: 4px; margin-left: 6px; }
+  .palette .tools button { font-size: 13px; padding: 3px 8px; }
+  .hl-pop { position: fixed; z-index: 40; display: flex; flex-wrap: wrap; gap: 4px; max-width: 320px; background: var(--panel); border: 1px solid var(--accent); border-radius: 10px; padding: 6px; box-shadow: 0 6px 20px rgba(0,0,0,.45); }
+  .hl-pop button { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; padding: 3px 8px 3px 4px; }
+  .tr-seg mark { color: inherit; border-radius: 3px; padding: 0 1px; cursor: help; }
+  .tr-seg mark.mine { cursor: pointer; outline: 1px dashed rgba(255,255,255,.45); }
+  .tr-seg .tx { user-select: text; -webkit-user-select: text; }
+  #b-draw.on, #b-ink.on { border-color: var(--accent); color: var(--accent); }
+  #b-live { border-color: var(--err); color: var(--err); font-weight: 650; }
+  .who-am-i { font-size: 12.5px; color: var(--muted); white-space: nowrap; }
+  .who-am-i button { font-size: 12px; padding: 1px 6px; margin-left: 4px; }
   .hidden { display: none !important; }
   @media (max-width: 800px) { .contrib-layout { grid-template-columns: 1fr; } header h1 { max-width: 60vw; } }
 </style>
@@ -112,17 +144,29 @@
     <select id="b-speed" title="Vitesse du rejeu"><option value="1">×1</option><option value="2">×2</option><option value="5">×5</option><option value="10" selected>×10</option><option value="30">×30</option></select>
   </span>
   <button id="b-edit" title="Modifier cet écran (E)">✎</button>
+  <button id="b-live" class="hidden" title="Revenir à l'écran affiché par le présentateur (L)">● Direct</button>
+  <button id="b-mic" title="Transcrire la parole du présentateur (T)">🎙</button>
+  <button id="b-cc" title="Sous-titres sur l'écran (S)">CC</button>
+  <button id="b-transcript" title="Transcription : texte, réglages et surlignage">📝</button>
+  <button id="b-draw" title="Annoter l'écran avec la grille de couleurs (D)">✏️</button>
+  <button id="b-ink" title="Afficher ou masquer les annotations (A)">👁</button>
+  <button id="b-follow" title="Suivre la présentation sur un autre appareil">👥 <span id="followers"></span></button>
+  <span id="who-am-i" class="who-am-i hidden"></span>
   <button id="b-full" title="Plein écran (F)">⛶</button>
   <button id="b-end" class="primary">Terminer et enregistrer</button>
 </header>
 <main>
   <div id="stage" class="stage"></div>
   <div id="qr-corner" class="qr-corner hidden" title="Participer : flasher le QR code (clic pour réduire, touche Q)"></div>
+  <canvas id="ink" class="ink"></canvas>
+  <div id="palette" class="palette hidden"></div>
+  <div id="captions" class="captions hidden"><span class="final"></span> <span class="interim"></span></div>
   <div id="drawer" class="drawer hidden"></div>
   <div id="overlay" class="overlay hidden"><div class="box" id="overlay-box"></div></div>
 </main>
 <footer id="progress"></footer>
 <div class="toast" id="toast"></div>
+<div id="hl-pop" class="hl-pop hidden"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
@@ -154,6 +198,8 @@ const token = params.get("t");
 let runId = params.get("run");
 const replayId = params.get("replay");
 const REPLAY = PUBLIC || !!replayId;
+// suivi sur un autre appareil (/public/suivre?run=…, après connexion) : les écrans suivent ceux du présentateur
+const FOLLOW = location.pathname === "/public/suivre";
 const DRAFT_KEY = `chaoticum:seance:${runId}`;
 const store = {
   get() { try { return JSON.parse(localStorage.getItem(DRAFT_KEY) ?? "null"); } catch { return null; } },
@@ -171,6 +217,8 @@ let baseline = null, allRows = [], shownByScreen = new Map(), pollTimer = null;
 const overrides = new Map();
 // rejeu
 let R = null, rIdx = 0, rElapsed = 0, playing = false, lastTick = Date.now();
+// transcription de la parole du présentateur : passages { at, duration, screen, text, engine }
+let transcript = [];
 
 // ==========================================
 // Chronomètre
@@ -192,16 +240,22 @@ function tick() {
     elapsed = rElapsed;
     total = (R?.events ?? []).slice(0, rIdx).reduce((n, e) => n + e.seconds, 0) + rElapsed;
     if (s.type === "contribution") renderReplayContribution();
+    if (ev) replayCaptions(new Date(ev.enteredAt).getTime() + rElapsed * 1000);
+  } else if (FOLLOW) {
+    // temps de l'écran affiché par le présentateur (s'il est suivi) et de la séance en direct
+    elapsed = liveState.live && current === liveState.current && liveState.enteredAt ? (Date.now() - new Date(liveState.enteredAt).getTime()) / 1000 : 0;
+    total = liveState.live && liveState.session ? (Date.now() - new Date(liveState.session).getTime()) / 1000 : 0;
   } else {
     elapsed = started ? (Date.now() - enteredAt) / 1000 : 0;
     total = started ? (Date.now() - new Date(startedAt).getTime()) / 1000 : 0;
   }
+  if (REPLAY && R?.annotations?.length) drawInk();
   const c = $("#chrono");
-  c.className = `chrono ${started || REPLAY ? status(elapsed, s.duration) : "idle"}`;
+  c.className = `chrono ${started || REPLAY || (FOLLOW && liveState.live) ? status(elapsed, s.duration) : "idle"}`;
   c.innerHTML = `${mmss(elapsed)} <small>/ ${mmss(s.duration)}</small>`;
   const plannedNow = P.screens.slice(0, current).reduce((n, x) => n + x.duration, 0) + Math.min(elapsed, s.duration);
   const drift = total - plannedNow;
-  $("#total").textContent = `séance ${mmss(total)} / ${mmss(P.durationSeconds)}${(started || REPLAY) && Math.abs(drift) >= 30 ? ` (${drift > 0 ? "+" : "−"}${mmss(Math.abs(drift))})` : ""}`;
+  $("#total").textContent = `séance ${mmss(total)} / ${mmss(P.durationSeconds)}${(started || REPLAY) && !FOLLOW && Math.abs(drift) >= 30 ? ` (${drift > 0 ? "+" : "−"}${mmss(Math.abs(drift))})` : ""}`;
 }
 setInterval(tick, 250);
 
@@ -224,11 +278,17 @@ function go(i) {
     return;
   }
   if (i === current) return;
+  if (FOLLOW) { // navigation libre : on « décroche » du présentateur jusqu'au retour au direct
+    previous = current; current = i; following = i === liveState.current;
+    updateFollowUi(); render();
+    return;
+  }
   closeEvent();
   previous = current;
   current = i;
   enteredAt = Date.now();
   saveDraft();
+  pushLive();
   render();
 }
 $("#b-first").onclick = () => go(0);
@@ -248,8 +308,14 @@ document.addEventListener("keydown", e => {
   else if (k === "r" || k === "Backspace") { e.preventDefault(); $("#b-back").click(); }
   else if (k === "g") { e.preventDefault(); $("#b-goto").focus(); $("#b-goto").select(); }
   else if (k === "f") $("#b-full").click();
-  else if (k === "e" && !REPLAY) $("#b-edit").click();
+  else if (k === "e" && !REPLAY && !FOLLOW) $("#b-edit").click();
+  else if (k === "d" && !REPLAY) $("#b-draw").click();
+  else if (k === "a") $("#b-ink").click();
+  else if (k === "l" && FOLLOW) $("#b-live").click();
+  else if (k === "Escape" && drawMode) $("#b-draw").click();
   else if (k === "q") $("#qr-corner")?.classList.toggle("small");
+  else if (k === "t" && !REPLAY && !FOLLOW) $("#b-mic").click();
+  else if (k === "s") $("#b-cc").click();
   else if (k === " " && REPLAY) { e.preventDefault(); togglePlay(); }
 });
 
@@ -264,7 +330,9 @@ const cycleMaterial = cycle => {
   }
   return { citations: [], diapos: [] };
 };
-const fileUrl = name => (PUBLIC ? `/public/api/rejeu/file?t=${encodeURIComponent(token)}&name=${encodeURIComponent(name)}` : `/api/chaoticum/file?run=${encodeURIComponent(runId)}&name=${encodeURIComponent(name)}`);
+const fileUrl = name => (PUBLIC ? `/public/api/rejeu/file?t=${encodeURIComponent(token)}&name=${encodeURIComponent(name)}`
+  : FOLLOW ? `/public/api/suivre/file?run=${encodeURIComponent(runId)}&name=${encodeURIComponent(name)}`
+  : `/api/chaoticum/file?run=${encodeURIComponent(runId)}&name=${encodeURIComponent(name)}`);
 const refOf = ci => [ci.source.creators, ci.source.year, ci.source.title].filter(Boolean).join(", ");
 
 async function render() {
@@ -308,6 +376,11 @@ async function render() {
       try { svg = (await mermaid.render(`d${current}_${Date.now()}`, code)).svg; break; } catch { document.querySelectorAll('[id^="dd"]').forEach(x => x.remove()); }
     }
     if (svg) panZoom(box, svg); else box.replaceWith(el("pre", { className: "code", textContent: s.diagramme.mermaid }));
+  } else if (s.type === "contribution" && FOLLOW) {
+    stage.append(el("div", { className: "center" },
+      s.contribution?.instruction ? el("div", { className: "instruction", textContent: s.contribution.instruction }) : null,
+      P.grist?.formUrl ? el("p", {}, "Proposer une adresse web : ", el("a", { href: P.grist.formUrl, target: "_blank", rel: "noopener", textContent: "formulaire de contribution", style: "color:var(--accent)" })) : null,
+      el("p", { className: "muted", textContent: "Les contributions retenues s'affichent sur l'écran de projection." })));
   } else if (s.type === "contribution") {
     stage.className = "stage";
     stage.append(contributionLayout());
@@ -315,6 +388,7 @@ async function render() {
   } else {
     stage.append(el("div", { className: "center muted" }, el("h2", { className: "screen-title", textContent: LABELS[s.type] ?? s.type }), "Contenu non généré pour cet écran (voir le rapport de la partition)."));
   }
+  drawInk();
 }
 const visited = () => new Set([...(REPLAY ? (R?.events ?? []).slice(0, rIdx + 1) : events).map(e => e.index), current]);
 
@@ -494,9 +568,9 @@ async function poll() {
 // Séance en direct : début, brouillon, enregistrement
 // ==========================================
 function participation() {
-  return { runId, configItemId: P.configItemId ?? null, title: P.title, mode: "live", startedAt, endedAt: new Date().toISOString(), elapsedSeconds: Math.round((Date.now() - new Date(startedAt).getTime()) / 1000), plannedSeconds: P.durationSeconds, events, contributions: [...contributions.values()], overrides: [...overrides].map(([id, o]) => ({ id, ...o })) };
+  return { runId, configItemId: P.configItemId ?? null, title: P.title, mode: "live", startedAt, endedAt: new Date().toISOString(), elapsedSeconds: Math.round((Date.now() - new Date(startedAt).getTime()) / 1000), plannedSeconds: P.durationSeconds, events, contributions: [...contributions.values()], overrides: [...overrides].map(([id, o]) => ({ id, ...o })), transcript };
 }
-function saveDraft() { if (started && !REPLAY && !saved) store.set({ startedAt, events, current, enteredAt, contributions: [...contributions.values()], baseline: baseline ? [...baseline] : null, overrides: [...overrides] }); }
+function saveDraft() { if (started && !REPLAY && !saved) store.set({ startedAt, events, current, enteredAt, contributions: [...contributions.values()], baseline: baseline ? [...baseline] : null, overrides: [...overrides], transcript }); }
 function start(draft) {
   started = true;
   if (draft) {
@@ -504,17 +578,20 @@ function start(draft) {
     for (const c of draft.contributions ?? []) contributions.set(c.id, c);
     baseline = draft.baseline ? new Set(draft.baseline) : null;
     for (const [id, o] of draft.overrides ?? []) overrides.set(id, o);
+    transcript = draft.transcript ?? [];
   } else {
-    startedAt = new Date().toISOString(); enteredAt = Date.now(); events = []; baseline = null;
+    startedAt = new Date().toISOString(); enteredAt = Date.now(); events = []; baseline = null; transcript = [];
   }
   $("#overlay").classList.add("hidden");
   $("#mode").textContent = "en direct";
-  saveDraft(); render(); poll();
+  saveDraft(); pushLive(); render(); poll();
 }
 $("#b-end").onclick = async () => {
   if (REPLAY) return;
   if (!started) return toast("La séance n'a pas commencé");
   if (!confirm("Terminer la séance et l'enregistrer dans Omeka S ?")) return;
+  // dernière tranche d'audio transcrite avant l'enregistrement
+  if (stt) { toast("Fin de la transcription…"); await stopTranscription(); }
   closeEvent();
   const p = participation();
   enteredAt = Date.now();
@@ -522,8 +599,9 @@ $("#b-end").onclick = async () => {
   try {
     const r = await api("/api/chaoticum/participation", { method: "POST", body: p });
     saved = true; store.clear();
+    if (drawMode) toggleDraw();
     overlay(el("h2", { textContent: "Séance enregistrée" }),
-      el("p", {}, `${p.events.length} passage(s) d'écran, ${p.contributions.length} contribution(s), ${mmss(p.elapsedSeconds)}.`),
+      el("p", {}, `${p.events.length} passage(s) d'écran, ${p.contributions.length} contribution(s), ${mmss(p.elapsedSeconds)}${p.transcript.length ? `, ${p.transcript.length} passage(s) transcrit(s)` : ""}.`),
       r.itemId ? el("p", {}, "Omeka S : ", el("a", { href: r.adminUrl, target: "_blank", textContent: `item ${r.itemId}`, style: "color:var(--accent)" })) : el("p", { className: "muted", textContent: `Archive locale seulement${r.error ? ` (Omeka S : ${r.error})` : ""}.` }),
       shareBlock(r),
       el("button", { className: "primary", textContent: "Rejouer cette séance", onclick: () => { location.href = `/jouer?run=${encodeURIComponent(runId)}&replay=${encodeURIComponent(r.id)}`; } }));
@@ -536,7 +614,8 @@ window.addEventListener("beforeunload", e => { if (started && !saved && !REPLAY 
 let editorMod = null;
 $("#b-edit").onclick = async () => {
   const drawer = $("#drawer");
-  if (!drawer.classList.contains("hidden")) { drawer.classList.add("hidden"); return; }
+  if (!drawer.classList.contains("hidden") && drawer.dataset.mode === "editor") { drawer.classList.add("hidden"); return; }
+  drawer.dataset.mode = "editor";
   editorMod ??= await import("/editeur-ecran.js");
   if (!document.querySelector("#editor-css")) document.head.append(el("style", { id: "editor-css", textContent: editorMod.editorCss }));
   drawer.classList.remove("hidden");
@@ -567,6 +646,437 @@ function shareBlock(r) {
     el("button", { textContent: "Copier le lien", onclick: () => navigator.clipboard.writeText(url).then(() => toast("Lien copié")) }));
 }
 function overlay(...children) { $("#overlay-box").replaceChildren(...children); $("#overlay").classList.remove("hidden"); }
+
+// ==========================================
+// Transcription de la parole du présentateur
+// ==========================================
+// moteurs : "albert" (audio enregistré par tranches, transcrit par le serveur avec le modèle de reconnaissance vocale
+// d'Albert) ; "navigateur" (Web Speech API : texte immédiat, mais l'audio part chez le fournisseur du navigateur)
+let sttCfg = { engine: "albert", language: "fr", chunkSeconds: 15, silenceLevel: 0.02, captions: true };
+let stt = null, lastText = "", captionTimer = null;
+const pref = {
+  get: (k, d) => { try { return localStorage.getItem(`chaoticum:${k}`) ?? d; } catch { return d; } },
+  set: (k, v) => { try { localStorage.setItem(`chaoticum:${k}`, v); } catch { /* stockage indisponible */ } },
+};
+const engine = () => pref.get("stt-engine", sttCfg.engine);
+const captionsOn = () => pref.get("stt-captions", String(sttCfg.captions)) === "true";
+const sinceStart = iso => mmss((new Date(iso).getTime() - new Date((REPLAY ? R.startedAt : FOLLOW ? liveState.session : startedAt) ?? iso).getTime()) / 1000);
+
+function showCaption(final, interim = "") {
+  const box = $("#captions");
+  clearTimeout(captionTimer);
+  if (!captionsOn() || (!final && !interim)) { box.classList.add("hidden"); return; }
+  // fin du texte seulement : deux lignes environ
+  const tail = t => (t.length > 200 ? "…" + t.slice(-200).replace(/^\S*\s/, "") : t);
+  box.querySelector(".final").textContent = tail(final);
+  box.querySelector(".interim").textContent = interim;
+  box.classList.remove("hidden");
+  if (!REPLAY) captionTimer = setTimeout(() => box.classList.add("hidden"), 12000);
+}
+
+function addSegment(seg) {
+  seg.text = seg.text.trim();
+  if (!seg.text) return;
+  lastText = seg.text;
+  // passages enregistrés avec la séance ; en aperçu, seulement affichés
+  if (started && !REPLAY && !saved) {
+    transcript.push(seg); saveDraft();
+    // diffusion aux personnes qui suivent (et base des surlignages)
+    api("/api/chaoticum/live/segment", { method: "POST", body: { run: runId, session: startedAt, segment: seg } }).catch(() => {});
+  }
+  showCaption(seg.text);
+  if ($("#drawer").dataset.mode === "transcript" && !$("#drawer").classList.contains("hidden")) renderTranscript();
+}
+
+// Albert : tranches autonomes (un enregistreur par tranche), envoyées dans l'ordre ; les tranches silencieuses sont ignorées
+async function startAlbert() {
+  const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+  const ac = new AudioContext();
+  const analyser = ac.createAnalyser();
+  analyser.fftSize = 2048;
+  ac.createMediaStreamSource(stream).connect(analyser);
+  const buf = new Float32Array(analyser.fftSize);
+  let peak = 0;
+  const meter = setInterval(() => {
+    analyser.getFloatTimeDomainData(buf);
+    const rms = Math.sqrt(buf.reduce((n, v) => n + v * v, 0) / buf.length);
+    peak = Math.max(peak, rms);
+    $("#b-mic").style.setProperty("--lvl", Math.min(1, rms * 12).toFixed(2));
+  }, 100);
+  const mime = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg;codecs=opus"].find(t => MediaRecorder.isTypeSupported(t)) ?? "";
+  let stopped = false, rec = null, timer = null, queue = Promise.resolve(), finish;
+  const done = new Promise(r => (finish = r));
+
+  async function send(blob, at, screen, duration) {
+    try {
+      const res = await fetch("/api/chaoticum/transcribe", { method: "POST", body: blob,
+        headers: { "Content-Type": blob.type.split(";")[0], "X-Transcription-Prompt": encodeURIComponent(lastText.slice(-200)) } });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      addSegment({ at: at.toISOString(), duration: Math.round(duration * 10) / 10, screen, text: data.text ?? "", engine: "albert" });
+    } catch (e) { toast("Transcription : " + e.message); }
+  }
+  function cycle() {
+    if (stopped) return;
+    const at = new Date(), screen = current, parts = [];
+    peak = 0;
+    const r = (rec = new MediaRecorder(stream, mime ? { mimeType: mime } : {}));
+    r.ondataavailable = e => { if (e.data.size) parts.push(e.data); };
+    r.onstop = () => {
+      const level = peak, duration = (Date.now() - at.getTime()) / 1000;
+      const blob = new Blob(parts, { type: r.mimeType || mime || "audio/webm" });
+      cycle();
+      if (level >= sttCfg.silenceLevel && blob.size > 2000 && duration > 1) queue = queue.then(() => send(blob, at, screen, duration));
+      if (stopped) queue.then(() => { clearInterval(meter); stream.getTracks().forEach(t => t.stop()); ac.close(); finish(); });
+    };
+    r.start();
+    timer = setTimeout(() => r.state !== "inactive" && r.stop(), sttCfg.chunkSeconds * 1000);
+  }
+  cycle();
+  return { stop() { stopped = true; clearTimeout(timer); if (rec?.state !== "inactive") rec.stop(); else finish(); return done; } };
+}
+
+// navigateur : résultats intermédiaires affichés tout de suite, résultats définitifs enregistrés
+function startBrowser() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) throw new Error("reconnaissance vocale indisponible dans ce navigateur (Chrome, Edge ou Safari) : choisir Albert");
+  const r = new SR();
+  r.lang = sttCfg.language.includes("-") ? sttCfg.language : `${sttCfg.language}-${sttCfg.language.toUpperCase()}`;
+  r.continuous = true; r.interimResults = true;
+  let stopped = false, segStart = null, segScreen = current;
+  r.onresult = e => {
+    let interim = "";
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const res = e.results[i];
+      if (res.isFinal) {
+        const at = segStart ?? new Date();
+        addSegment({ at: at.toISOString(), duration: Math.round((Date.now() - at.getTime()) / 100) / 10, screen: segStart ? segScreen : current, text: res[0].transcript, engine: "navigateur" });
+        segStart = null;
+      } else {
+        if (!segStart) { segStart = new Date(); segScreen = current; }
+        interim += res[0].transcript;
+      }
+    }
+    if (interim) showCaption(lastText, interim);
+  };
+  // la reconnaissance s'arrête après un silence : relance tant que la transcription est active
+  r.onend = () => { if (!stopped) try { r.start(); } catch { /* déjà relancée */ } };
+  r.onerror = e => { if (["not-allowed", "service-not-allowed", "audio-capture"].includes(e.error)) { toast(`Micro indisponible (${e.error})`); stopTranscription(); } };
+  r.start();
+  return { stop() { stopped = true; r.stop(); return Promise.resolve(); } };
+}
+
+async function startTranscription() {
+  try {
+    stt = engine() === "navigateur" ? startBrowser() : await startAlbert();
+    $("#b-mic").classList.add("on");
+    $("#b-mic").title = `Transcription en cours (${engine() === "navigateur" ? "navigateur" : "Albert"}) : cliquer pour arrêter (T)`;
+    toast(`Transcription démarrée${started ? "" : " (aperçu : rien n'est enregistré avant le début de la séance)"}`);
+  } catch (e) { stt = null; toast("Transcription impossible : " + e.message); }
+}
+async function stopTranscription() {
+  const s = stt;
+  stt = null;
+  $("#b-mic").classList.remove("on");
+  $("#b-mic").style.removeProperty("--lvl");
+  $("#b-mic").title = "Transcrire la parole du présentateur (T)";
+  if (s) await s.stop();
+}
+$("#b-mic").onclick = () => (stt ? stopTranscription() : startTranscription());
+$("#b-cc").onclick = () => {
+  pref.set("stt-captions", String(!captionsOn()));
+  $("#b-cc").classList.toggle("on", captionsOn());
+  if (!captionsOn()) $("#captions").classList.add("hidden");
+  toast(captionsOn() ? "Sous-titres affichés" : "Sous-titres masqués");
+};
+
+// panneau : réglages et texte de la transcription (séance en cours ou rejouée)
+function renderTranscript() {
+  const drawer = $("#drawer");
+  const list = REPLAY ? (R?.transcript ?? []) : transcript;
+  const canRecord = !REPLAY && !FOLLOW;
+  // position de lecture conservée, sauf si on lisait la fin
+  const atBottom = drawer.scrollHeight - drawer.scrollTop - drawer.clientHeight < 40;
+  const keep = drawer.scrollTop;
+  const text = () => list.map(x => `[${sinceStart(x.at)}] écran ${x.screen + 1} — ${x.text}`).join("\n");
+  const sel = el("select", { onchange: async e => { pref.set("stt-engine", e.target.value); if (stt) { await stopTranscription(); startTranscription(); } renderTranscript(); } },
+    el("option", { value: "albert", textContent: "Albert (serveur, par tranches)", selected: engine() === "albert" }),
+    el("option", { value: "navigateur", textContent: "Navigateur (immédiat)", selected: engine() === "navigateur" }));
+  drawer.replaceChildren(...[
+    el("div", { style: "display:flex;align-items:center;gap:8px" }, el("h2", { className: "screen-title", style: "font-size:20px;margin:0", textContent: "Transcription" }), el("div", { className: "spacer" }),
+      el("button", { textContent: "Fermer", onclick: () => drawer.classList.add("hidden") })),
+    canRecord ? el("div", { className: "tr-tools" },
+      el("label", {}, "Moteur", sel),
+      el("div", { className: "help", textContent: engine() === "navigateur"
+        ? "Texte immédiat, mais l'audio est envoyé au service de reconnaissance du navigateur (Google pour Chrome, Apple pour Safari)."
+        : `L'audio est envoyé au serveur par tranches de ${sttCfg.chunkSeconds} s et transcrit par Albert : le texte arrive avec ce décalage.` }),
+      el("div", { className: "help", textContent: started ? "Le texte est enregistré avec la séance." : "La séance n'a pas commencé : le texte s'affiche sans être enregistré." })) : null,
+    !REPLAY && grid.length ? el("div", { className: "tr-tools" }, el("div", { className: "help", textContent: canAnnotate()
+      ? "Surligner : sélectionner un passage du texte, puis choisir sa couleur dans la grille. Cliquer sur un de ses surlignages pour le retirer."
+      : "Le surlignage s'ouvre au début de la séance." })) : null,
+    el("div", { className: "tr-tools" }, el("div", { style: "display:flex;gap:6px;flex-wrap:wrap" },
+      el("button", { textContent: "Copier", disabled: !list.length, onclick: () => navigator.clipboard.writeText(text()).then(() => toast("Transcription copiée")) }),
+      el("button", { textContent: "Télécharger (.txt)", disabled: !list.length, onclick: () => {
+        const a = el("a", { href: URL.createObjectURL(new Blob([`${P.title}\n\n${text()}\n`], { type: "text/plain" })), download: `transcription_${runId}.txt` });
+        a.click(); URL.revokeObjectURL(a.href);
+      } }))),
+    list.length ? el("div", {}, list.map(x => el("div", { className: "tr-seg" },
+      el("span", { className: "t", title: "Aller à cet écran", textContent: `${sinceStart(x.at)} · écran ${x.screen + 1}`, onclick: () => go(x.screen) }), segmentText(x))))
+      : el("p", { className: "muted", textContent: REPLAY ? "Pas de transcription pour cette séance." : FOLLOW ? "Pas encore de transcription : elle apparaît ici quand le présentateur parle." : "Aucun texte pour le moment : activer le micro (🎙 ou touche T)." })].filter(Boolean));
+  drawer.scrollTop = atBottom ? drawer.scrollHeight : keep;
+}
+$("#b-transcript").onclick = () => {
+  const drawer = $("#drawer");
+  if (!drawer.classList.contains("hidden") && drawer.dataset.mode === "transcript") { drawer.classList.add("hidden"); return; }
+  drawer.dataset.mode = "transcript";
+  drawer.classList.remove("hidden");
+  renderTranscript();
+  drawer.scrollTop = drawer.scrollHeight;
+};
+
+// rejeu : passage prononcé à l'instant rejoué
+function replayCaptions(t) {
+  const seg = [...(R?.transcript ?? [])].reverse().find(x => { const a = new Date(x.at).getTime(); return a <= t && t <= a + (Math.max(x.duration ?? 0, 6) + 2) * 1000; });
+  const box = $("#captions");
+  if ((box.dataset.at ?? "") === (seg?.at ?? "")) return;
+  box.dataset.at = seg?.at ?? "";
+  showCaption(seg?.text ?? "");
+}
+
+// ==========================================
+// Suivi sur un autre appareil et annotations collectives
+// ==========================================
+// écran affiché par le présentateur (diffusé par le serveur) ; following : la page suit le présentateur
+let liveState = { session: null, live: false, current: 0, enteredAt: null }, following = true;
+// grille d'annotation (couleur → signification, comme exploZoteroAnno), annotations de la séance, personne connectée
+let grid = [], annotations = [], me = null, publicBase = "";
+let drawMode = false, inkColor = null, drawing = null;
+const PRESENTER_ID = "presentateur";
+
+const canAnnotate = () => !REPLAY && grid.length > 0 && (FOLLOW ? !!liveState.session && liveState.live : started && !saved);
+const mine = a => a.author?.id === (FOLLOW ? me?.id : PRESENTER_ID);
+// le présentateur modère : il peut retirer toute annotation
+const canRemove = a => !REPLAY && (FOLLOW ? mine(a) : true);
+const inkKey = () => `ink-${FOLLOW ? "suivi" : REPLAY ? "rejeu" : "presentateur"}`;
+// sur l'écran projeté, les annotations du public sont masquées par défaut
+const inkShown = () => pref.get(inkKey(), String(FOLLOW || REPLAY)) === "true";
+const positionOf = color => grid.find(g => g.color.toLowerCase() === String(color).toLowerCase())?.position ?? "";
+
+async function annotationCall(action, body) {
+  const url = FOLLOW ? `/public/api/suivre/${action}?run=${encodeURIComponent(runId)}` : `/api/chaoticum/live/${action}`;
+  return api(url, { method: "POST", body: FOLLOW ? body : { run: runId, ...body } });
+}
+async function sendAnnotation(annotation) {
+  try { addAnnotation(await annotationCall("annotation", { annotation })); }
+  catch (e) { toast("Annotation non enregistrée : " + e.message); drawInk(); }
+}
+async function removeAnnotation(a) {
+  try { await annotationCall("annotation/delete", { id: a.id }); dropAnnotation(a.id); }
+  catch (e) { toast("Impossible de retirer l'annotation : " + e.message); }
+}
+function addAnnotation(a) {
+  if (!a?.id || annotations.some(x => x.id === a.id)) return;
+  annotations.push(a);
+  drawInk();
+  if (drawMode) renderPalette();
+  if (a.kind === "highlight") refreshTranscript();
+}
+function dropAnnotation(id) {
+  const a = annotations.find(x => x.id === id);
+  annotations = annotations.filter(x => x.id !== id);
+  drawInk();
+  if (drawMode) renderPalette();
+  if (a?.kind === "highlight") refreshTranscript();
+}
+const refreshTranscript = () => { if ($("#drawer").dataset.mode === "transcript" && !$("#drawer").classList.contains("hidden")) renderTranscript(); };
+
+// ---------- traits sur les écrans (coordonnées relatives à la zone d'affichage : 0 à 1) ----------
+const ink = $("#ink");
+function drawInk() {
+  const w = ink.clientWidth, h = ink.clientHeight, dpr = window.devicePixelRatio || 1;
+  if (ink.width !== Math.round(w * dpr) || ink.height !== Math.round(h * dpr)) { ink.width = Math.round(w * dpr); ink.height = Math.round(h * dpr); }
+  const g = ink.getContext("2d");
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.clearRect(0, 0, w, h);
+  const list = REPLAY ? (R?.annotations ?? []) : annotations;
+  // rejeu : les traits apparaissent au moment où ils ont été tracés
+  const until = REPLAY && R?.events?.[rIdx] ? new Date(R.events[rIdx].enteredAt).getTime() + rElapsed * 1000 : Infinity;
+  const strokes = inkShown() ? list.filter(a => a.kind === "stroke" && a.screen === current && new Date(a.at).getTime() <= until) : [];
+  if (drawing) strokes.push(drawing);
+  for (const a of strokes) {
+    g.strokeStyle = a.color; g.globalAlpha = 0.85; g.lineCap = "round"; g.lineJoin = "round";
+    g.lineWidth = Math.max(2, (a.width ?? 0.004) * Math.min(w, h));
+    g.beginPath();
+    a.points.forEach(([x, y], i) => (i ? g.lineTo(x * w, y * h) : g.moveTo(x * w, y * h)));
+    g.stroke();
+  }
+}
+new ResizeObserver(() => drawInk()).observe(ink);
+const pointAt = e => { const r = ink.getBoundingClientRect(); return [(e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height]; };
+ink.addEventListener("pointerdown", e => {
+  if (!drawMode) return;
+  ink.setPointerCapture(e.pointerId);
+  drawing = { kind: "stroke", color: inkColor, screen: current, points: [pointAt(e)], width: 0.004 };
+});
+ink.addEventListener("pointermove", e => {
+  if (!drawing) return;
+  const p = pointAt(e), last = drawing.points.at(-1);
+  if (Math.hypot(p[0] - last[0], p[1] - last[1]) > 0.002) { drawing.points.push(p); drawInk(); }
+});
+const endStroke = () => {
+  if (!drawing) return;
+  const a = drawing;
+  drawing = null;
+  if (a.points.length >= 2) { annotations.push({ ...a, id: `tmp-${Date.now()}`, at: new Date().toISOString(), author: { id: FOLLOW ? me?.id : PRESENTER_ID } }); drawInk(); sendAnnotation(a).then(() => { annotations = annotations.filter(x => !String(x.id).startsWith("tmp-")); drawInk(); }); }
+  else drawInk();
+};
+ink.addEventListener("pointerup", endStroke);
+ink.addEventListener("pointercancel", endStroke);
+
+function renderPalette() {
+  const own = annotations.filter(a => a.kind === "stroke" && a.screen === current && mine(a));
+  $("#palette").replaceChildren(
+    ...grid.map(g => el("button", { className: `sw${g.color === inkColor ? " on" : ""}`, title: g.instruction || g.position, onclick: () => { inkColor = g.color; renderPalette(); } },
+      el("i", { style: `background:${g.color}` }), g.position || g.name)),
+    el("span", { className: "tools" },
+      el("button", { textContent: "↶", title: "Retirer mon dernier trait sur cet écran", disabled: !own.length, onclick: () => removeAnnotation(own.at(-1)) }),
+      el("button", { textContent: "Effacer les miens", disabled: !own.length, onclick: () => own.forEach(removeAnnotation) }),
+      FOLLOW ? null : el("button", { textContent: "Tout effacer", title: "Retirer tous les traits de cet écran (modération)", onclick: () => { if (confirm("Retirer tous les traits de cet écran, y compris ceux du public ?")) annotations.filter(a => a.kind === "stroke" && a.screen === current).forEach(removeAnnotation); } }),
+      el("button", { textContent: "✕", title: "Terminer l'annotation (Échap)", onclick: toggleDraw })));
+}
+function toggleDraw() {
+  if (!drawMode && !canAnnotate()) return toast(grid.length ? (FOLLOW ? "Les annotations s'ouvrent quand la séance est en direct" : "Démarrer la séance pour annoter") : "Grille d'annotation indisponible");
+  drawMode = !drawMode;
+  inkColor ??= grid[0]?.color;
+  ink.classList.toggle("drawing", drawMode);
+  $("#palette").classList.toggle("hidden", !drawMode);
+  $("#b-draw").classList.toggle("on", drawMode);
+  // en annotant, on voit les traits
+  if (drawMode && !inkShown()) { pref.set(inkKey(), "true"); $("#b-ink").classList.add("on"); }
+  if (drawMode) renderPalette();
+  drawInk();
+}
+$("#b-draw").onclick = toggleDraw;
+$("#b-ink").onclick = () => { pref.set(inkKey(), String(!inkShown())); $("#b-ink").classList.toggle("on", inkShown()); drawInk(); toast(inkShown() ? "Annotations affichées" : "Annotations masquées"); };
+
+// ---------- surlignage de la transcription ----------
+function segmentText(seg) {
+  const text = String(seg.text);
+  const list = (REPLAY ? (R?.annotations ?? []) : annotations).filter(a => a.kind === "highlight" && a.segment === seg.at && a.end <= text.length);
+  const box = el("span", { className: "tx" });
+  box.dataset.at = seg.at;
+  const cuts = [...new Set([0, text.length, ...list.flatMap(a => [a.start, a.end])])].sort((a, b) => a - b);
+  for (let i = 0; i < cuts.length - 1; i++) {
+    const [a, b] = [cuts[i], cuts[i + 1]];
+    const over = list.filter(h => h.start <= a && h.end >= b);
+    if (!over.length) { box.append(text.slice(a, b)); continue; }
+    const top = over.at(-1);
+    const m = el("mark", { className: canRemove(top) ? "mine" : "", textContent: text.slice(a, b),
+      title: over.map(h => `${h.author?.name || "anonyme"} : ${h.position}`).join("\n") + (canRemove(top) ? "\n(clic : retirer)" : ""),
+      style: `background:color-mix(in srgb, ${top.color} 55%, transparent)` });
+    if (canRemove(top)) m.onclick = () => { if (confirm(`Retirer le surlignage « ${top.text} » (${top.position}) ?`)) removeAnnotation(top); };
+    box.append(m);
+  }
+  return box;
+}
+// sélection d'un passage d'une ligne de la transcription : palette de la grille
+const hlPop = $("#hl-pop");
+function offsetIn(box, node, offset) { const r = document.createRange(); r.selectNodeContents(box); r.setEnd(node, offset); return r.toString().length; }
+function checkSelection() {
+  const sel = getSelection();
+  if (!sel || sel.isCollapsed || !canAnnotate()) return hlPop.classList.add("hidden");
+  const box = sel.anchorNode?.parentElement?.closest(".tx");
+  if (!box || box !== sel.focusNode?.parentElement?.closest(".tx")) return hlPop.classList.add("hidden");
+  const x = offsetIn(box, sel.anchorNode, sel.anchorOffset), y = offsetIn(box, sel.focusNode, sel.focusOffset);
+  const start = Math.min(x, y), end = Math.max(x, y);
+  if (end - start < 2) return hlPop.classList.add("hidden");
+  const rect = sel.getRangeAt(0).getBoundingClientRect();
+  hlPop.replaceChildren(...grid.map(g => el("button", { title: g.instruction || g.position, onmousedown: e => e.preventDefault(), onclick: () => {
+    hlPop.classList.add("hidden"); sel.removeAllRanges();
+    sendAnnotation({ kind: "highlight", segment: box.dataset.at, start, end, color: g.color });
+  } }, el("i", { style: `background:${g.color}` }), g.position || g.name)));
+  hlPop.classList.remove("hidden");
+  hlPop.style.left = `${Math.max(8, Math.min(innerWidth - hlPop.offsetWidth - 8, rect.left))}px`;
+  hlPop.style.top = `${rect.bottom + 8 + hlPop.offsetHeight > innerHeight ? rect.top - hlPop.offsetHeight - 8 : rect.bottom + 8}px`;
+}
+document.addEventListener("mouseup", () => setTimeout(checkSelection, 0));
+document.addEventListener("touchend", () => setTimeout(checkSelection, 300));
+document.addEventListener("keyup", e => { if (e.shiftKey) checkSelection(); });
+document.addEventListener("mousedown", e => { if (!hlPop.contains(e.target)) hlPop.classList.add("hidden"); });
+
+// ---------- présentateur : diffusion de l'écran affiché et lien de suivi ----------
+function pushLive() {
+  if (FOLLOW || REPLAY || !started || saved) return;
+  api("/api/chaoticum/live", { method: "POST", body: { run: runId, session: startedAt, live: true, current, enteredAt: new Date(enteredAt).toISOString() } }).catch(() => {});
+}
+function presenterEvents() {
+  const es = new EventSource(`/api/chaoticum/live/events?run=${encodeURIComponent(runId)}`);
+  es.addEventListener("init", e => { const d = JSON.parse(e.data); annotations = started && d.session === startedAt ? d.annotations : []; setFollowers(d.followers); drawInk(); });
+  es.addEventListener("annotation", e => addAnnotation(JSON.parse(e.data)));
+  es.addEventListener("annotation-removed", e => dropAnnotation(JSON.parse(e.data).id));
+  es.addEventListener("followers", e => setFollowers(JSON.parse(e.data).followers));
+}
+const setFollowers = n => { $("#followers").textContent = n ? String(n) : ""; $("#b-follow").title = `Suivre la présentation sur un autre appareil${n ? ` (${n} personne(s) connectée(s))` : ""}`; };
+$("#b-follow").onclick = () => {
+  const base = publicBase && !/\/\/(127\.|localhost|\[::1\])/.test(publicBase) ? publicBase : location.origin;
+  const url = `${base.replace(/\/$/, "")}/public/suivre?run=${encodeURIComponent(runId)}`;
+  overlay(el("h2", { textContent: "Suivre la présentation" }),
+    el("div", { style: "background:#fff;border-radius:10px;padding:10px;width:240px;margin:0 auto", innerHTML: qrSvg(url) }),
+    el("p", {}, el("a", { href: url, target: "_blank", rel: "noopener", textContent: url, style: "color:var(--accent);font-size:13px;word-break:break-all" })),
+    el("p", { className: "muted", style: "font-size:13px", textContent: "Après connexion (Google, GitHub ou compte local), chacun suit les écrans et la transcription, et les annote avec la grille de couleurs ; les annotations sont enregistrées avec la séance." }),
+    el("button", { textContent: "Copier le lien", onclick: () => navigator.clipboard.writeText(url).then(() => toast("Lien copié")) }), " ",
+    el("button", { className: "primary", textContent: "Fermer", onclick: () => $("#overlay").classList.add("hidden") }));
+};
+
+// ---------- personne qui suit : écran du présentateur, transcription et annotations en direct ----------
+function updateFollowUi() {
+  if (!FOLLOW) return;
+  const n = liveState.current + 1, detached = liveState.live && !following;
+  $("#b-live").classList.toggle("hidden", !detached);
+  $("#b-live").textContent = `● Direct · écran ${n}`;
+  $("#b-live").title = `Revenir à l'écran ${n}, affiché par le présentateur (L)`;
+  $("#mode").textContent = liveState.live ? (following ? "en direct · suivi" : `décroché · présentateur à l'écran ${n}`) : liveState.session ? "séance terminée" : "en attente du début de la séance";
+  // repère de l'écran du présentateur dans la barre des écrans
+  [...$("#progress").children].forEach((x, i) => {
+    const on = liveState.live && i === liveState.current;
+    x.classList.toggle("live", on);
+    x.title = x.title.replace(/ · présentateur ici$/, "") + (on ? " · présentateur ici" : "");
+  });
+  if (drawMode && !canAnnotate()) toggleDraw();
+}
+function syncToLive() {
+  following = true;
+  if (liveState.session && liveState.current !== current) { previous = current; current = Math.min(P.screens.length - 1, liveState.current); render(); }
+  updateFollowUi();
+}
+$("#b-live").onclick = syncToLive;
+function followerEvents() {
+  const es = new EventSource(`/public/api/suivre/events?run=${encodeURIComponent(runId)}`);
+  es.addEventListener("init", e => {
+    const d = JSON.parse(e.data);
+    liveState = { session: d.session, live: d.live, current: d.current, enteredAt: d.enteredAt };
+    transcript = d.transcript; annotations = d.annotations;
+    if (following) syncToLive(); else updateFollowUi();
+    drawInk(); refreshTranscript();
+  });
+  es.addEventListener("state", e => {
+    const d = JSON.parse(e.data), newSession = d.session !== liveState.session, moved = d.live && d.current !== liveState.current;
+    liveState = d;
+    // décroché : le présentateur a changé d'écran
+    if (moved && !following && !newSession) {
+      toast(`Le présentateur est passé à l'écran ${d.current + 1}${P.screens[d.current] ? ` (${LABELS[P.screens[d.current].type] ?? ""})` : ""} — ● Direct ou touche L pour le rejoindre`);
+      const b = $("#b-live"); b.classList.remove("pulse"); void b.offsetWidth; b.classList.add("pulse");
+    }
+    if (newSession) { transcript = []; annotations = []; refreshTranscript(); }
+    if (following) syncToLive(); else updateFollowUi();
+    drawInk();
+  });
+  es.addEventListener("segment", e => { const seg = JSON.parse(e.data); transcript.push(seg); lastText = seg.text; showCaption(seg.text); refreshTranscript(); });
+  es.addEventListener("annotation", e => addAnnotation(JSON.parse(e.data)));
+  es.addEventListener("annotation-removed", e => dropAnnotation(JSON.parse(e.data).id));
+  // session expirée : retour à la page de connexion
+  es.onerror = async () => { const r = await fetch("/public/auth/me").catch(() => null); if (r && r.status === 401) location.href = `/public/connexion?next=${encodeURIComponent(location.pathname + location.search)}`; };
+}
 
 // ==========================================
 // Rejeu d'une séance enregistrée
@@ -608,7 +1118,34 @@ function renderReplayContribution(force = false) {
 // ==========================================
 // Chargement
 // ==========================================
+// page de suivi : partition, état du direct, personne connectée, grille d'annotation
+async function loadFollow() {
+  const r = await fetch(`/public/api/suivre?run=${encodeURIComponent(runId ?? "")}`);
+  if (r.status === 401) { location.href = `/public/connexion?next=${encodeURIComponent(location.pathname + location.search)}`; return; }
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+  P = d.partition; grid = d.grid ?? []; me = d.user;
+  liveState = { session: d.live.session, live: d.live.live, current: d.live.current, enteredAt: d.live.enteredAt };
+  transcript = d.live.transcript ?? []; annotations = d.live.annotations ?? [];
+  document.title = `${P.title} – suivi`;
+  $("#title").textContent = P.title;
+  for (const id of ["#b-end", "#b-edit", "#b-mic", "#b-follow"]) $(id).classList.add("hidden");
+  document.querySelector("a.home").classList.add("hidden");
+  $("#qr-corner").remove();
+  $("#who-am-i").replaceChildren(me.name, el("button", { textContent: "Déconnexion", onclick: async () => { await fetch("/public/auth/logout", { method: "POST" }); location.href = "/public/connexion"; } }));
+  $("#who-am-i").classList.remove("hidden");
+  $("#b-cc").classList.toggle("on", captionsOn());
+  $("#b-ink").classList.toggle("on", inkShown());
+  $("#progress").replaceChildren(...P.screens.map((s, i) => el("span", { style: `background:var(--t-${s.type});flex:${s.duration}`, title: `${i + 1}. ${LABELS[s.type]} (${mmss(s.duration)})`, onclick: () => go(i) })));
+  current = liveState.session ? Math.min(P.screens.length - 1, liveState.current) : 0;
+  render();
+  updateFollowUi();
+  followerEvents();
+  toast(`Connecté : ${me.name}`);
+}
+
 async function load() {
+  if (FOLLOW) return loadFollow();
   if (PUBLIC) {
     if (!token) throw new Error("Lien de rejeu incomplet");
     const r = await api(`/public/api/rejeu?t=${encodeURIComponent(token)}`);
@@ -627,8 +1164,15 @@ async function load() {
     $("#qr-corner").onclick = () => $("#qr-corner").classList.toggle("small");
   } else $("#qr-corner")?.remove();
   $("#progress").replaceChildren(...P.screens.map((s, i) => el("span", { style: `background:var(--t-${s.type});flex:${s.duration}`, title: `${i + 1}. ${LABELS[s.type]} (${mmss(s.duration)})`, onclick: () => go(i) })));
+  $("#b-cc").classList.toggle("on", captionsOn());
   if (REPLAY) {
+    $("#b-draw").classList.add("hidden");
+    $("#b-follow").classList.add("hidden");
     if (!PUBLIC) R = await api(`/api/chaoticum/participation?run=${encodeURIComponent(runId)}&id=${encodeURIComponent(replayId)}`);
+    $("#b-mic").classList.add("hidden");
+    if (!R.transcript?.length) { $("#b-cc").classList.add("hidden"); $("#b-transcript").classList.add("hidden"); }
+    if (!R.annotations?.length) $("#b-ink").classList.add("hidden");
+    $("#b-ink").classList.toggle("on", inkShown());
     $("#replay-ctl").classList.remove("hidden");
     $("#b-end").classList.add("hidden");
     $("#b-back").classList.add("hidden");
@@ -641,13 +1185,18 @@ async function load() {
       el("button", { className: "primary", textContent: "Lancer le rejeu", onclick: () => { $("#overlay").classList.add("hidden"); togglePlay(); } }));
     return;
   }
+  sttCfg = { ...sttCfg, ...(await api("/api/chaoticum/transcription").catch(() => ({}))) };
+  ({ grid = [], publicBase = "" } = await api("/api/chaoticum/live/info").catch(() => ({})));
+  $("#b-ink").classList.toggle("on", inkShown());
+  presenterEvents();
+  $("#b-cc").classList.toggle("on", captionsOn());
   render();
   pollTimer = setInterval(poll, Math.max(3, Number(P.grist.pollSeconds) || 10) * 1000);
   poll();
   const draft = store.get();
   const intro = [el("h2", { textContent: P.title }),
     el("p", {}, `${P.screens.length} écrans · ${mmss(P.durationSeconds)} · graine ${P.seed}`),
-    el("p", { className: "muted", textContent: "Navigation : ← → (écran précédent, suivant), Début / Fin, G (aller à), R (revenir), F (plein écran), Q (réduire le QR code). Le chronomètre passe à l'orange puis au rouge quand la durée prévue d'un écran est dépassée." })];
+    el("p", { className: "muted", textContent: "Navigation : ← → (écran précédent, suivant), Début / Fin, G (aller à), R (revenir), F (plein écran), Q (réduire le QR code), T (transcrire la parole), S (sous-titres). Le chronomètre passe à l'orange puis au rouge quand la durée prévue d'un écran est dépassée." })];
   if (draft?.startedAt) overlay(...intro, el("p", {}, `Une séance commencée le ${new Date(draft.startedAt).toLocaleString("fr-FR")} n'a pas été enregistrée.`),
     el("button", { className: "primary", textContent: "Reprendre cette séance", onclick: () => start(draft) }), " ",
     el("button", { textContent: "Nouvelle séance", onclick: () => { store.clear(); start(null); } }));

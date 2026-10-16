@@ -1,3 +1,4 @@
+import { agentModelId } from "../../../agents/overrides";
 import { createStep } from "@mastra/core/workflows";
 import fs from "fs/promises";
 import { aapAnalystAgent } from "../../../agents/aapAnalystAgent";
@@ -16,7 +17,7 @@ export const analyzeCfpStep = createStep({
 
     console.log("🧠 Agent : Analyse des attendus de l'appel à propositions...");
     const res = await aapAnalystAgent.generate(`Titre : ${cfp.title}\n${cfp.url ? `Source : ${cfp.url}\n` : ""}\nTexte de l'appel :\n${cfp.text}`);
-    recordUsage("Attendus de l'appel (aapAnalystAgent)", workflowConfig.models.analytics, (res as any).totalUsage ?? res.usage);
+    recordUsage("Attendus de l'appel (aapAnalystAgent)", agentModelId("aap-analyst-agent", workflowConfig.models.analytics), (res as any).totalUsage ?? res.usage);
     const expectations = `# Attendus de l'appel : ${cfp.title}\n\n${cfp.url ? `Source : <${cfp.url}>\n\n` : ""}${res.text.replace(/^#\s+Attendus[^\n]*\n+/i, "")}`;
 
     // AttenduAPP : enregistré localement et dans l'item Omeka de l'appel

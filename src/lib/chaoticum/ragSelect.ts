@@ -32,21 +32,27 @@ function clip(text: string, max: number) {
 
 const toCitation = ({ a, r }: Cand, max: number): Citation => ({
   key: a.key, kind: a.kind, text: clip(a.text || a.comment, max), comment: a.kind === "annotation" ? a.comment : "", page: a.page, color: a.color, author: a.author, date: a.date,
-  source: { key: r.key, title: r.title, creators: r.creators, year: r.year, url: zoteroWebUrl(`items/${r.key}`) },
+  source: { key: r.key, title: r.title, creators: r.creators, year: r.year, url: r.source === "diigo" ? r.url ?? null : zoteroWebUrl(`items/${r.key}`) },
 });
 
 export async function ragMaterial(o: { c: ChaoticumConfig; theme: Theme; screens: Screen[]; rng: Rng; dir: string }): Promise<{ used: boolean; reason?: string }> {
   const { c, theme, screens, rng, dir } = o;
   if (!c.rag.enabled) return { used: false, reason: "index RAG désactivés" };
-  const sStore = loadStore("diapos", emptySlides(), c), zStore = loadStore("bibliotheque", emptyZotero(), c);
+  const sStore = loadStore("diapos", emptySlides(), c), zStore = loadStore("bibliotheque", emptyZotero(), c), dStore = loadStore("diigo", emptyZotero(), c);
+  // sources des citations : bibliothèque Zotero et/ou annotations Diigo
+  const sources = new Set(c.citations.sources ?? ["zotero"]);
+  const useZotero = sources.has("zotero"), useDiigo = sources.has("diigo");
   const slides = Object.values(sStore.items).filter(e => e.docId && e.description);
   // collection choisie : elle et toutes ses sous-collections
   let scopeKeys: Set<string> | null = c.citations.scope === "collection" && c.citations.collection
     ? await collectionWithDescendants(new Zotero(process.env.ZOTERO_USER_ID ?? "", process.env.ZOTERO_API_KEY ?? ""), c.citations.collection)
     : null;
-  const inScope = (r: ReferenceEntry) => !scopeKeys || r.collections.some(k => scopeKeys!.has(k));
+  // la portée (collection Zotero) ne s'applique qu'aux références Zotero
+  const inScope = (r: ReferenceEntry) => r.source === "diigo" || !scopeKeys || r.collections.some(k => scopeKeys!.has(k));
   const usable = (x: Cand) => (x.a.text || x.a.comment).length >= c.citations.minLength && (c.citations.includeNotes || x.a.kind === "annotation");
-  const libraryCits: Cand[] = Object.values(zStore.items).flatMap(r => Object.values(r.annotations).map(a => ({ a, r }))).filter(usable);
+  const cands = (store: typeof zStore, source: "zotero" | "diigo") => Object.values(store.items).flatMap(r => Object.values(r.annotations).map(a => ({ a, r: { ...r, source } }))).filter(usable);
+  const diigoCits: Cand[] = useDiigo ? cands(dStore, "diigo") : [];
+  const libraryCits: Cand[] = [...(useZotero ? cands(zStore, "zotero") : []), ...diigoCits];
   let allCits = libraryCits.filter(x => inScope(x.r));
   const needC = screens.some(s => s.type === "citation"), needD = screens.some(s => s.type === "diapo");
   if (needC && scopeKeys && !allCits.length && libraryCits.length) {
@@ -56,9 +62,9 @@ export async function ragMaterial(o: { c: ChaoticumConfig; theme: Theme; screens
     allCits = libraryCits;
   }
   if (scopeKeys && scopeKeys.size > 1) console.log(`📂 [RAG] Collection ${c.citations.collection} et ${scopeKeys.size - 1} sous-collection(s)`);
-  if (needC && !allCits.length) return { used: false, reason: "index de la bibliothèque vide" };
+  if (needC && !allCits.length) return { used: false, reason: useDiigo && !useZotero ? "index des annotations Diigo vide" : "index de la bibliothèque vide" };
   if (needD && !slides.length) return { used: false, reason: "index des diapos vide" };
-  console.log(`🔎 [RAG] Index : ${slides.length} diapo(s), ${allCits.length} citation(s) possible(s)`);
+  console.log(`🔎 [RAG] Index : ${slides.length} diapo(s), ${allCits.length} citation(s) possible(s)${diigoCits.length ? ` dont ${diigoCits.length} annotation(s) Diigo` : ""}`);
 
   const albert = new Albert(workflowConfig.models.provider, process.env.ALBERT_API_KEY ?? "");
   const themed = hasTheme(theme);
@@ -80,7 +86,8 @@ export async function ragMaterial(o: { c: ChaoticumConfig; theme: Theme; screens
     }
   }
 
-  const sCol = sStore.collectionId, zCol = zStore.collectionId;
+  const sCol = sStore.collectionId, zCol = useZotero ? zStore.collectionId : null, dCol = useDiigo ? dStore.collectionId : null;
+  const byKey = new Map(allCits.map(x => [x.a.key, x]));
   const usedCit = new Set<string>(), usedDia = new Set<string>();
   let previous: { citations: Citation[]; diapos: SlideEntry[] } = { citations: [], diapos: [] };
 
@@ -109,7 +116,22 @@ export async function ragMaterial(o: { c: ChaoticumConfig; theme: Theme; screens
           }
         } catch (e) { console.warn("⚠️ [RAG] Recherche dans la bibliothèque impossible :", (e as Error).message.split("\n")[0]); }
       }
-      cits = cits.filter(x => !usedCit.has(x.a.key) && allCits.some(y => y.a.key === x.a.key)).slice(0, 8);
+      if (query && dCol) {
+        try {
+          const res = await albert.search({ collectionIds: [dCol], query, limit: c.rag.searchLimit, method: "hybrid" });
+          recordUsage("Recherche RAG (annotations Diigo)", "BAAI/bge-m3", { inputTokens: Number(res.usage?.prompt_tokens) || Math.ceil(query.length / 4), outputTokens: 0 });
+          for (const hit of res.data) {
+            const r = dStore.items[String(hit.chunk.metadata?.key ?? "")];
+            if (!r) continue;
+            // extrait du texte d'un média (sans passage marqué) : tous les passages de la page sont candidats
+            const keys = [...hit.chunk.content.matchAll(/\[\[(D\d+)\]\]/g)].map(m => m[1]!);
+            for (const k of keys.length ? keys : Object.keys(r.annotations)) { const x = byKey.get(k); if (x && !cits.some(y => y.a.key === k)) cits.push(x); }
+          }
+        } catch (e) { console.warn("⚠️ [RAG] Recherche dans les annotations Diigo impossible :", (e as Error).message.split("\n")[0]); }
+      }
+      // résultats des deux sources entremêlés, pour ne pas privilégier l'une
+      if (zCol && dCol) { const z = cits.filter(x => x.r.source !== "diigo"), dg = cits.filter(x => x.r.source === "diigo"); cits = z.flatMap((x, i) => [x, dg[i]]).concat(dg.slice(z.length)).filter(Boolean) as Cand[]; }
+      cits = cits.filter(x => !usedCit.has(x.a.key) && byKey.has(x.a.key)).map(x => byKey.get(x.a.key)!).slice(0, 8);
       for (const x of shuffle(rng, allCits)) { if (cits.length >= Math.max(cScreens.length, query ? cScreens.length : 6)) break; if (!usedCit.has(x.a.key) && !cits.includes(x)) cits.push(x); }
     }
     if (dScreens.length) {

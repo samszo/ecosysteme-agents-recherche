@@ -1,6 +1,6 @@
 import { Agent } from "@mastra/core/agent";
-import { overridable } from "./overrides";
-import { ALBERT_MODEL_ANALYTICS } from "../config/models";
+import { overridable, overridableModel } from "./overrides";
+import { workflowConfig } from "../config";
 
 export const AAP_ANALYST_INSTRUCTIONS = `Tu es un expert en ingénierie de la recherche, chargé d'analyser les attendus d'un appel à propositions (AAP).
   À partir du texte de l'appel, rédige en français, en markdown, une analyse structurée intitulée « Attendus de l'appel » avec ces sections :
@@ -19,5 +19,5 @@ export const aapAnalystAgent = new Agent({
   id: "aap-analyst-agent",
   name: "Analyste AAP",
   instructions: overridable("aap-analyst-agent", AAP_ANALYST_INSTRUCTIONS),
-  model: ALBERT_MODEL_ANALYTICS,
+  model: overridableModel("aap-analyst-agent", () => workflowConfig.models.analytics),
 });

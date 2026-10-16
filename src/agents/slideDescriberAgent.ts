@@ -1,6 +1,5 @@
 import { Agent } from "@mastra/core/agent";
-import { overridable } from "./overrides";
-import { albertModel } from "../config/models";
+import { overridable, overridableModel } from "./overrides";
 import { workflowConfig } from "../config";
 
 export const SLIDE_DESCRIBER_INSTRUCTIONS = `Tu décris des diapositives de conférences de recherche (sciences de l'information et de la communication,
@@ -17,5 +16,5 @@ export const slideDescriberAgent = new Agent({
   id: "slide-describer-agent",
   name: "Descripteur de diapositives",
   instructions: overridable("slide-describer-agent", SLIDE_DESCRIBER_INSTRUCTIONS),
-  model: ({ requestContext }: any) => albertModel(requestContext?.get?.("model") ?? workflowConfig.models.fast),
+  model: overridableModel("slide-describer-agent", rc => rc?.get?.("model") ?? workflowConfig.models.fast),
 });

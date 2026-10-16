@@ -1,3 +1,4 @@
+import { agentModelId } from "../../../agents/overrides";
 import { createStep } from "@mastra/core/workflows";
 import { kappaAnalystAgent } from "../../../agents/kappaAnalystAgent";
 import { fetchOmekaAnnotations, type CodedAnnotation } from "../../../tools/fetchOmekaAnnotations";
@@ -50,7 +51,7 @@ export const kappaAnalysisStep = createStep({
         Statistiques : ${JSON.stringify(kappa)}
         Codes les plus souvent confondus sur une même phrase : ${JSON.stringify(topConfusions)}`
       );
-      recordUsage("Bilan kappa (kappaAnalystAgent)", workflowConfig.models.analytics, (res as any).totalUsage ?? res.usage);
+      recordUsage("Bilan kappa (kappaAnalystAgent)", agentModelId("kappa-analyst-agent", workflowConfig.models.analytics), (res as any).totalUsage ?? res.usage);
       summary = res.text;
     }
 

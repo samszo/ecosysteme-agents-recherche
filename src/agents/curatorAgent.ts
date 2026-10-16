@@ -1,6 +1,5 @@
 import { Agent } from "@mastra/core/agent";
-import { overridable } from "./overrides";
-import { albertModel } from "../config/models";
+import { overridable, overridableModel } from "./overrides";
 import { workflowConfig } from "../config";
 
 export const CURATOR_INSTRUCTIONS = `Tu prépares une conférence-performance participative à partir de la bibliothèque du conférencier
@@ -18,5 +17,5 @@ export const curatorAgent = new Agent({
   id: "curator-agent",
   name: "Curateur de conférence",
   instructions: overridable("curator-agent", CURATOR_INSTRUCTIONS),
-  model: ({ requestContext }: any) => albertModel(requestContext?.get?.("model") ?? workflowConfig.models.analytics),
+  model: overridableModel("curator-agent", rc => rc?.get?.("model") ?? workflowConfig.models.analytics),
 });

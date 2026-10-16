@@ -1,6 +1,6 @@
 import { Agent } from "@mastra/core/agent";
-import { overridable } from "./overrides";
-import { ALBERT_MODEL_ANALYTICS } from "../config/models";
+import { overridable, overridableModel } from "./overrides";
+import { workflowConfig } from "../config";
 
 export const DISCUSSION_INSTRUCTIONS = `Tu accompagnes un groupe de recherche qui a annoté collectivement une collection de documents.
 Chaque couleur de surlignage a une signification partagée (grille d'annotation). Tu reçois les passages annotés
@@ -49,5 +49,5 @@ export const discussionAgent = new Agent({
   id: "discussion-agent",
   name: "Animateur de discussion",
   instructions: overridable("discussion-agent", DISCUSSION_INSTRUCTIONS),
-  model: ALBERT_MODEL_ANALYTICS,
+  model: overridableModel("discussion-agent", () => workflowConfig.models.analytics),
 });

@@ -158,6 +158,18 @@ export class Albert {
     return { data: res?.data ?? [], usage: res?.usage ?? null };
   }
 
+  // transcription d'un fichier audio (modèle de reconnaissance vocale, ex. whisper-large-v3) ; prompt : texte précédent,
+  // pour la continuité (noms propres, ponctuation)
+  async transcribe(options: { audio: Uint8Array; fileName: string; type: string; model: string; language?: string; prompt?: string }): Promise<{ text: string; usage: AlbertUsage | null }> {
+    const form = new FormData();
+    form.append("file", new Blob([options.audio as BlobPart], { type: options.type }), options.fileName);
+    form.append("model", options.model);
+    if (options.language) form.append("language", options.language);
+    if (options.prompt) form.append("prompt", options.prompt);
+    const res = await this.request("/audio/transcriptions", { method: "POST", body: form });
+    return { text: String(res?.text ?? "").trim(), usage: res?.usage ?? null };
+  }
+
   async chat(options: { model: string; messages: { role: "system" | "user" | "assistant"; content: string }[]; temperature?: number }): Promise<{ text: string; usage: AlbertUsage | null; model: string }> {
     const res = await this.json("/chat/completions", "POST", {
       model: options.model,

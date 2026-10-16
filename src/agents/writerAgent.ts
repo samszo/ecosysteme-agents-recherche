@@ -1,6 +1,6 @@
 import { Agent } from "@mastra/core/agent";
-import { overridable } from "./overrides";
-import { ALBERT_MODEL_ANALYTICS } from "../config/models";
+import { overridable, overridableModel } from "./overrides";
+import { workflowConfig } from "../config";
 
 export const WRITER_INSTRUCTIONS = `Tu es un chercheur qui rédige, en français, une proposition d'article répondant à un appel à propositions.
   Tu reçois : les attendus de l'appel, un plan en markdown, les références de la collection (avec leurs clés de citation),
@@ -20,5 +20,5 @@ export const writerAgent = new Agent({
   id: "writer-agent",
   name: "Rédacteur Académique",
   instructions: overridable("writer-agent", WRITER_INSTRUCTIONS),
-  model: ALBERT_MODEL_ANALYTICS,
+  model: overridableModel("writer-agent", () => workflowConfig.models.analytics),
 });

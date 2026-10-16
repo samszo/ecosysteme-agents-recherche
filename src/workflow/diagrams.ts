@@ -10,6 +10,7 @@ import { CURATOR_INSTRUCTIONS } from "../agents/curatorAgent";
 import { SEMINARIO_INSTRUCTIONS } from "../agents/seminarioAgent";
 import { SLIDE_DESCRIBER_INSTRUCTIONS } from "../agents/slideDescriberAgent";
 import { EDITOR_INSTRUCTIONS } from "../agents/editorAgent";
+import { IMAGE_DESCRIBER_INSTRUCTIONS } from "../agents/imageDescriberAgent";
 
 export type ModelRole = "analytique" | "rapide" | "vision";
 
@@ -25,24 +26,31 @@ export interface AgentInfo {
   promptHelp?: string;
   // où sont les autres textes envoyés à l'agent
   note?: string;
+  // étiquette des appels de l'agent dans les tableaux de consommation (ex. « (writerAgent) »)
+  usageTag: string;
+  // libellés des mêmes appels dans les rapports antérieurs aux agents
+  legacyUsage?: string[];
+  // consommation par défaut, tant qu'aucune exécution n'est connue : tokens par appel, appels par traitement
+  estimate: { inputTokens: number; outputTokens: number; callsPerRun: number };
 }
 
 export interface StepInfo { id: string; label: string; description: string; agents?: string[]; model?: ModelRole }
 export interface WorkflowDiagram { workflowId: string; title: string; stages: StepInfo[][]; outside: StepInfo[] }
 
 export const AGENTS: Record<string, AgentInfo> = {
-  "aap-analyst-agent": { id: "aap-analyst-agent", name: "Analyste AAP", role: "analyse les attendus de l'appel à propositions", model: "analytique", instructions: AAP_ANALYST_INSTRUCTIONS, note: "La demande contient le titre, la source et le texte de l'appel." },
-  "kappa-analyst-agent": { id: "kappa-analyst-agent", name: "Analyste de convergence", role: "évalue l'accord inter-juges (kappa) sur les annotations codées", model: "analytique", tools: ["fetchOmekaAnnotations", "calculateFleissKappa"], instructions: KAPPA_ANALYST_INSTRUCTIONS, note: "Les codes et le seuil de kappa insérés dans les instructions par défaut viennent de la configuration (Configuration › Kappa) au moment du chargement." },
-  "writer-agent": { id: "writer-agent", name: "Rédacteur académique", role: "rédige la proposition d'article selon le plan", model: "analytique", instructions: WRITER_INSTRUCTIONS, note: "La demande contient les attendus, le plan, les références, les citations, les mots-clés et le graphe de concepts." },
-  "epistemologist-agent": { id: "epistemologist-agent", name: "Épistémologue critique", role: "relit la proposition au regard des attendus de l'appel", model: "analytique", instructions: EPISTEMOLOGIST_INSTRUCTIONS, note: "La demande contient la proposition et les attendus de l'appel." },
-  "discussion-agent": { id: "discussion-agent", name: "Animateur de discussion", role: "propose des thèmes de discussion à partir de l'annotation collective", model: "analytique", instructions: DISCUSSION_INSTRUCTIONS, prompt: DISCUSSION_PROMPT,
+  "aap-analyst-agent": { id: "aap-analyst-agent", usageTag: "(aapAnalystAgent)", estimate: { inputTokens: 300, outputTokens: 1050, callsPerRun: 1 }, name: "Analyste AAP", role: "analyse les attendus de l'appel à propositions", model: "analytique", instructions: AAP_ANALYST_INSTRUCTIONS, note: "La demande contient le titre, la source et le texte de l'appel." },
+  "kappa-analyst-agent": { id: "kappa-analyst-agent", usageTag: "(kappaAnalystAgent)", estimate: { inputTokens: 560, outputTokens: 1100, callsPerRun: 1 }, name: "Analyste de convergence", role: "évalue l'accord inter-juges (kappa) sur les annotations codées", model: "analytique", tools: ["fetchOmekaAnnotations", "calculateFleissKappa"], instructions: KAPPA_ANALYST_INSTRUCTIONS, note: "Les codes et le seuil de kappa insérés dans les instructions par défaut viennent de la configuration (Configuration › Kappa) au moment du chargement." },
+  "writer-agent": { id: "writer-agent", usageTag: "(writerAgent)", estimate: { inputTokens: 6500, outputTokens: 1550, callsPerRun: 1 }, name: "Rédacteur académique", role: "rédige la proposition d'article selon le plan", model: "analytique", instructions: WRITER_INSTRUCTIONS, note: "La demande contient les attendus, le plan, les références, les citations, les mots-clés et le graphe de concepts." },
+  "epistemologist-agent": { id: "epistemologist-agent", usageTag: "(epistemologistAgent)", estimate: { inputTokens: 4900, outputTokens: 4800, callsPerRun: 1 }, name: "Épistémologue critique", role: "relit la proposition au regard des attendus de l'appel", model: "analytique", instructions: EPISTEMOLOGIST_INSTRUCTIONS, note: "La demande contient la proposition et les attendus de l'appel." },
+  "discussion-agent": { id: "discussion-agent", usageTag: "(discussionAgent)", estimate: { inputTokens: 1350, outputTokens: 2200, callsPerRun: 1 }, name: "Animateur de discussion", role: "propose des thèmes de discussion à partir de l'annotation collective", model: "analytique", instructions: DISCUSSION_INSTRUCTIONS, prompt: DISCUSSION_PROMPT,
     promptHelp: "Variables remplacées par les données de l'analyse : {{count}} (nombre de thèmes), {{grille}}, {{participation}}, {{passages_divergents}} (avec leur tension), {{passages_convergents}}, {{commentaires}}, {{marqueurs}}." },
-  "rag-assistant": { id: "rag-assistant", name: "Assistant RAG Albert", role: "répond aux questions posées sur la collection (onglet RAG)", model: "analytique", instructions: "",
+  "rag-assistant": { id: "rag-assistant", usageTag: "Réponse RAG", estimate: { inputTokens: 3000, outputTokens: 600, callsPerRun: 1 }, name: "Assistant RAG Albert", role: "répond aux questions posées sur la collection (onglet RAG)", model: "analytique", instructions: "",
     note: "La demande est le modèle de prompt choisi dans l'onglet RAG (enregistré dans Omeka S, modifiable avec « Modifier »)." },
-  "curator-agent": { id: "curator-agent", name: "Curateur de conférence", role: "formule les requêtes RAG et choisit citations et diapos selon le thème", model: "analytique", instructions: CURATOR_INSTRUCTIONS, note: "La demande contient le thème de la conférence et les candidats numérotés." },
-  "seminario-agent": { id: "seminario-agent", name: "Compositeur de séquences", role: "choisit les matériaux cohérents, la question et le diagramme de chaque séquence", model: "analytique", instructions: SEMINARIO_INSTRUCTIONS, note: "La réponse suit un schéma (question, intention, nœuds et liens du diagramme)." },
-  "slide-describer-agent": { id: "slide-describer-agent", name: "Descripteur de diapositives", role: "décrit les diapos à partir de leur copie d'écran", model: "vision", instructions: SLIDE_DESCRIBER_INSTRUCTIONS, note: "La demande contient la copie d'écran et le texte de la diapo ; la réponse suit un schéma (titre, mots-clés, description)." },
-  "editor-agent": { id: "editor-agent", name: "Correcteur d'écran", role: "raccourcit les questions trop longues pour l'écran", model: "vision", instructions: EDITOR_INSTRUCTIONS, note: "La demande est la question à raccourcir." },
+  "curator-agent": { id: "curator-agent", usageTag: "(curatorAgent)", legacyUsage: ["Requêtes RAG (thème)", "Choix des présentations (thème)", "Choix des citations (thème)"], estimate: { inputTokens: 300, outputTokens: 110, callsPerRun: 2 }, name: "Curateur de conférence", role: "formule les requêtes RAG et choisit citations et diapos selon le thème", model: "analytique", instructions: CURATOR_INSTRUCTIONS, note: "La demande contient le thème de la conférence et les candidats numérotés." },
+  "seminario-agent": { id: "seminario-agent", usageTag: "(seminarioAgent)", legacyUsage: ["Cohérence, questions et diagrammes (RAG)", "Questions et diagrammes"], estimate: { inputTokens: 1150, outputTokens: 580, callsPerRun: 6 }, name: "Compositeur de séquences", role: "choisit les matériaux cohérents, la question et le diagramme de chaque séquence", model: "analytique", instructions: SEMINARIO_INSTRUCTIONS, note: "La réponse suit un schéma (question, intention, nœuds et liens du diagramme)." },
+  "image-describer-agent": { id: "image-describer-agent", usageTag: "(imageDescriberAgent)", estimate: { inputTokens: 1500, outputTokens: 400, callsPerRun: 3200 }, name: "Descripteur d'images", role: "analyse les images des pages annotées avec Diigo (index RAG)", model: "vision", instructions: IMAGE_DESCRIBER_INSTRUCTIONS, note: "La demande contient l'image (vignette Omeka S) et le titre de la page ; la réponse suit un schéma (titre, mots-clés, description, texte visible)." },
+  "slide-describer-agent": { id: "slide-describer-agent", usageTag: "(slideDescriberAgent)", legacyUsage: ["Description des diapos (vision)"], estimate: { inputTokens: 1500, outputTokens: 300, callsPerRun: 6 }, name: "Descripteur de diapositives", role: "décrit les diapos à partir de leur copie d'écran", model: "vision", instructions: SLIDE_DESCRIBER_INSTRUCTIONS, note: "La demande contient la copie d'écran et le texte de la diapo ; la réponse suit un schéma (titre, mots-clés, description)." },
+  "editor-agent": { id: "editor-agent", usageTag: "(editorAgent)", legacyUsage: ["Raccourcissement des questions"], estimate: { inputTokens: 80, outputTokens: 25, callsPerRun: 6 }, name: "Correcteur d'écran", role: "raccourcit les questions trop longues pour l'écran", model: "vision", instructions: EDITOR_INSTRUCTIONS, note: "La demande est la question à raccourcir." },
 };
 
 export const DIAGRAMS: Record<"paper" | "explo" | "chaoticum", WorkflowDiagram> = {
@@ -87,6 +95,7 @@ export const DIAGRAMS: Record<"paper" | "explo" | "chaoticum", WorkflowDiagram> 
     ],
     outside: [
       { id: "index", label: "Indexation des diapos", description: "Bouton « Indexer les diapos » : description des diapos pour l'index RAG", agents: ["slide-describer-agent"] },
+      { id: "index-diigo", label: "Indexation des annotations Diigo", description: "Bouton « Indexer les annotations Diigo » : pages, passages surlignés, texte des médias et analyse des images", agents: ["image-describer-agent"] },
       { id: "regenerate", label: "Éditeur d'écran", description: "Nouvelle question ou nouveau diagramme pour un écran de la partition", agents: ["seminario-agent", "editor-agent"] },
     ],
   },

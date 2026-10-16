@@ -1,3 +1,4 @@
+import { agentModelId } from "../../../agents/overrides";
 import { createStep } from "@mastra/core/workflows";
 import { epistemologistAgent } from "../../../agents/epistemologistAgent";
 import { recordUsage } from "../../../lib/metrics/usage";
@@ -17,7 +18,7 @@ ${inputData.cfpAnalysis}
 # Proposition d'article (PropAPP)
 ${inputData.draft}`);
     
-    recordUsage("Relecture (epistemologistAgent)", workflowConfig.models.analytics, (res as any).totalUsage ?? res.usage);
+    recordUsage("Relecture (epistemologistAgent)", agentModelId("epistemologist-agent", workflowConfig.models.analytics), (res as any).totalUsage ?? res.usage);
     return { 
       finalReview: res.text, 
       draft: inputData.draft, 

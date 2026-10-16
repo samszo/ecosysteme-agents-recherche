@@ -1,6 +1,6 @@
 import { createStep } from "@mastra/core/workflows";
 import { discussionAgent, DISCUSSION_PROMPT } from "../../../agents/discussionAgent";
-import { agentText } from "../../../agents/overrides";
+import { agentModelId, agentText } from "../../../agents/overrides";
 import { formatAnnotations } from "../../../tools/buildLLMWiki";
 import { recordUsage } from "../../../lib/metrics/usage";
 import { workflowConfig } from "../../../config";
@@ -46,7 +46,7 @@ export const themesStep = createStep({
       marqueurs: [...tags].sort((a, b) => b[1] - a[1]).slice(0, 40).map(([t, n]) => `${t} (${n})`).join(", ") || "(aucun)",
     };
     const res = await discussionAgent.generate(prompt.replace(/\{\{(\w+)\}\}/g, (m, k) => vars[k] ?? m));
-    recordUsage("Thèmes de discussion (discussionAgent)", workflowConfig.models.analytics, (res as any).totalUsage ?? res.usage);
+    recordUsage("Thèmes de discussion (discussionAgent)", agentModelId("discussion-agent", workflowConfig.models.analytics), (res as any).totalUsage ?? res.usage);
     return { themes: res.text, participation, collaboration };
   },
 });

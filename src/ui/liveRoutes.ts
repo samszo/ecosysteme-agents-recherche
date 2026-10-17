@@ -13,7 +13,10 @@ type Handler = (req: http.IncomingMessage, res: http.ServerResponse, url: URL) =
 
 export interface Annotation {
   id: string;
-  kind: "stroke" | "highlight";
+  // trait libre, forme prédéfinie, bulle de texte avec flèche, surlignage de la transcription
+  kind: "stroke" | "shape" | "callout" | "highlight";
+  // forme : ligne, flèche, cercle (ellipse inscrite), rectangle, hexagone, tracée du premier au second point
+  shape?: (typeof SHAPES)[number];
   at: string;
   author: { id: string; name: string };
   color: string;
@@ -23,6 +26,7 @@ export interface Annotation {
   points?: [number, number][];
   width?: number;
   // surlignage : passage de la transcription (identifié par son heure) et caractères surlignés
+  // bulle : premier point = pointe de la flèche (élément désigné), second = centre de la bulle
   segment?: string;
   start?: number;
   end?: number;
@@ -52,6 +56,7 @@ interface LiveCtx {
 
 const validId = (id: string | null): id is string => !!id && /^[\w-]{1,80}$/.test(id);
 const PRESENTER = { id: "presentateur", name: "Présentateur" };
+export const SHAPES = ["line", "arrow", "circle", "rect", "hexagon"] as const;
 
 export function createLive(ctx: LiveCtx) {
   const states = new Map<string, LiveState>();
@@ -124,12 +129,25 @@ export function createLive(ctx: LiveCtx) {
     if (!g) throw new Error("Couleur hors de la grille d'annotation");
     const base = { id: crypto.randomBytes(6).toString("hex"), at: new Date().toISOString(), author, color: g.color, position: g.position };
     let ann: Annotation;
+    // points normalisés (0-1) dans le cadre de l'écran
+    const pointsOf = (max: number) => (Array.isArray(a.points) ? a.points : []).slice(0, max)
+      .map((p: any) => [Math.min(1, Math.max(0, Number(p?.[0]))), Math.min(1, Math.max(0, Number(p?.[1])))].map(v => Math.round(v * 10000) / 10000) as [number, number])
+      .filter((p: number[]) => p.every(Number.isFinite));
+    const geometry = { screen: Math.max(0, Math.floor(Number(a.screen) || 0)), width: Math.min(0.02, Math.max(0.001, Number(a.width) || 0.004)) };
     if (a.kind === "stroke") {
-      const points = (Array.isArray(a.points) ? a.points : []).slice(0, 2000)
-        .map((p: any) => [Math.min(1, Math.max(0, Number(p[0]))), Math.min(1, Math.max(0, Number(p[1])))].map(v => Math.round(v * 10000) / 10000) as [number, number])
-        .filter((p: number[]) => p.every(Number.isFinite));
+      const points = pointsOf(2000);
       if (points.length < 2) throw new Error("Trait trop court");
-      ann = { ...base, kind: "stroke", screen: Math.max(0, Math.floor(Number(a.screen) || 0)), points, width: Math.min(0.02, Math.max(0.001, Number(a.width) || 0.004)) };
+      ann = { ...base, kind: "stroke", ...geometry, points };
+    } else if (a.kind === "shape") {
+      const points = pointsOf(2);
+      if (!SHAPES.includes(a.shape)) throw new Error("Forme inconnue");
+      if (points.length < 2 || Math.hypot(points[1]![0] - points[0]![0], points[1]![1] - points[0]![1]) < 0.005) throw new Error("Forme trop petite");
+      ann = { ...base, kind: "shape", shape: a.shape, ...geometry, points };
+    } else if (a.kind === "callout") {
+      const points = pointsOf(2), text = String(a.text ?? "").replace(/\s+/g, " ").trim().slice(0, 300);
+      if (points.length < 2) throw new Error("Bulle sans position");
+      if (!text) throw new Error("Bulle vide");
+      ann = { ...base, kind: "callout", ...geometry, points, text };
     } else if (a.kind === "highlight") {
       const seg = s.transcript.find(x => x.at === a.segment);
       const start = Math.floor(Number(a.start)), end = Math.floor(Number(a.end));

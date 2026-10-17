@@ -30,23 +30,25 @@
   button:disabled { opacity: .45; cursor: default; }
   input.goto { width: 64px; cursor: text; }
   .badge { font-size: 12px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
-  main { flex: 1; min-height: 0; position: relative; }
-  .stage { position: absolute; inset: 0; padding: 3vh 4vw; display: flex; flex-direction: column; overflow: auto; }
+  main { flex: 1; min-height: 0; position: relative; overflow: hidden; background: #000; }
+  /* cadre des écrans : toujours 1920 × 1080, mis à l'échelle de la fenêtre (bandes noires si les proportions diffèrent),
+     pour que le contenu et les annotations (coordonnées relatives au cadre) soient au même endroit sur tous les appareils */
+  .frame { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; transform-origin: 0 0; container-type: size; background: var(--bg); overflow: hidden; }
+  .stage { position: absolute; inset: 0; padding: 3cqh 4cqw; display: flex; flex-direction: column; overflow: auto; }
   .stage.full { padding: 0; }
   .center { margin: auto; max-width: 1100px; width: 100%; }
-  blockquote.citation { font-size: clamp(22px, 3.2vw, 44px); line-height: 1.35; margin: 0; font-family: Georgia, "Times New Roman", serif; }
+  blockquote.citation { font-size: clamp(22px, 3.2cqw, 44px); line-height: 1.35; margin: 0; font-family: Georgia, "Times New Roman", serif; }
   blockquote.citation::before { content: "« "; color: var(--t-citation); }
   blockquote.citation::after { content: " »"; color: var(--t-citation); }
-  .cite-media { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); gap: 3vw; align-items: center; }
-  .cite-media img { width: 100%; max-height: 72vh; object-fit: contain; background: #fff; border-radius: 10px; display: block; }
-  blockquote.citation.from-image { font-size: clamp(18px, 2.2vw, 32px); }
+  .cite-media { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); gap: 3cqw; align-items: center; }
+  .cite-media img { width: 100%; max-height: 72cqh; object-fit: contain; background: #fff; border-radius: 10px; display: block; }
+  blockquote.citation.from-image { font-size: clamp(18px, 2.2cqw, 32px); }
   .ref a.page-link { color: var(--accent); }
-  @media (max-width: 800px) { .cite-media { grid-template-columns: 1fr; } }
-  .ref { margin-top: 3vh; font-size: clamp(15px, 1.5vw, 22px); color: var(--muted); }
-  .comment { margin-top: 2vh; font-size: clamp(14px, 1.3vw, 19px); border-left: 3px solid var(--t-citation); padding-left: 12px; color: var(--ink); opacity: .85; }
-  .question { font-size: clamp(26px, 4vw, 58px); line-height: 1.25; font-weight: 650; }
-  .intention { margin-top: 2vh; font-size: clamp(14px, 1.4vw, 20px); color: var(--muted); }
-  .sources { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 4vh; align-items: flex-start; }
+  .ref { margin-top: 3cqh; font-size: clamp(15px, 1.5cqw, 22px); color: var(--muted); }
+  .comment { margin-top: 2cqh; font-size: clamp(14px, 1.3cqw, 19px); border-left: 3px solid var(--t-citation); padding-left: 12px; color: var(--ink); opacity: .85; }
+  .question { font-size: clamp(26px, 4cqw, 58px); line-height: 1.25; font-weight: 650; }
+  .intention { margin-top: 2cqh; font-size: clamp(14px, 1.4cqw, 20px); color: var(--muted); }
+  .sources { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 4cqh; align-items: flex-start; }
   .sources .src { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-size: 13px; max-width: 360px; color: var(--muted); }
   .sources img { width: 240px; border-radius: 6px; display: block; }
   iframe.slide, iframe.contrib { width: 100%; height: 100%; border: 0; background: #fff; }
@@ -62,9 +64,9 @@
   .contrib-main { position: relative; border-radius: 10px; overflow: hidden; border: 1px solid var(--line); background: var(--panel); min-height: 0; }
   .placeholder { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; text-align: center; padding: 24px; color: var(--muted); }
   .placeholder a { color: var(--accent); font-size: 18px; word-break: break-all; }
-  .diagram { background: #fff; color: #111; border-radius: 10px; padding: 2vh 2vw; margin-top: 2vh; display: flex; justify-content: center; }
-  .diagram svg { max-width: 100%; height: auto; max-height: 70vh; }
-  h2.screen-title { font-size: clamp(20px, 2.4vw, 32px); margin: 0 0 1vh; }
+  .diagram { background: #fff; color: #111; border-radius: 10px; padding: 2cqh 2cqw; margin-top: 2cqh; display: flex; justify-content: center; }
+  .diagram svg { max-width: 100%; height: auto; max-height: 70cqh; }
+  h2.screen-title { font-size: clamp(20px, 2.4cqw, 32px); margin: 0 0 1cqh; }
   pre.code { white-space: pre-wrap; font-size: 13px; color: var(--muted); }
   footer { display: flex; height: 14px; cursor: pointer; }
   footer span { flex: 1; opacity: .45; border-right: 1px solid var(--bg); position: relative; }
@@ -83,7 +85,7 @@
   .qr-corner { position: absolute; right: 14px; bottom: 14px; z-index: 5; background: #fff; color: #111; border-radius: 10px; padding: 6px 6px 4px; width: 128px; text-align: center; font-size: 11px; font-weight: 600; box-shadow: 0 4px 16px rgba(0,0,0,.35); cursor: pointer; }
   .qr-corner svg { width: 100%; height: auto; display: block; }
   .qr-corner.small { width: 64px; font-size: 0; padding: 4px; }
-  .zoom-wrap { position: relative; overflow: hidden; cursor: grab; touch-action: none; height: 68vh; user-select: none; -webkit-user-select: none; }
+  .zoom-wrap { position: relative; overflow: hidden; cursor: grab; touch-action: none; height: 68cqh; user-select: none; -webkit-user-select: none; }
   .zoom-wrap.dragging { cursor: grabbing; }
   .zoom-inner { transform-origin: 0 0; display: inline-block; }
   .zoom-tools { position: absolute; top: 8px; right: 8px; display: flex; gap: 4px; z-index: 2; }
@@ -92,7 +94,7 @@
   .contribs .c .tools button { padding: 2px 8px; font-size: 12px; }
   .contribs .c .edited { color: var(--t-contribution); font-size: 11px; }
   .drawer { position: absolute; top: 0; right: 0; bottom: 0; width: min(560px, 100%); background: var(--panel); border-left: 1px solid var(--line); z-index: 8; overflow: auto; padding: 14px 16px; box-shadow: -8px 0 24px rgba(0,0,0,.35); --accent-ink: #1f0a14; }
-  .instruction { font-size: clamp(16px, 1.6vw, 22px); color: var(--ink); margin-bottom: 4px; }
+  .instruction { font-size: clamp(16px, 1.6cqw, 22px); color: var(--ink); margin-bottom: 4px; }
   .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 8px 16px; border-radius: 8px; font-size: 14px; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 30; }
   .toast.show { opacity: 1; }
   .captions { position: absolute; left: 50%; bottom: 26px; transform: translateX(-50%); width: max-content; max-width: min(1100px, 90%); background: rgba(0,0,0,.8); color: #fff; font-size: clamp(18px, 2vw, 30px); line-height: 1.35; padding: 8px 18px; border-radius: 8px; z-index: 6; text-align: center; pointer-events: none; }
@@ -113,6 +115,10 @@
   .palette .sw.on { border-color: #fff; background: #2a2e36; }
   .palette .tools { display: flex; gap: 4px; margin-left: 6px; }
   .palette .tools button { font-size: 13px; padding: 3px 8px; }
+  .palette .tool { font-size: 15px; padding: 3px 8px; min-width: 34px; }
+  .palette .tool.on { border-color: #fff; background: #2a2e36; }
+  .palette .sep { width: 1px; align-self: stretch; background: var(--line); margin: 0 2px; }
+  .callout-input { position: absolute; z-index: 5; transform: translate(-50%, -50%); width: 460px; min-height: 70px; font: 28px/1.3 system-ui, -apple-system, "Segoe UI", sans-serif; color: #111; background: rgba(255,255,255,.97); border: 4px solid var(--c, #ffd400); border-radius: 14px; padding: 10px 14px; resize: none; box-shadow: 0 6px 20px rgba(0,0,0,.35); }
   .hl-pop { position: fixed; z-index: 40; display: flex; flex-wrap: wrap; gap: 4px; max-width: 320px; background: var(--panel); border: 1px solid var(--accent); border-radius: 10px; padding: 6px; box-shadow: 0 6px 20px rgba(0,0,0,.45); }
   .hl-pop button { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; padding: 3px 8px 3px 4px; }
   .tr-seg mark { color: inherit; border-radius: 3px; padding: 0 1px; cursor: help; }
@@ -140,7 +146,8 @@
   .share-box .qr-mini { background: #fff; border-radius: 8px; padding: 6px; width: 120px; }
   .share-box a { color: var(--accent); word-break: break-all; }
   .hidden { display: none !important; }
-  @media (max-width: 800px) { .contrib-layout { grid-template-columns: 1fr; } header h1 { max-width: 60vw; } }
+  /* le contenu des écrans est toujours mis en page à 1920 px de large (cadre) : seul l'en-tête s'adapte */
+  @media (max-width: 800px) { header h1 { max-width: 60vw; } }
 </style>
 </head>
 <body>
@@ -179,9 +186,11 @@
   <button id="b-end" class="primary">Terminer et enregistrer</button>
 </header>
 <main>
-  <div id="stage" class="stage"></div>
+  <div id="frame" class="frame">
+    <div id="stage" class="stage"></div>
+    <canvas id="ink" class="ink"></canvas>
+  </div>
   <div id="qr-corner" class="qr-corner hidden" title="Participer : flasher le QR code (clic pour réduire, touche Q)"></div>
-  <canvas id="ink" class="ink"></canvas>
   <div id="palette" class="palette hidden"></div>
   <div id="captions" class="captions hidden"><span class="final"></span> <span class="interim"></span></div>
   <div id="drawer" class="drawer hidden"></div>
@@ -213,6 +222,18 @@ function toast(msg) { const t = $("#toast"); t.textContent = msg; t.classList.ad
 const mmss = s => { s = Math.max(0, Math.round(s)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
 const LABELS = { citation: "Citation", diapo: "Diapo", question: "Question", contribution: "Contributions", diagramme: "Diagramme" };
 const qrSvg = text => { if (!window.qrcode || !text) return ""; const q = window.qrcode(0, "M"); q.addData(text); q.make(); return q.createSvgTag({ cellSize: 4, margin: 2, scalable: true }); };
+
+// cadre 1920 × 1080 mis à l'échelle de la zone d'affichage (centré)
+const FRAME_W = 1920, FRAME_H = 1080;
+let frameScale = 1;
+function fitFrame() {
+  const m = document.querySelector("main"), f = document.getElementById("frame");
+  if (!m || !f) return;
+  frameScale = Math.min(m.clientWidth / FRAME_W, m.clientHeight / FRAME_H) || 1;
+  f.style.transform = `translate(${(m.clientWidth - FRAME_W * frameScale) / 2}px, ${(m.clientHeight - FRAME_H * frameScale) / 2}px) scale(${frameScale})`;
+  if (typeof drawInk === "function") drawInk();
+}
+new ResizeObserver(fitFrame).observe(document.querySelector("main"));
 
 const params = new URLSearchParams(location.search);
 // rejeu public (/public/rejeu?t=<jeton>) : lecture seule, ni participation ni modification des liens
@@ -322,7 +343,7 @@ $("#b-back").onclick = () => { if (previous !== null) go(previous); };
 $("#b-goto").onchange = e => { const n = Number(e.target.value); if (n >= 1) go(n - 1); e.target.blur(); };
 $("#b-full").onclick = () => (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen()).catch(() => {});
 document.addEventListener("keydown", e => {
-  if (e.target.tagName === "INPUT" || e.target.tagName === "SELECT" || !P) return;
+  if (e.target.tagName === "INPUT" || e.target.tagName === "SELECT" || e.target.tagName === "TEXTAREA" || !P) return;
   const k = e.key;
   if (k === "ArrowRight" || k === "PageDown") { e.preventDefault(); $("#b-next").click(); }
   else if (k === "ArrowLeft" || k === "PageUp") { e.preventDefault(); $("#b-prev").click(); }
@@ -457,14 +478,14 @@ function panZoom(box, svg) {
     const s = inner.querySelector("svg");
     if (!s) return;
     s.style.maxWidth = "none"; s.style.maxHeight = "none";
-    const w = s.getBoundingClientRect().width / scale, h = s.getBoundingClientRect().height / scale;
+    const w = s.getBoundingClientRect().width / scale / frameScale, h = s.getBoundingClientRect().height / scale / frameScale;
     scale = Math.min(wrap.clientWidth / w, wrap.clientHeight / h) * 0.95 || 1;
     x = (wrap.clientWidth - w * scale) / 2; y = (wrap.clientHeight - h * scale) / 2; apply();
   };
-  wrap.addEventListener("wheel", e => { e.preventDefault(); const r = wrap.getBoundingClientRect(); zoomAt(e.deltaY < 0 ? 1.15 : 1 / 1.15, e.clientX - r.left, e.clientY - r.top); }, { passive: false });
+  wrap.addEventListener("wheel", e => { e.preventDefault(); const r = wrap.getBoundingClientRect(); zoomAt(e.deltaY < 0 ? 1.15 : 1 / 1.15, (e.clientX - r.left) / frameScale, (e.clientY - r.top) / frameScale); }, { passive: false });
   let drag = null;
   wrap.addEventListener("pointerdown", e => { if (e.target.closest("button")) return; drag = { px: e.clientX, py: e.clientY, x, y }; wrap.setPointerCapture(e.pointerId); wrap.classList.add("dragging"); });
-  wrap.addEventListener("pointermove", e => { if (!drag) return; x = drag.x + e.clientX - drag.px; y = drag.y + e.clientY - drag.py; apply(); });
+  wrap.addEventListener("pointermove", e => { if (!drag) return; x = drag.x + (e.clientX - drag.px) / frameScale; y = drag.y + (e.clientY - drag.py) / frameScale; apply(); });
   const end = () => { drag = null; wrap.classList.remove("dragging"); };
   wrap.addEventListener("pointerup", end); wrap.addEventListener("pointercancel", end);
   const center = f => zoomAt(f, wrap.clientWidth / 2, wrap.clientHeight / 2);
@@ -928,59 +949,173 @@ const refreshTranscript = () => { if ($("#drawer").dataset.mode === "transcript"
 
 // ---------- traits sur les écrans (coordonnées relatives à la zone d'affichage : 0 à 1) ----------
 const ink = $("#ink");
+// annotations dessinées sur l'écran : traits libres, formes prédéfinies, bulles de texte avec flèche
+const INK_KINDS = new Set(["stroke", "shape", "callout"]);
+const isInk = a => INK_KINDS.has(a.kind);
+const SHAPE_LABELS = { line: "ligne", arrow: "flèche", circle: "cercle", rect: "rectangle", hexagon: "hexagone" };
+const BUBBLE = { font: 28, pad: 14, maxWidth: 460, line: 36 };
+
+function arrowHead(g, x0, y0, x1, y1, size) {
+  const t = Math.atan2(y1 - y0, x1 - x0);
+  g.beginPath();
+  g.moveTo(x1, y1);
+  g.lineTo(x1 - size * Math.cos(t - 0.45), y1 - size * Math.sin(t - 0.45));
+  g.lineTo(x1 - size * Math.cos(t + 0.45), y1 - size * Math.sin(t + 0.45));
+  g.closePath();
+  g.fill();
+}
+// lignes d'une bulle : mots répartis sur la largeur maximale
+function bubbleLines(g, text) {
+  const lines = [];
+  let line = "";
+  for (const word of String(text).split(/\s+/)) {
+    const next = line ? `${line} ${word}` : word;
+    if (line && g.measureText(next).width > BUBBLE.maxWidth - 2 * BUBBLE.pad) { lines.push(line); line = word; } else line = next;
+  }
+  if (line) lines.push(line);
+  return lines.length ? lines : [""];
+}
+function drawAnnotation(g, a, w, h) {
+  const lw = Math.max(2, (a.width ?? 0.004) * Math.min(w, h));
+  g.strokeStyle = a.color; g.fillStyle = a.color; g.globalAlpha = 0.9; g.lineCap = "round"; g.lineJoin = "round"; g.lineWidth = lw;
+  const P = (a.points ?? []).map(([x, y]) => [x * w, y * h]);
+  if (a.kind === "stroke") {
+    g.beginPath(); P.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y))); g.stroke();
+    return;
+  }
+  const [[x0, y0], [x1, y1]] = P.length >= 2 ? P : [[0, 0], [0, 0]];
+  if (a.kind === "shape") {
+    const l = Math.min(x0, x1), r = Math.max(x0, x1), t = Math.min(y0, y1), bt = Math.max(y0, y1), cx = (l + r) / 2, cy = (t + bt) / 2;
+    g.beginPath();
+    if (a.shape === "line" || a.shape === "arrow") { g.moveTo(x0, y0); g.lineTo(x1, y1); g.stroke(); if (a.shape === "arrow") arrowHead(g, x0, y0, x1, y1, lw * 5); return; }
+    if (a.shape === "circle") g.ellipse(cx, cy, (r - l) / 2, (bt - t) / 2, 0, 0, Math.PI * 2);
+    else if (a.shape === "rect") g.rect(l, t, r - l, bt - t);
+    else if (a.shape === "hexagon") { const q = (r - l) / 4; [[l + q, t], [r - q, t], [r, cy], [r - q, bt], [l + q, bt], [l, cy]].forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y))); g.closePath(); }
+    g.stroke();
+    return;
+  }
+  if (a.kind === "callout") {
+    // bulle centrée sur le second point, flèche jusqu'au premier (élément désigné)
+    g.font = `${BUBBLE.font}px system-ui, -apple-system, "Segoe UI", sans-serif`;
+    const lines = bubbleLines(g, a.text || "…");
+    const bw = Math.min(BUBBLE.maxWidth, Math.max(...lines.map(x => g.measureText(x).width)) + 2 * BUBBLE.pad), bh = lines.length * BUBBLE.line + 2 * BUBBLE.pad;
+    const bx = Math.min(w - bw, Math.max(0, x1 - bw / 2)), by = Math.min(h - bh, Math.max(0, y1 - bh / 2)), cx = bx + bw / 2, cy = by + bh / 2;
+    // départ de la flèche : bord de la bulle dans la direction de l'élément désigné
+    const dx = x0 - cx, dy = y0 - cy;
+    const k = Math.min(Math.abs(dx) > 0 ? (bw / 2) / Math.abs(dx) : Infinity, Math.abs(dy) > 0 ? (bh / 2) / Math.abs(dy) : Infinity);
+    if (k < 1) {
+      const sx = cx + dx * k, sy = cy + dy * k;
+      g.globalAlpha = 0.95; g.lineWidth = Math.max(3, lw);
+      g.beginPath(); g.moveTo(sx, sy); g.lineTo(x0, y0); g.stroke();
+      arrowHead(g, sx, sy, x0, y0, Math.max(3, lw) * 5);
+    }
+    g.globalAlpha = 1;
+    g.beginPath(); g.roundRect(bx, by, bw, bh, 14);
+    g.fillStyle = "rgba(255,255,255,0.96)"; g.fill();
+    g.lineWidth = 4; g.strokeStyle = a.color; g.stroke();
+    g.fillStyle = "#111"; g.textBaseline = "top";
+    lines.forEach((line, i) => g.fillText(line, bx + BUBBLE.pad, by + BUBBLE.pad + i * BUBBLE.line + (BUBBLE.line - BUBBLE.font) / 2));
+  }
+}
 function drawInk() {
-  const w = ink.clientWidth, h = ink.clientHeight, dpr = window.devicePixelRatio || 1;
+  // taille logique fixe (1920 × 1080) ; résolution du dessin selon l'échelle d'affichage et la densité de l'écran
+  const w = ink.clientWidth, h = ink.clientHeight, dpr = Math.max(0.5, Math.min(2, (window.devicePixelRatio || 1) * frameScale));
   if (ink.width !== Math.round(w * dpr) || ink.height !== Math.round(h * dpr)) { ink.width = Math.round(w * dpr); ink.height = Math.round(h * dpr); }
   const g = ink.getContext("2d");
   g.setTransform(dpr, 0, 0, dpr, 0, 0);
   g.clearRect(0, 0, w, h);
   const list = REPLAY ? (R?.annotations ?? []) : annotations;
-  // rejeu : les traits apparaissent au moment où ils ont été tracés
+  // rejeu : les annotations apparaissent au moment où elles ont été faites
   const until = REPLAY && R?.events?.[rIdx] ? new Date(R.events[rIdx].enteredAt).getTime() + rElapsed * 1000 : Infinity;
-  const strokes = inkShown() ? list.filter(a => a.kind === "stroke" && a.screen === current && new Date(a.at).getTime() <= until) : [];
-  if (drawing) strokes.push(drawing);
-  for (const a of strokes) {
-    g.strokeStyle = a.color; g.globalAlpha = 0.85; g.lineCap = "round"; g.lineJoin = "round";
-    g.lineWidth = Math.max(2, (a.width ?? 0.004) * Math.min(w, h));
-    g.beginPath();
-    a.points.forEach(([x, y], i) => (i ? g.lineTo(x * w, y * h) : g.moveTo(x * w, y * h)));
-    g.stroke();
-  }
+  const shown = inkShown() ? list.filter(a => isInk(a) && a.screen === current && new Date(a.at).getTime() <= until) : [];
+  if (drawing) shown.push(drawing);
+  for (const a of shown) drawAnnotation(g, a, w, h);
 }
 new ResizeObserver(() => drawInk()).observe(ink);
 const pointAt = e => { const r = ink.getBoundingClientRect(); return [(e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height]; };
+// outil : trait libre, forme (glisser du premier au second point), bulle (glisser de l'élément à la place de la bulle)
+let inkTool = "pen";
+const TOOLS = [["pen", "✎", "Trait libre"], ["line", "╱", "Ligne"], ["arrow", "➝", "Flèche"], ["circle", "◯", "Cercle"], ["rect", "▭", "Rectangle"], ["hexagon", "⬡", "Hexagone"],
+  ["callout", "💬", "Bulle de texte : cliquer sur l'élément à désigner, glisser jusqu'à la place de la bulle, puis écrire"]];
 ink.addEventListener("pointerdown", e => {
-  if (!drawMode) return;
+  if (!drawMode || calloutInput) return;
   ink.setPointerCapture(e.pointerId);
-  drawing = { kind: "stroke", color: inkColor, screen: current, points: [pointAt(e)], width: 0.004 };
+  const p = pointAt(e);
+  drawing = inkTool === "pen" ? { kind: "stroke", color: inkColor, screen: current, points: [p], width: 0.004 }
+    : inkTool === "callout" ? { kind: "callout", color: inkColor, screen: current, points: [p, p], text: "", width: 0.004 }
+    : { kind: "shape", shape: inkTool, color: inkColor, screen: current, points: [p, p], width: 0.004 };
 });
 ink.addEventListener("pointermove", e => {
   if (!drawing) return;
-  const p = pointAt(e), last = drawing.points.at(-1);
-  if (Math.hypot(p[0] - last[0], p[1] - last[1]) > 0.002) { drawing.points.push(p); drawInk(); }
+  const p = pointAt(e);
+  if (drawing.kind === "stroke") {
+    const last = drawing.points.at(-1);
+    if (Math.hypot(p[0] - last[0], p[1] - last[1]) > 0.002) { drawing.points.push(p); drawInk(); }
+  } else { drawing.points[1] = p; if (drawing.kind === "shape") drawInk(); }
 });
+// annotation affichée tout de suite, remplacée par celle du serveur
+function commitAnnotation(a) {
+  annotations.push({ ...a, id: `tmp-${Date.now()}`, at: new Date().toISOString(), author: { id: FOLLOW ? me?.id : PRESENTER_ID } });
+  drawInk();
+  sendAnnotation(a).then(() => { annotations = annotations.filter(x => !String(x.id).startsWith("tmp-")); drawInk(); });
+}
 const endStroke = () => {
   if (!drawing) return;
   const a = drawing;
   drawing = null;
-  if (a.points.length >= 2) { annotations.push({ ...a, id: `tmp-${Date.now()}`, at: new Date().toISOString(), author: { id: FOLLOW ? me?.id : PRESENTER_ID } }); drawInk(); sendAnnotation(a).then(() => { annotations = annotations.filter(x => !String(x.id).startsWith("tmp-")); drawInk(); }); }
-  else drawInk();
+  if (a.kind === "stroke") { if (a.points.length >= 2) commitAnnotation(a); else drawInk(); return; }
+  const [[x0, y0], [x1, y1]] = a.points;
+  if (a.kind === "shape") { if (Math.hypot(x1 - x0, y1 - y0) >= 0.005) commitAnnotation(a); else drawInk(); return; }
+  // bulle : simple clic → bulle placée en haut à droite de l'élément
+  if (Math.hypot(x1 - x0, y1 - y0) < 0.02) a.points[1] = [Math.min(0.88, x0 + 0.12), Math.max(0.1, y0 - 0.12)];
+  openCalloutInput(a);
 };
 ink.addEventListener("pointerup", endStroke);
 ink.addEventListener("pointercancel", endStroke);
 
+// saisie du texte d'une bulle, à sa place sur l'écran : Entrée pour valider, Maj+Entrée pour aller à la ligne, Échap pour annuler
+let calloutInput = null;
+function openCalloutInput(a) {
+  const [bx, by] = a.points[1];
+  const input = el("textarea", { className: "callout-input", placeholder: "Texte de la bulle…", maxLength: 300, style: `left:${bx * 100}%;top:${by * 100}%;--c:${a.color}` });
+  calloutInput = { input, a };
+  drawing = { ...a, text: "" };
+  drawInk();
+  const close = submit => {
+    if (!calloutInput) return;
+    calloutInput = null;
+    drawing = null;
+    input.remove();
+    const text = input.value.replace(/\s+/g, " ").trim();
+    if (submit && text) commitAnnotation({ ...a, text }); else drawInk();
+  };
+  input.addEventListener("keydown", e => {
+    e.stopPropagation();
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); close(true); }
+    else if (e.key === "Escape") { e.preventDefault(); close(false); }
+  });
+  input.addEventListener("blur", () => close(true));
+  $("#frame").append(input);
+  setTimeout(() => input.focus(), 0);
+}
+
 function renderPalette() {
-  const own = annotations.filter(a => a.kind === "stroke" && a.screen === current && mine(a));
+  const own = annotations.filter(a => isInk(a) && a.screen === current && mine(a));
   $("#palette").replaceChildren(
+    // icônes : caractères, sauf l'hexagone (dessiné : le caractère manque dans certaines polices)
+    ...TOOLS.map(([id, icon, label]) => el("button", { className: `tool${inkTool === id ? " on" : ""}`, title: label, onclick: () => { inkTool = id; renderPalette(); },
+      ...(id === "hexagon" ? { innerHTML: '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M7 3h10l5 9-5 9H7l-5-9z" fill="none" stroke="currentColor" stroke-width="2"/></svg>' } : { textContent: icon }) })),
+    el("span", { className: "sep" }),
     ...grid.map(g => el("button", { className: `sw${g.color === inkColor ? " on" : ""}`, title: g.instruction || g.position, onclick: () => { inkColor = g.color; renderPalette(); } },
       el("i", { style: `background:${g.color}` }), g.position || g.name)),
     el("span", { className: "tools" },
-      el("button", { textContent: "↶", title: "Retirer mon dernier trait sur cet écran", disabled: !own.length, onclick: () => removeAnnotation(own.at(-1)) }),
+      el("button", { textContent: "↶", title: "Retirer ma dernière annotation sur cet écran (trait, forme ou bulle)", disabled: !own.length, onclick: () => removeAnnotation(own.at(-1)) }),
       el("button", { textContent: "Effacer les miens", disabled: !own.length, onclick: () => own.forEach(removeAnnotation) }),
-      FOLLOW ? null : el("button", { textContent: "Tout effacer", title: "Retirer tous les traits de cet écran (modération)", onclick: () => { if (confirm("Retirer tous les traits de cet écran, y compris ceux du public ?")) annotations.filter(a => a.kind === "stroke" && a.screen === current).forEach(removeAnnotation); } }),
+      FOLLOW ? null : el("button", { textContent: "Tout effacer", title: "Retirer toutes les annotations dessinées sur cet écran (modération)", onclick: () => { if (confirm("Retirer tous les traits, formes et bulles de cet écran, y compris ceux du public ?")) annotations.filter(a => isInk(a) && a.screen === current).forEach(removeAnnotation); } }),
       el("button", { textContent: "✕", title: "Terminer l'annotation (Échap)", onclick: toggleDraw })));
 }
 function toggleDraw() {
+  if (calloutInput) calloutInput.input.blur();
   if (!drawMode && !canAnnotate()) return toast(grid.length ? (FOLLOW ? "Les annotations s'ouvrent quand la séance est en direct" : "Démarrer la séance pour annoter") : "Grille d'annotation indisponible");
   drawMode = !drawMode;
   inkColor ??= grid[0]?.color;
@@ -1116,7 +1251,8 @@ let people = [], clientId = null;
 const annotationList = () => (REPLAY ? (R?.annotations ?? []) : annotations);
 const screenAnnotations = i => annotationList().filter(a => a.screen === i && !String(a.id).startsWith("tmp-")).sort((a, b) => String(a.at).localeCompare(String(b.at)));
 const clock = iso => new Date(iso).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-const KIND = { stroke: "trait", highlight: "surlignage" };
+const KIND = { stroke: "trait", shape: "forme", callout: "bulle", highlight: "surlignage" };
+const kindLabel = a => (a.kind === "shape" ? SHAPE_LABELS[a.shape] ?? "forme" : KIND[a.kind] ?? a.kind);
 function updateAnnsCount() {
   const n = screenAnnotations(current).length;
   $("#anns-count").textContent = n ? String(n) : "";
@@ -1127,7 +1263,7 @@ function annRow(a, o = {}) {
   return el("div", { className: "ann-row" },
     el("span", { className: "dot", style: `background:${a.color}` }),
     el("div", {},
-      el("div", { className: "what" }, el("strong", { textContent: a.position || "?" }), ` · ${KIND[a.kind] ?? a.kind}`, a.kind === "highlight" && a.text ? ` « ${a.text.length > 140 ? a.text.slice(0, 140) + "…" : a.text} »` : ""),
+      el("div", { className: "what" }, el("strong", { textContent: a.position || "?" }), ` · ${kindLabel(a)}`, (a.kind === "highlight" || a.kind === "callout") && a.text ? ` « ${a.text.length > 140 ? a.text.slice(0, 140) + "…" : a.text} »` : ""),
       el("div", { className: "meta" }, [
         o.author !== false ? (a.author?.name || (a.author?.id === PRESENTER_ID ? "Présentateur" : "anonyme")) : null,
         `${clock(a.at)} (${sinceStart(a.at)} de séance)`,
@@ -1145,7 +1281,7 @@ function renderAnnotationsPanel() {
   $("#drawer").replaceChildren(...[
     panelHead(`Annotations — écran ${current + 1}`),
     el("div", { className: "muted", style: "font-size:13px;margin-top:4px", textContent: list.length
-      ? `${list.length} annotation(s) par ${authors} personne(s) : ${list.filter(a => a.kind === "stroke").length} trait(s), ${list.filter(a => a.kind === "highlight").length} surlignage(s) de la transcription. ${REPLAY ? "" : "La liste suit l'écran affiché et se met à jour en direct."}`
+      ? `${list.length} annotation(s) par ${authors} personne(s) : ${list.filter(a => a.kind === "stroke").length} trait(s), ${list.filter(a => a.kind === "shape").length} forme(s), ${list.filter(a => a.kind === "callout").length} bulle(s), ${list.filter(a => a.kind === "highlight").length} surlignage(s) de la transcription. ${REPLAY ? "" : "La liste suit l'écran affiché et se met à jour en direct."}`
       : REPLAY ? "Pas d'annotation sur cet écran pendant la séance." : "Pas encore d'annotation sur cet écran." }),
     list.length ? el("div", { className: "panel-list" }, list.map(a => annRow(a))) : null].filter(Boolean));
 }
@@ -1172,7 +1308,7 @@ function renderPeoplePanel() {
           p.screen == null ? "écran inconnu" : `écran ${p.screen + 1}${sc ? ` (${LABELS[sc.type] ?? sc.type})` : ""}${p.screen === current ? " — le vôtre" : ""}`,
           p.following ? " · suit le direct" : " · décroché du direct"),
         own.length
-          ? el("details", {}, el("summary", { textContent: `${own.length} annotation(s) : ${own.filter(a => a.kind === "stroke").length} trait(s), ${own.filter(a => a.kind === "highlight").length} surlignage(s)` }),
+          ? el("details", {}, el("summary", { textContent: `${own.length} annotation(s) : ${own.filter(a => a.kind === "stroke").length} trait(s), ${own.filter(a => a.kind === "shape").length} forme(s), ${own.filter(a => a.kind === "callout").length} bulle(s), ${own.filter(a => a.kind === "highlight").length} surlignage(s)` }),
               el("div", { className: "panel-list" }, own.map(a => annRow(a, { author: false, screen: true }))))
           : el("div", { className: "meta", textContent: "Pas encore d'annotation." }));
     })) : el("p", { className: "muted", textContent: "Personne n'est encore connecté : partager le lien ou le QR code ci-dessus." })].filter(Boolean));

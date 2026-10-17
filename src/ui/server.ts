@@ -999,7 +999,22 @@ function serveDocs(res: http.ServerResponse, pathname: string) {
   const file = path.join(DOCS_DIR, name);
   if (!name.endsWith(".html") || !fs.existsSync(file)) return sendJson(res, 404, { error: "Page de documentation introuvable (lancer npm run docs)" });
   res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
-  res.end(fs.readFileSync(file));
+  res.end(publicDocAddresses(name, fs.readFileSync(file, "utf-8")));
+}
+
+// documentation servie : dans les pages destinées aux utilisateurs (accueil, guide), les adresses locales des
+// applications (http://127.0.0.1:7272…) remplacées par leurs adresses publiques (PAPER_URL, EXPLO_URL, CHAOTICUM_URL).
+// Le guide d'installation garde les adresses locales : elles y désignent les serveurs vus de la machine (Apache, Docker).
+const PUBLIC_DOC_PAGES = new Set(["index.html", "utilisateur.html"]);
+function publicDocAddresses(page: string, html: string) {
+  if (!PUBLIC_DOC_PAGES.has(page)) return html;
+  const urls = appUrls();
+  for (const a of Object.keys(APPS) as AppName[]) {
+    const url = urls[a]?.url?.replace(/\/+$/, "");
+    if (!url || /\/\/(127\.|localhost|\[::1\])/.test(url)) continue;
+    html = html.replace(new RegExp(`https?://(?:127\\.0\\.0\\.1|localhost):${APPS[a].defaultPort}(?![0-9])`, "g"), url);
+  }
+  return html;
 }
 
 const server = http.createServer(async (req, res) => {

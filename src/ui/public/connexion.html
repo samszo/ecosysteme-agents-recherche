@@ -57,15 +57,23 @@ const params = new URLSearchParams(location.search);
 const next = /^\/public\//.test(params.get("next") ?? "") ? params.get("next") : "/public/suivre";
 if (params.get("erreur")) { $("#error").textContent = params.get("erreur"); $("#error").classList.remove("hidden"); }
 const ICONS = {
+  cas: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2 2 7l10 5 8-4v6h2V7L12 2zm-6 9.2V15c0 2.2 2.7 4 6 4s6-1.8 6-4v-3.8l-6 3-6-3z"/></svg>',
   google: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M22.6 12.3c0-.8-.1-1.6-.2-2.3H12v4.4h6a5.1 5.1 0 0 1-2.2 3.4v2.8h3.6c2.1-1.9 3.2-4.8 3.2-8.3z"/><path fill="#34A853" d="M12 23c3 0 5.5-1 7.3-2.7l-3.6-2.8c-1 .7-2.2 1.1-3.7 1.1-2.9 0-5.3-1.9-6.2-4.5H2.1v2.9A11 11 0 0 0 12 23z"/><path fill="#FBBC05" d="M5.8 14.1a6.6 6.6 0 0 1 0-4.2V7H2.1a11 11 0 0 0 0 10l3.7-2.9z"/><path fill="#EA4335" d="M12 5.4c1.6 0 3.1.6 4.2 1.7l3.2-3.2A11 11 0 0 0 2.1 7l3.7 2.9C6.7 7.3 9.1 5.4 12 5.4z"/></svg>',
   github: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 .5a11.5 11.5 0 0 0-3.6 22.4c.6.1.8-.3.8-.6v-2c-3.2.7-3.9-1.5-3.9-1.5-.5-1.3-1.3-1.7-1.3-1.7-1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.7-1.6-2.6-.3-5.3-1.3-5.3-5.7 0-1.3.5-2.3 1.2-3.1-.1-.3-.5-1.5.1-3.1 0 0 1-.3 3.2 1.2a11 11 0 0 1 5.8 0c2.2-1.5 3.2-1.2 3.2-1.2.6 1.6.2 2.8.1 3.1.8.8 1.2 1.8 1.2 3.1 0 4.4-2.7 5.4-5.3 5.7.4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6A11.5 11.5 0 0 0 12 .5z"/></svg>',
 };
 (async () => {
   const p = await (await fetch("/public/auth/providers")).json();
   if (p.user) {
-    $("#who").textContent = `Connecté : ${p.user.name} (${p.user.provider === "local" ? "compte local" : p.user.provider === "google" ? "Google" : "GitHub"})`;
+    $("#who").textContent = `Connecté : ${p.user.name} (${{ local: "compte local", google: "Google", github: "GitHub", cas: p.cas?.label ?? "CAS" }[p.user.provider] ?? p.user.provider})`;
     $("#continue").href = next;
     $("#signed").classList.remove("hidden"); $("#choices").classList.add("hidden");
+  }
+  // CAS de l'établissement (université Paris 8 par défaut) : en premier
+  if (p.cas) {
+    const a = document.createElement("a");
+    a.className = "btn"; a.href = `/public/auth/cas?next=${encodeURIComponent(next)}`; a.innerHTML = `${ICONS.cas}<span></span>`;
+    a.querySelector("span").textContent = `Se connecter avec ${p.cas.label}`;
+    $("#providers").append(a);
   }
   for (const [k, label] of [["google", "Continuer avec Google"], ["github", "Continuer avec GitHub"]]) {
     if (!p[k]) continue;
@@ -75,8 +83,8 @@ const ICONS = {
     $("#providers").append(a);
   }
   $("#local").classList.toggle("hidden", !p.local);
-  $("#sep").classList.toggle("hidden", !(p.local && (p.google || p.github)));
-  $("#none").classList.toggle("hidden", p.local || p.google || p.github);
+  $("#sep").classList.toggle("hidden", !(p.local && (p.google || p.github || p.cas)));
+  $("#none").classList.toggle("hidden", !!(p.local || p.google || p.github || p.cas));
 })();
 $("#local").onsubmit = async e => {
   e.preventDefault();

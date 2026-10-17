@@ -122,6 +122,23 @@
   #b-live { border-color: var(--err); color: var(--err); font-weight: 650; }
   .who-am-i { font-size: 12.5px; color: var(--muted); white-space: nowrap; }
   .who-am-i button { font-size: 12px; padding: 1px 6px; margin-left: 4px; }
+  .panel-list { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+  .ann-row { display: grid; grid-template-columns: 14px 1fr auto; gap: 8px; align-items: start; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; font-size: 13.5px; }
+  .ann-row .dot { width: 12px; height: 12px; border-radius: 50%; margin-top: 4px; }
+  .ann-row .meta { color: var(--muted); font-size: 12px; }
+  .ann-row .what { overflow-wrap: anywhere; }
+  .ann-row button { font-size: 12px; padding: 1px 7px; }
+  .person { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+  .person .head { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
+  .person .head strong { font-size: 14.5px; }
+  .person .meta { color: var(--muted); font-size: 12.5px; }
+  .person .live-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--ok); margin-right: 4px; }
+  .person .live-dot.off { background: var(--warn); }
+  .person details { margin-top: 6px; }
+  .person summary { cursor: pointer; font-size: 13px; color: var(--muted); }
+  .share-box { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin: 6px 0 12px; font-size: 13px; }
+  .share-box .qr-mini { background: #fff; border-radius: 8px; padding: 6px; width: 120px; }
+  .share-box a { color: var(--accent); word-break: break-all; }
   .hidden { display: none !important; }
   @media (max-width: 800px) { .contrib-layout { grid-template-columns: 1fr; } header h1 { max-width: 60vw; } }
 </style>
@@ -155,6 +172,7 @@
   <button id="b-transcript" title="Transcription : texte, réglages et surlignage">📝</button>
   <button id="b-draw" title="Annoter l'écran avec la grille de couleurs (D)">✏️</button>
   <button id="b-ink" title="Afficher ou masquer les annotations (A)">👁</button>
+  <button id="b-anns" title="Annotations de cet écran : qui, quoi, à quelle heure (N)">🗂 <span id="anns-count"></span></button>
   <button id="b-follow" title="Suivre la présentation sur un autre appareil">👥 <span id="followers"></span></button>
   <span id="who-am-i" class="who-am-i hidden"></span>
   <button id="b-full" title="Plein écran (F)">⛶</button>
@@ -316,6 +334,7 @@ document.addEventListener("keydown", e => {
   else if (k === "e" && !REPLAY && !FOLLOW) $("#b-edit").click();
   else if (k === "d" && !REPLAY) $("#b-draw").click();
   else if (k === "a") $("#b-ink").click();
+  else if (k === "n") $("#b-anns").click();
   else if (k === "l" && FOLLOW) $("#b-live").click();
   else if (k === "Escape" && drawMode) $("#b-draw").click();
   else if (k === "q") $("#qr-corner")?.classList.toggle("small");
@@ -402,6 +421,8 @@ async function render() {
     stage.append(el("div", { className: "center muted" }, el("h2", { className: "screen-title", textContent: LABELS[s.type] ?? s.type }), "Contenu non généré pour cet écran (voir le rapport de la partition)."));
   }
   drawInk();
+  refreshPanels();
+  postPosition();
 }
 const visited = () => new Set([...(REPLAY ? (R?.events ?? []).slice(0, rIdx + 1) : events).map(e => e.index), current]);
 
@@ -891,6 +912,7 @@ function addAnnotation(a) {
   if (!a?.id || annotations.some(x => x.id === a.id)) return;
   annotations.push(a);
   drawInk();
+  refreshPanels();
   if (drawMode) renderPalette();
   if (a.kind === "highlight") refreshTranscript();
 }
@@ -898,6 +920,7 @@ function dropAnnotation(id) {
   const a = annotations.find(x => x.id === id);
   annotations = annotations.filter(x => x.id !== id);
   drawInk();
+  refreshPanels();
   if (drawMode) renderPalette();
   if (a?.kind === "highlight") refreshTranscript();
 }
@@ -1024,26 +1047,19 @@ function pushLive() {
 }
 function presenterEvents() {
   const es = new EventSource(`/api/chaoticum/live/events?run=${encodeURIComponent(runId)}`);
-  es.addEventListener("init", e => { const d = JSON.parse(e.data); annotations = started && d.session === startedAt ? d.annotations : []; setFollowers(d.followers); drawInk(); });
+  es.addEventListener("init", e => { const d = JSON.parse(e.data); annotations = started && d.session === startedAt ? d.annotations : []; people = d.people ?? []; setFollowers(d.followers); drawInk(); refreshPanels(); });
+  es.addEventListener("people", e => { people = JSON.parse(e.data).people; refreshPanels(); });
   es.addEventListener("annotation", e => addAnnotation(JSON.parse(e.data)));
   es.addEventListener("annotation-removed", e => dropAnnotation(JSON.parse(e.data).id));
   es.addEventListener("followers", e => setFollowers(JSON.parse(e.data).followers));
 }
-const setFollowers = n => { $("#followers").textContent = n ? String(n) : ""; $("#b-follow").title = `Suivre la présentation sur un autre appareil${n ? ` (${n} personne(s) connectée(s))` : ""}`; };
-$("#b-follow").onclick = () => {
-  const base = publicBase && !/\/\/(127\.|localhost|\[::1\])/.test(publicBase) ? publicBase : location.origin;
-  const url = `${base.replace(/\/$/, "")}/public/suivre?run=${encodeURIComponent(runId)}`;
-  overlay(el("h2", { textContent: "Suivre la présentation" }),
-    el("div", { style: "background:#fff;border-radius:10px;padding:10px;width:240px;margin:0 auto", innerHTML: qrSvg(url) }),
-    el("p", {}, el("a", { href: url, target: "_blank", rel: "noopener", textContent: url, style: "color:var(--accent);font-size:13px;word-break:break-all" })),
-    el("p", { className: "muted", style: "font-size:13px", textContent: "Après connexion (Google, GitHub ou compte local), chacun suit les écrans et la transcription, et les annote avec la grille de couleurs ; les annotations sont enregistrées avec la séance." }),
-    el("button", { textContent: "Copier le lien", onclick: () => navigator.clipboard.writeText(url).then(() => toast("Lien copié")) }), " ",
-    el("button", { className: "primary", textContent: "Fermer", onclick: () => $("#overlay").classList.add("hidden") }));
-};
+const setFollowers = n => { $("#followers").textContent = n ? String(n) : ""; $("#b-follow").title = `Personnes connectées et lien de suivi${n ? ` (${n} personne(s) connectée(s))` : ""}`; };
+$("#b-follow").onclick = () => togglePanel("people", renderPeoplePanel);
 
 // ---------- personne qui suit : écran du présentateur, transcription et annotations en direct ----------
 function updateFollowUi() {
   if (!FOLLOW) return;
+  postPosition();
   const n = liveState.current + 1, detached = liveState.live && !following;
   $("#b-live").classList.toggle("hidden", !detached);
   $("#b-live").textContent = `● Direct · écran ${n}`;
@@ -1069,6 +1085,8 @@ function followerEvents() {
     const d = JSON.parse(e.data);
     liveState = { session: d.session, live: d.live, current: d.current, enteredAt: d.enteredAt };
     transcript = d.transcript; annotations = d.annotations;
+    clientId = d.client ?? null;
+    postPosition();
     if (following) syncToLive(); else updateFollowUi();
     drawInk(); refreshTranscript();
   });
@@ -1089,6 +1107,98 @@ function followerEvents() {
   es.addEventListener("annotation-removed", e => dropAnnotation(JSON.parse(e.data).id));
   // session expirée : retour à la page de connexion
   es.onerror = async () => { const r = await fetch("/public/auth/me").catch(() => null); if (r && r.status === 401) location.href = `/public/connexion?next=${encodeURIComponent(location.pathname + location.search)}`; };
+}
+
+// ==========================================
+// Panneaux : annotations d'un écran (qui, quoi, quand), personnes connectées (présentateur)
+// ==========================================
+let people = [], clientId = null;
+const annotationList = () => (REPLAY ? (R?.annotations ?? []) : annotations);
+const screenAnnotations = i => annotationList().filter(a => a.screen === i && !String(a.id).startsWith("tmp-")).sort((a, b) => String(a.at).localeCompare(String(b.at)));
+const clock = iso => new Date(iso).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+const KIND = { stroke: "trait", highlight: "surlignage" };
+function updateAnnsCount() {
+  const n = screenAnnotations(current).length;
+  $("#anns-count").textContent = n ? String(n) : "";
+  $("#b-anns").title = `Annotations de cet écran (${n}) : qui, quoi, à quelle heure (N)`;
+}
+// une annotation : couleur et signification, nature (trait, passage surligné), auteur, heure, écran
+function annRow(a, o = {}) {
+  return el("div", { className: "ann-row" },
+    el("span", { className: "dot", style: `background:${a.color}` }),
+    el("div", {},
+      el("div", { className: "what" }, el("strong", { textContent: a.position || "?" }), ` · ${KIND[a.kind] ?? a.kind}`, a.kind === "highlight" && a.text ? ` « ${a.text.length > 140 ? a.text.slice(0, 140) + "…" : a.text} »` : ""),
+      el("div", { className: "meta" }, [
+        o.author !== false ? (a.author?.name || (a.author?.id === PRESENTER_ID ? "Présentateur" : "anonyme")) : null,
+        `${clock(a.at)} (${sinceStart(a.at)} de séance)`,
+        o.screen ? `écran ${a.screen + 1}${P.screens[a.screen] ? ` · ${LABELS[P.screens[a.screen].type] ?? ""}` : ""}` : null,
+      ].filter(Boolean).join(" · "))),
+    canRemove(a) && !REPLAY ? el("button", { textContent: "Retirer", title: "Retirer cette annotation", onclick: () => { if (confirm("Retirer cette annotation ?")) removeAnnotation(a); } }) : el("span"));
+}
+const panelHead = (title, extra) => el("div", { style: "display:flex;align-items:center;gap:8px" },
+  el("h2", { className: "screen-title", style: "font-size:20px;margin:0", textContent: title }), el("div", { className: "spacer" }), extra ?? null,
+  el("button", { textContent: "Fermer", onclick: () => $("#drawer").classList.add("hidden") }));
+
+function renderAnnotationsPanel() {
+  const list = screenAnnotations(current);
+  const authors = new Set(list.map(a => a.author?.id)).size;
+  $("#drawer").replaceChildren(...[
+    panelHead(`Annotations — écran ${current + 1}`),
+    el("div", { className: "muted", style: "font-size:13px;margin-top:4px", textContent: list.length
+      ? `${list.length} annotation(s) par ${authors} personne(s) : ${list.filter(a => a.kind === "stroke").length} trait(s), ${list.filter(a => a.kind === "highlight").length} surlignage(s) de la transcription. ${REPLAY ? "" : "La liste suit l'écran affiché et se met à jour en direct."}`
+      : REPLAY ? "Pas d'annotation sur cet écran pendant la séance." : "Pas encore d'annotation sur cet écran." }),
+    list.length ? el("div", { className: "panel-list" }, list.map(a => annRow(a))) : null].filter(Boolean));
+}
+
+// personnes connectées (présentateur) : compte, écran consulté, suivi du direct, annotations
+function renderPeoplePanel() {
+  const base = publicBase && !/\/\/(127\.|localhost|\[::1\])/.test(publicBase) ? publicBase : location.origin;
+  const url = `${base.replace(/\/$/, "")}/public/suivre?run=${encodeURIComponent(runId)}`;
+  const PROVIDERS = { cas: "CAS", google: "Google", github: "GitHub", local: "compte local" };
+  const all = annotationList();
+  $("#drawer").replaceChildren(...[
+    panelHead(`Personnes connectées (${people.length})`),
+    el("div", { className: "share-box" },
+      el("div", { className: "qr-mini", innerHTML: qrSvg(url) }),
+      el("div", {}, el("div", { textContent: "Lien de suivi (connexion requise) :" }), el("a", { href: url, target: "_blank", rel: "noopener", textContent: url }), " ",
+        el("button", { textContent: "Copier", onclick: () => navigator.clipboard.writeText(url).then(() => toast("Lien copié")) }))),
+    people.length ? el("div", { className: "panel-list" }, people.map(p => {
+      const own = all.filter(a => a.author?.id === p.id).sort((a, b) => String(b.at).localeCompare(String(a.at)));
+      const sc = p.screen != null ? P.screens[p.screen] : null;
+      return el("div", { className: "person" },
+        el("div", { className: "head" }, el("strong", { textContent: p.name }), el("span", { className: "meta", textContent: `${PROVIDERS[p.provider] ?? p.provider}${p.tabs > 1 ? ` · ${p.tabs} onglets` : ""} · connecté(e) à ${clock(p.since)}` })),
+        el("div", { className: "meta" },
+          el("span", { className: `live-dot${p.following ? "" : " off"}` }),
+          p.screen == null ? "écran inconnu" : `écran ${p.screen + 1}${sc ? ` (${LABELS[sc.type] ?? sc.type})` : ""}${p.screen === current ? " — le vôtre" : ""}`,
+          p.following ? " · suit le direct" : " · décroché du direct"),
+        own.length
+          ? el("details", {}, el("summary", { textContent: `${own.length} annotation(s) : ${own.filter(a => a.kind === "stroke").length} trait(s), ${own.filter(a => a.kind === "highlight").length} surlignage(s)` }),
+              el("div", { className: "panel-list" }, own.map(a => annRow(a, { author: false, screen: true }))))
+          : el("div", { className: "meta", textContent: "Pas encore d'annotation." }));
+    })) : el("p", { className: "muted", textContent: "Personne n'est encore connecté : partager le lien ou le QR code ci-dessus." })].filter(Boolean));
+}
+
+function refreshPanels() {
+  updateAnnsCount();
+  const d = $("#drawer");
+  if (d.classList.contains("hidden")) return;
+  if (d.dataset.mode === "annotations") renderAnnotationsPanel();
+  else if (d.dataset.mode === "people") renderPeoplePanel();
+}
+const togglePanel = (mode, render) => {
+  const d = $("#drawer");
+  if (!d.classList.contains("hidden") && d.dataset.mode === mode) { d.classList.add("hidden"); return; }
+  d.dataset.mode = mode; d.classList.remove("hidden"); render();
+};
+$("#b-anns").onclick = () => togglePanel("annotations", renderAnnotationsPanel);
+
+// page de suivi : écran affiché transmis au serveur (liste des personnes du présentateur)
+let positionTimer = null;
+function postPosition() {
+  if (!FOLLOW || !clientId) return;
+  clearTimeout(positionTimer);
+  positionTimer = setTimeout(() => fetch(`/public/api/suivre/position?run=${encodeURIComponent(runId)}`, { method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ client: clientId, screen: current, following }) }).catch(() => {}), 300);
 }
 
 // ==========================================
@@ -1184,7 +1294,7 @@ async function load() {
     if (!PUBLIC) R = await api(`/api/chaoticum/participation?run=${encodeURIComponent(runId)}&id=${encodeURIComponent(replayId)}`);
     $("#b-mic").classList.add("hidden");
     if (!R.transcript?.length) { $("#b-cc").classList.add("hidden"); $("#b-transcript").classList.add("hidden"); }
-    if (!R.annotations?.length) $("#b-ink").classList.add("hidden");
+    if (!R.annotations?.length) { $("#b-ink").classList.add("hidden"); $("#b-anns").classList.add("hidden"); }
     $("#b-ink").classList.toggle("on", inkShown());
     $("#replay-ctl").classList.remove("hidden");
     $("#b-end").classList.add("hidden");

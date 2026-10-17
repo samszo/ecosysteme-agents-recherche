@@ -96,6 +96,8 @@ const ENV_FIELDS = [
     { key: "GITHUB_CLIENT_SECRET", label: "Secret client GitHub", secret: true, group: "Suivi de la présentation" },
     { key: "DIIGO_OMKS_KEY_IDENTITY", label: "Identité de la clé Omeka S (annotations Diigo)", group: "Annotations Diigo", help: "Facultatif : seulement si les items Diigo de l'Omeka S source ne sont pas publics." },
     { key: "DIIGO_OMKS_KEY_CREDENTIAL", label: "Secret de la clé Omeka S (annotations Diigo)", secret: true, group: "Annotations Diigo" },
+    { key: "CAS_URL", label: "Serveur CAS", group: "Suivi de la présentation", help: "Connexion avec le compte de l'établissement (protocole CAS). Vide : CAS de l'université Paris 8 (https://cas.univ-paris8.fr/cas) ; « non » pour le désactiver." },
+    { key: "CAS_LABEL", label: "Nom affiché du CAS", group: "Suivi de la présentation", help: "Texte du bouton « Se connecter avec … » (par défaut : Université Paris 8)." },
     { key: "AUTH_ALLOWED", label: "Comptes autorisés", group: "Suivi de la présentation", help: "Facultatif : adresses, domaines (@univ-paris8.fr) ou comptes GitHub (github:identifiant), séparés par des virgules. Vide : tout compte Google ou GitHub. Les comptes locaux sont toujours autorisés." },
   ] : []),
   { key: APP_DEF.portKey, label: "Port de cette interface", group: "Interface", help: `Pris en compte au prochain lancement du serveur (${APP_DEF.defaultPort} par défaut).` },

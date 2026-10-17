@@ -55,7 +55,9 @@ const PRESENTER = { id: "presentateur", name: "Présentateur" };
 
 export function createLive(ctx: LiveCtx) {
   const states = new Map<string, LiveState>();
-  const clients = new Map<string, Set<{ res: http.ServerResponse; presenter: boolean }>>();
+  // connexions aux flux : présentateur, ou personne qui suit (compte, écran affiché, suivi du direct)
+  interface Client { res: http.ServerResponse; presenter: boolean; id: string; user?: AuthUser; screen: number | null; following: boolean; since: string; seen?: string }
+  const clients = new Map<string, Set<Client>>();
   const file = (runId: string) => path.join(ctx.partDir(runId), "live.json");
   const empty = (): LiveState => ({ session: null, live: false, current: 0, enteredAt: null, transcript: [], annotations: [], updatedAt: new Date().toISOString() });
 
@@ -77,20 +79,40 @@ export function createLive(ctx: LiveCtx) {
   function broadcast(runId: string, event: string, data: unknown) {
     for (const c of clients.get(runId) ?? []) c.res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
   }
-  const followers = (runId: string) => [...(clients.get(runId) ?? [])].filter(c => !c.presenter).length;
+  const followers = (runId: string) => people(runId).length;
+  // personnes connectées (plusieurs onglets d'un même compte : une seule personne, écran du dernier onglet actif)
+  function people(runId: string) {
+    const byUser = new Map<string, { id: string; name: string; provider: string; screen: number | null; following: boolean; since: string; tabs: number; seen: string }>();
+    for (const c of clients.get(runId) ?? []) {
+      if (c.presenter || !c.user) continue;
+      const p = byUser.get(c.user.id);
+      if (!p) byUser.set(c.user.id, { id: c.user.id, name: c.user.name, provider: c.user.provider, screen: c.screen, following: c.following, since: c.since, tabs: 1, seen: c.seen ?? c.since });
+      else { p.tabs++; if ((c.seen ?? c.since) > p.seen) Object.assign(p, { screen: c.screen, following: c.following, seen: c.seen ?? c.since }); if (c.since < p.since) p.since = c.since; }
+    }
+    return [...byUser.values()].sort((a, b) => a.name.localeCompare(b.name));
+  }
+  // liste des personnes : au présentateur seulement (les personnes qui suivent n'en reçoivent que le nombre)
+  function broadcastPeople(runId: string) {
+    const list = people(runId);
+    for (const c of clients.get(runId) ?? []) {
+      c.res.write(`event: followers\ndata: ${JSON.stringify({ followers: list.length })}\n\n`);
+      if (c.presenter) c.res.write(`event: people\ndata: ${JSON.stringify({ people: list })}\n\n`);
+    }
+  }
   const publicState = (s: LiveState) => ({ session: s.session, live: s.live, current: s.current, enteredAt: s.enteredAt });
 
-  function stream(req: http.IncomingMessage, res: http.ServerResponse, runId: string, presenter: boolean) {
+  function stream(req: http.IncomingMessage, res: http.ServerResponse, runId: string, presenter: boolean, user?: AuthUser) {
     res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache, no-transform", Connection: "keep-alive", "X-Accel-Buffering": "no" });
     const s = state(runId);
-    res.write(`event: init\ndata: ${JSON.stringify({ ...publicState(s), transcript: s.transcript, annotations: s.annotations, followers: followers(runId) })}\n\n`);
     if (!clients.has(runId)) clients.set(runId, new Set());
-    const c = { res, presenter };
+    // identifiant de la connexion : la page de suivi le renvoie avec l'écran qu'elle affiche
+    const c: Client = { res, presenter, id: crypto.randomBytes(8).toString("hex"), ...(user ? { user } : {}), screen: null, following: true, since: new Date().toISOString() };
+    res.write(`event: init\ndata: ${JSON.stringify({ ...publicState(s), transcript: s.transcript, annotations: s.annotations, followers: followers(runId), client: c.id, ...(presenter ? { people: people(runId) } : {}) })}\n\n`);
     clients.get(runId)!.add(c);
-    broadcast(runId, "followers", { followers: followers(runId) });
+    broadcastPeople(runId);
     // maintien de la connexion à travers les proxys
     const ping = setInterval(() => res.write(": ping\n\n"), 25_000);
-    req.on("close", () => { clearInterval(ping); clients.get(runId)?.delete(c); broadcast(runId, "followers", { followers: followers(runId) }); });
+    req.on("close", () => { clearInterval(ping); clients.get(runId)?.delete(c); broadcastPeople(runId); });
   }
 
   // annotation reçue : validée, horodatée, attribuée, diffusée
@@ -219,7 +241,20 @@ export function createLive(ctx: LiveCtx) {
     },
     "GET /public/api/suivre/events": (req, res, url) => {
       const g = guard(req, res, url);
-      if (g) stream(req, res, g.runId, false);
+      if (g) stream(req, res, g.runId, false, g.user);
+    },
+    // écran affiché par une personne qui suit (et si elle suit le direct) : liste des personnes du présentateur
+    "POST /public/api/suivre/position": async (req, res, url) => {
+      const g = guard(req, res, url);
+      if (!g) return;
+      const { client, screen, following } = await ctx.readBody(req);
+      const c = [...(clients.get(g.runId) ?? [])].find(x => x.id === client && x.user?.id === g.user.id);
+      if (!c) return ctx.sendJson(res, 404, { error: "Connexion inconnue" });
+      c.screen = Number.isFinite(Number(screen)) ? Math.max(0, Math.floor(Number(screen))) : null;
+      c.following = following !== false;
+      c.seen = new Date().toISOString();
+      broadcastPeople(g.runId);
+      ctx.sendJson(res, 200, { ok: true });
     },
     "POST /public/api/suivre/annotation": async (req, res, url) => {
       const g = guard(req, res, url);

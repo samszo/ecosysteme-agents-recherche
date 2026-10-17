@@ -220,7 +220,7 @@
 
     <section class="card">
       <h2>Connexion des personnes qui suivent</h2>
-      <p class="lead">Le suivi (<code>/public/suivre</code>) demande une connexion : Google ou GitHub (identifiants à saisir sur la page <a href="/parametres" style="color:var(--accent)">⚙ Paramètres</a>, groupe « Suivi de la présentation ») ou un compte local créé ici.</p>
+      <p class="lead">Le suivi (<code>/public/suivre</code>) demande une connexion : compte de l'université Paris 8 (CAS), Google ou GitHub (identifiants à saisir sur la page <a href="/parametres" style="color:var(--accent)">⚙ Paramètres</a>, groupe « Suivi de la présentation ») ou un compte local créé ici.</p>
       <div id="auth-providers" class="help"></div>
       <div class="table-wrap" id="auth-users" style="margin-top:8px"></div>
       <div class="grid" style="margin-top:8px">
@@ -428,7 +428,7 @@ async function loadUsers() {
   let d;
   try { d = await api("/api/auth/users"); } catch (e) { $("#auth-users").textContent = "Comptes indisponibles : " + e.message; return; }
   $("#auth-providers").replaceChildren(
-    `Google : ${d.providers.google ? "configuré" : "non configuré"} (retour : ${d.callbacks.google}) · GitHub : ${d.providers.github ? "configuré" : "non configuré"} (retour : ${d.callbacks.github})`);
+    `CAS : ${d.providers.cas ? `${d.providers.cas.label} (${d.providers.cas.url} ; service : ${d.callbacks.cas})` : "désactivé"} · Google : ${d.providers.google ? "configuré" : "non configuré"} (retour : ${d.callbacks.google}) · GitHub : ${d.providers.github ? "configuré" : "non configuré"} (retour : ${d.callbacks.github})`);
   $("#auth-users").replaceChildren(d.users.length ? el("table", { className: "data" },
     el("thead", {}, el("tr", {}, ["Identifiant", "Nom", "Créé le", ""].map(h => el("th", { textContent: h })))),
     el("tbody", {}, d.users.map(u => el("tr", {},

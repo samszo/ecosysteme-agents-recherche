@@ -1,12 +1,13 @@
 // Authentification des personnes qui suivent une présentation (chaoticumSeminario, pages /public/suivre) :
-// Google (OpenID Connect), GitHub (OAuth) ou comptes locaux (users.json, mots de passe hachés avec scrypt).
+// Google (OpenID Connect), GitHub (OAuth), CAS d'un établissement (par défaut celui de l'université Paris 8) ou
+// comptes locaux (users.json, mots de passe hachés avec scrypt).
 // La session est un cookie signé (HMAC) : ni base de sessions, ni donnée personnelle stockée côté serveur.
 import http from "http";
 import fs from "fs";
 import path from "path";
 import crypto from "crypto";
 
-export interface AuthUser { id: string; name: string; provider: "google" | "github" | "local"; email?: string }
+export interface AuthUser { id: string; name: string; provider: "google" | "github" | "cas" | "local"; email?: string }
 type Handler = (req: http.IncomingMessage, res: http.ServerResponse, url: URL) => Promise<void> | void;
 
 interface AuthCtx {
@@ -80,7 +81,8 @@ export function createAuth(ctx: AuthCtx) {
   // Accès : AUTH_ALLOWED (adresses, @domaines, github:identifiant ; vide = tout compte authentifié)
   // ==========================================
   function allowed(u: AuthUser) {
-    if (u.provider === "local") return true;
+    // comptes locaux et comptes de l'établissement (CAS) : toujours autorisés
+    if (u.provider === "local" || u.provider === "cas") return true;
     const rules = String(ctx.readEnv().AUTH_ALLOWED ?? "").split(/[,\s]+/).map(s => s.trim().toLowerCase()).filter(Boolean);
     if (!rules.length) return true;
     const email = (u.email ?? "").toLowerCase();
@@ -99,6 +101,16 @@ export function createAuth(ctx: AuthCtx) {
   const attempts = new Map<string, { n: number; until: number }>();
 
   const configured = (p: Provider) => { const env = ctx.readEnv(); return !!(env[PROVIDERS[p].id] && env[PROVIDERS[p].secret]); };
+
+  // ==========================================
+  // CAS (protocole CAS 2 : /login puis /serviceValidate) : CAS_URL, par défaut celui de l'université Paris 8 ;
+  // CAS_URL=non le désactive ; CAS_LABEL : nom affiché sur le bouton
+  // ==========================================
+  const CAS_DEFAULT = "https://cas.univ-paris8.fr/cas";
+  const casUrl = () => { const v = (ctx.readEnv().CAS_URL ?? "").trim(); return /^(non|off|aucun|false|0)$/i.test(v) ? "" : (v || CAS_DEFAULT).replace(/\/(login)?\/?$/, ""); };
+  const casLabel = () => ctx.readEnv().CAS_LABEL || (casUrl() === CAS_DEFAULT ? "Université Paris 8" : "CAS de l'établissement");
+  const casService = (req: http.IncomingMessage) => `${origin(req)}/public/auth/cas/callback`;
+  const xml = (s: string) => s.replace(/&#0*39;|&apos;/g, "'").replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&").trim();
   const fail = (res: http.ServerResponse, message: string) => { res.writeHead(302, { Location: `/public/connexion?erreur=${encodeURIComponent(message)}` }); res.end(); };
 
   // ==========================================
@@ -149,12 +161,39 @@ export function createAuth(ctx: AuthCtx) {
       res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
       res.end(fs.readFileSync(path.join(ctx.publicDir, "connexion.html")));
     },
-    "GET /public/auth/providers": (req, res) => ctx.sendJson(res, 200, { google: configured("google"), github: configured("github"), local: readUsers().length > 0, user: currentUser(req) }),
+    "GET /public/auth/providers": (req, res) => ctx.sendJson(res, 200, { google: configured("google"), github: configured("github"), cas: casUrl() ? { label: casLabel() } : false, local: readUsers().length > 0, user: currentUser(req) }),
     "GET /public/auth/me": (req, res) => { const u = currentUser(req); ctx.sendJson(res, u ? 200 : 401, u ? { user: u } : { error: "Non connecté" }); },
     "GET /public/auth/google": oauthStart("google"),
     "GET /public/auth/google/callback": oauthCallback("google"),
     "GET /public/auth/github": oauthStart("github"),
     "GET /public/auth/github/callback": oauthCallback("github"),
+
+    // CAS : redirection vers la page de connexion de l'établissement (l'adresse de retour garde la page à suivre)
+    "GET /public/auth/cas": (req, res, url) => {
+      if (!casUrl()) return fail(res, "Connexion CAS non configurée");
+      res.writeHead(302, { "Set-Cookie": cookie(req, OAUTH_COOKIE, sign({ p: "cas", next: safeNext(url.searchParams.get("next")), exp: Date.now() + 600_000 }), 600), Location: `${casUrl()}/login?service=${encodeURIComponent(casService(req))}` });
+      res.end();
+    },
+    // retour du CAS avec un ticket, validé auprès du serveur CAS (réponse XML)
+    "GET /public/auth/cas/callback": async (req, res, url) => {
+      const pending = verify<{ p: string; next: string }>(cookies(req)[OAUTH_COOKIE]);
+      const ticket = url.searchParams.get("ticket");
+      if (!ticket) return fail(res, "Connexion CAS annulée ou sans ticket");
+      try {
+        const r = await fetch(`${casUrl()}/serviceValidate?service=${encodeURIComponent(casService(req))}&ticket=${encodeURIComponent(ticket)}`, { headers: { Accept: "application/xml" } });
+        const body = await r.text();
+        const failure = /<cas:authenticationFailure[^>]*>([\s\S]*?)<\/cas:authenticationFailure>/.exec(body);
+        if (failure) throw new Error(xml(failure[1]!));
+        const login = /<cas:user>([\s\S]*?)<\/cas:user>/.exec(body)?.[1];
+        if (!login) throw new Error(`réponse inattendue du serveur CAS (${r.status})`);
+        // attributs éventuellement transmis par le CAS (nom, adresse)
+        const attr = (...names: string[]) => { for (const n of names) { const m = new RegExp(`<cas:${n}>([\\s\\S]*?)</cas:${n}>`).exec(body); if (m) return xml(m[1]!); } return ""; };
+        const name = attr("displayName", "cn") || [attr("givenName"), attr("sn")].filter(Boolean).join(" ") || xml(login);
+        const email = attr("mail", "email");
+        const user: AuthUser = { id: `cas:${xml(login).toLowerCase()}`, name, provider: "cas", ...(email ? { email } : {}) };
+        startSession(req, res, user, pending?.next ?? "/public/suivre");
+      } catch (e) { fail(res, `Connexion ${casLabel()} impossible : ${(e as Error).message}`); }
+    },
 
     "POST /public/auth/local": async (req, res) => {
       const ip = String(req.headers["x-forwarded-for"] ?? req.socket.remoteAddress ?? "").split(",")[0]!.trim();
@@ -181,8 +220,8 @@ export function createAuth(ctx: AuthCtx) {
     // gestion des comptes locaux (page de configuration, protégée comme le reste de l'application)
     "GET /api/auth/users": (req, res) => ctx.sendJson(res, 200, {
       users: readUsers().map(({ login, name, createdAt }) => ({ login, name, createdAt })),
-      providers: { google: configured("google"), github: configured("github") },
-      callbacks: { google: `${origin(req)}/public/auth/google/callback`, github: `${origin(req)}/public/auth/github/callback` },
+      providers: { google: configured("google"), github: configured("github"), cas: casUrl() ? { label: casLabel(), url: casUrl() } : false },
+      callbacks: { google: `${origin(req)}/public/auth/google/callback`, github: `${origin(req)}/public/auth/github/callback`, cas: casService(req) },
     }),
     "POST /api/auth/users": async (req, res) => {
       const { login, name, password } = await ctx.readBody(req);

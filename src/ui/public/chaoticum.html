@@ -232,11 +232,9 @@
     </section>
 
     <section class="card">
-      <h2>Modèles Albert</h2>
-      <div class="grid">
-        <div class="field"><label for="m-vision">Modèle de vision (copies d'écran)</label><input id="m-vision" list="albert-models"></div>
-        <div class="field"><label for="m-analytics">Modèle analytique (questions, diagrammes)</label><input id="m-analytics" list="albert-models"></div>
-      </div>
+      <h2>Enregistrer la configuration</h2>
+      <p class="lead">Les modèles utilisés par chaque agent (questions, diagrammes, description des diapos et des images…) se choisissent dans l'onglet <strong>Workflow</strong>.</p>
+      <!-- modèles Albert proposés dans les champs de modèle (reconnaissance vocale) -->
       <datalist id="albert-models"></datalist>
       <div class="toolbar" style="margin-top:12px">
         <button id="btn-save" class="btn primary">Enregistrer</button>
@@ -377,7 +375,6 @@ const FIELDS = [
   ["#ci-scope", "citations.scope"], ["#ci-min", "citations.minLength", true], ["#ci-max", "citations.maxLength", true],
   ["#s-site", "slides.siteUrl"], ["#s-local", "slides.localDir"], ["#s-repo", "slides.repo"], ["#s-settle", "slides.settleMs", true],
   ["#g-form", "grist.formUrl"], ["#g-responses", "grist.responsesUrl"], ["#g-url", "grist.urlColumn"], ["#g-name", "grist.nameColumn"], ["#g-date", "grist.dateColumn"], ["#g-poll", "grist.pollSeconds", true],
-  ["#m-vision", "models.vision"], ["#m-analytics", "models.analytics"],
   ["#tr-engine", "transcription.engine"], ["#tr-model", "transcription.model"], ["#tr-language", "transcription.language"], ["#tr-chunk", "transcription.chunkSeconds", true], ["#tr-silence", "transcription.silenceLevel", true],
   ["#dg-api", "diigo.apiUrl"], ["#dg-itemset", "diigo.itemSetId", true], ["#dg-template", "diigo.highlightTemplateId", true], ["#dg-collection", "diigo.collection"], ["#dg-mediamax", "diigo.mediaMaxChars", true], ["#dg-perrun", "diigo.perRun", true],
   ["#r-perrun", "rag.slidesPerRun", true], ["#r-kw", "rag.keywordsWeight", true], ["#r-notes", "rag.notesWeight", true], ["#r-limit", "rag.searchLimit", true],

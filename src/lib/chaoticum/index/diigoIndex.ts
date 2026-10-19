@@ -29,7 +29,10 @@ const IMAGE_CONCURRENCY = 2;
 // quota quotidien du modèle de vision atteint (Albert : « N requests per day exceeded ») : plus aucune analyse d'image
 // pendant cette exécution ; les pages qui en attendent sont laissées pour la prochaine indexation
 export class QuotaError extends Error {}
-type ImageStats = { analyzed: number; cached: number; quotaExceeded?: string };
+// failures : échecs consécutifs (erreurs temporaires d'Albert) ; au-delà de UNAVAILABLE_AFTER, le modèle est considéré
+// indisponible pour cette exécution, comme quand le quota est atteint
+type ImageStats = { analyzed: number; cached: number; quotaExceeded?: string; failures?: number };
+const UNAVAILABLE_AFTER = 5;
 
 const ImageSchema = z.object({
   titre: z.string().describe("idée principale de l'image en quelques mots"),
@@ -95,7 +98,8 @@ async function describeImage(m: any, pageTitle: string, c: ChaoticumConfig, cach
   if (!r.ok) throw new Error(`image ${r.status}`);
   const data = Buffer.from(await r.arrayBuffer());
   const mediaType = thumb ? "image/jpeg" : m["o:media_type"];
-  // limite de débit d'Albert (429 « Too Many Requests ») : nouvelles tentatives espacées (5, 15, 45 s)
+  // erreurs temporaires d'Albert (429 limite de débit, 500/502/503/504 serveur surchargé ou délai dépassé, coupure réseau) :
+  // nouvelles tentatives espacées (5, 15, 45 s)
   const ask = () => askAgent(imageDescriberAgent, {
     model: c.diigo.visionModel || c.models.vision, source: "Index des annotations Diigo : analyse des images (imageDescriberAgent)", schema: ImageSchema,
     prompt: [{ role: "user", content: [
@@ -112,11 +116,19 @@ async function describeImage(m: any, pageTitle: string, c: ChaoticumConfig, cach
       const text = [err?.message, err?.responseBody, err?.cause?.message, err?.cause?.responseBody, err?.details && JSON.stringify(err.details)].filter(Boolean).join(" ");
       // quota quotidien épuisé : inutile de réessayer avant demain
       if (/per day exceeded/i.test(text)) { stats.quotaExceeded = /\d+ requests per day/i.exec(text)?.[0] ?? "quota quotidien"; throw new QuotaError(stats.quotaExceeded); }
-      const limited = /too many requests|429|rate limit/i.test(text) || (e as any)?.statusCode === 429;
-      if (!limited || attempt >= 3) throw e;
+      const status = Number(err?.statusCode ?? err?.cause?.statusCode) || 0;
+      const transient = [429, 500, 502, 503, 504].includes(status) || /too many requests|rate limit|gateway time-?out|timed? ?out|bad gateway|service unavailable|econnreset|etimedout|fetch failed|socket hang up/i.test(text);
+      if (!transient) throw e;
+      if (attempt >= 3) {
+        // erreurs temporaires répétées sur plusieurs images : modèle indisponible pour cette exécution
+        stats.failures = (stats.failures ?? 0) + 1;
+        if (stats.failures >= UNAVAILABLE_AFTER && !stats.quotaExceeded) stats.quotaExceeded = `modèle de vision indisponible : ${status || ""} ${/gateway time-?out/i.test(text) ? "Gateway Time-out" : String(err?.message ?? "").slice(0, 60)}`.replace(/\s+/g, " ").trim();
+        throw e;
+      }
       await new Promise(res => setTimeout(res, 5000 * 3 ** attempt));
     }
   }
+  stats.failures = 0;
   // « texte visible » laissé à sa valeur d'exemple par le modèle (aucun, néant, sichtbarer Text…) : vide
   const texte = clean(object.texte);
   const placeholder = /^[\s\p{P}]*(texte visible|visible text|sichtbarer text|aucun( texte)?|néant|rien|none|n\/a|vide)[\s\p{P}]*$/iu.test(texte);
@@ -336,7 +348,9 @@ export async function indexDiigo(c: ChaoticumConfig) {
       if (uploaded % 20 === 0) { saveStore("diigo", store, c); saveStore("diigo-images", imageCache, c); console.log(`   … ${uploaded} page(s) déposée(s), ${imageStats.analyzed} image(s) analysée(s)`); }
     } catch (e) {
       if (e instanceof QuotaError) {
-        if (!quotaPages++) console.warn(`⚠️ [DIIGO] Quota quotidien du modèle de vision atteint (${e.message}) : les pages dont des images restent à analyser sont laissées pour la prochaine indexation (demain) ; les autres continuent.`);
+        if (!quotaPages++) console.warn(/indisponible/.test(e.message)
+          ? `⚠️ [DIIGO] ${e.message} (${UNAVAILABLE_AFTER} images de suite sans réponse) : les pages dont des images restent à analyser sont laissées pour la prochaine indexation ; les autres continuent.`
+          : `⚠️ [DIIGO] Quota quotidien du modèle de vision atteint (${e.message}) : les pages dont des images restent à analyser sont laissées pour la prochaine indexation (demain) ; les autres continuent.`);
         pending++;
         continue;
       }
@@ -356,6 +370,6 @@ export async function indexDiigo(c: ChaoticumConfig) {
   saveStore("diigo-images", imageCache, c);
   if (tokens) recordUsage("Index des annotations Diigo : vectorisation (estimation)", "BAAI/bge-m3", { inputTokens: tokens, outputTokens: 0, totalTokens: tokens });
   const citations = Object.values(store.items).reduce((s, e) => s + Object.keys(e.annotations).length, 0);
-  console.log(`✅ [DIIGO] ${uploaded} page(s) déposée(s) (${mediaFiles} média(s) lu(s), dont ${imageStats.analyzed} image(s) analysée(s) et ${imageStats.cached} déjà analysée(s)), ${unchanged} inchangée(s), ${removed} retirée(s), ${errors} erreur(s)${pending ? `, ${pending} à déposer à la prochaine indexation (limite de ${d.perRun} par exécution)` : ""}${incomplete ? `, ${incomplete} page(s) aux images non analysées (limite de débit d'Albert ?), reprise(s) à la prochaine indexation` : ""}${quotaPages ? `, ${quotaPages} page(s) en attente du quota du modèle de vision (${imageStats.quotaExceeded})` : ""} ; index : ${Object.keys(store.items).length} page(s), ${citations} citation(s) possible(s)`);
+  console.log(`✅ [DIIGO] ${uploaded} page(s) déposée(s) (${mediaFiles} média(s) lu(s), dont ${imageStats.analyzed} image(s) analysée(s) et ${imageStats.cached} déjà analysée(s)), ${unchanged} inchangée(s), ${removed} retirée(s), ${errors} erreur(s)${pending ? `, ${pending} à déposer à la prochaine indexation (limite de ${d.perRun} par exécution)` : ""}${incomplete ? `, ${incomplete} page(s) aux images non analysées (Albert surchargé ou limite de débit), reprise(s) à la prochaine indexation` : ""}${quotaPages ? `, ${quotaPages} page(s) en attente du modèle de vision (${imageStats.quotaExceeded})` : ""} ; index : ${Object.keys(store.items).length} page(s), ${citations} citation(s) possible(s)`);
   return { uploaded, unchanged, removed, errors, pending, pages: Object.keys(store.items).length, citations };
 }

@@ -12,6 +12,8 @@ L'écosystème d'agents propose trois applications, qui travaillent sur une **co
 
 Dans chaque application, le lien **⚙ Paramètres** de l'en-tête ouvre la page des **connexions** (adresse `/parametres`) : clé de l'API Albert, bibliothèque Zotero (clé, identifiant utilisateur, groupe), instance Omeka S (URL et clé d'API), port de l'interface.
 
+![La page Paramètres : connexions à Albert, Zotero et Omeka S (identifiants masqués)](img/parametres.png)
+
 - Les secrets ne sont jamais réaffichés : laisser le champ vide garde la valeur enregistrée.
 - Pendant la saisie de la bibliothèque Zotero, la page indique la bibliothèque correspondante et son nombre de collections, avant même l'enregistrement.
 - **Enregistrer et tester les connexions** vérifie Albert, Zotero et Omeka S (vocabulaires et droits de la clé).
@@ -44,6 +46,10 @@ flowchart LR
 ### L'onglet Workflow (prompts des agents)
 
 Chaque application a un onglet **Workflow** : un diagramme montre les étapes du traitement dans l'ordre d'exécution (les étapes encadrées « en parallèle » s'exécutent en même temps), les agents qu'elles font intervenir et, en dessous, les agents appelés hors du traitement (onglet RAG d'exploZoteroAnno, indexation des diapos et éditeur d'écran de chaoticumSeminario). Les modèles utilisés sont rappelés en tête.
+
+![L'onglet Workflow de l'Atelier d'articles : étapes, agents et coût estimé d'un traitement](img/paper-workflow.png)
+
+![Le formulaire d'un agent : modèle, coût estimé et instructions modifiables](img/paper-agent.png)
 
 Un clic sur un agent ouvre son formulaire : son rôle, les étapes qui l'appellent, ses outils, son **modèle** (un identifiant de modèle Albert, choisi dans la liste proposée ; vide : modèle par défaut de l'agent), son **coût estimé** (par appel et par traitement : tokens, coût, énergie, carbone, recalculés dès qu'on change de modèle), ses **instructions** (prompt système) et, quand elle est modifiable, la **demande** qui lui est envoyée (gabarit avec des variables `{{…}}` remplacées par les données du traitement ; c'est le cas de l'Animateur de discussion d'exploZoteroAnno). **Enregistrer** vaut pour les appels suivants de l'agent, y compris ceux de l'interface, sans redémarrer ; un agent modifié est marqué « modifié » dans le diagramme. **Rétablir les textes par défaut** remet les textes d'origine. Les textes et modèles modifiés sont enregistrés dans `agents.config.json`, commun aux trois applications.
 
@@ -111,6 +117,8 @@ L'interface s'ouvre sur http://127.0.0.1:7272. Elle comporte cinq onglets : Conf
 | Accord inter-juges | codes de la grille, similarité de phrase, kappa requis |
 | Omeka S (avancé) | vocabulaires, classes et propriétés utilisées |
 
+![Atelier d'articles, onglet Configuration : collection Zotero et appel à propositions](img/paper-configuration.png)
+
 **Enregistrer** écrit les modifications dans `.env` et `workflow.config.json` ; **Rétablir la configuration par défaut** revient aux valeurs de `config.ts`.
 
 #### Le plan de la proposition
@@ -169,6 +177,8 @@ Un document dont l'extraction sémantique est déjà faite (date `curation:acces
 
 L'onglet **Résultats** affiche les documents produits : markdown mis en forme, tableaux CSV, graphe interactif.
 
+![Onglet Résultats : la proposition d'article (PropAPP) et les autres documents produits](img/paper-resultats.png)
+
 | Document | Contenu | Emplacement dans Omeka S |
 |---|---|---|
 | **PropAPP** | proposition d'article : métadonnées (titre, auteurs, mots-clés), texte selon le plan, annexe des citations, références BibTeX | item de l'appel |
@@ -182,6 +192,8 @@ L'onglet **Résultats** affiche les documents produits : markdown mis en forme, 
 #### Le graphe de concepts
 
 La taille d'un concept dépend de son nombre de relations, sa couleur de sa catégorie. **Survoler** un concept met en évidence ses voisins ; **cliquer** ouvre sa fiche (relations, documents sources, lien vers l'item Omeka S). La recherche, la légende (pour masquer une catégorie) et le zoom sont dans le panneau.
+
+![Le graphe de concepts interactif, avec la recherche et le filtre par catégorie](img/paper-graphe.png)
 
 #### Les auteurs de la proposition
 
@@ -216,6 +228,8 @@ L'estimation est aussi enregistrée dans l'item de configuration de l'exécution
 
 L'onglet **Appels traités** liste les appels à propositions déjà analysés, avec l'historique de leurs exécutions (date, collection, statut, durée, tokens, coût estimé, titre de la proposition, lien vers la configuration dans Omeka S). Il réunit l'historique local (`workflow.history.json`) et les configurations enregistrées dans Omeka S : les exécutions faites depuis une autre machine ou avant une réinstallation y figurent aussi.
 
+![Onglet Appels traités : historique des exécutions, Rejouer, Charger dans les paramètres](img/paper-appels.png)
+
 Pour chaque appel :
 
 - **Rejouer** relance l'analyse avec la collection choisie (par défaut, la dernière utilisée), **avec les paramètres et les connexions actuels** : c'est l'usage prévu après une modification de la collection Zotero (nouveaux documents, annotations, notes), un changement de modèle ou de connexion ;
@@ -248,6 +262,8 @@ flowchart LR
 - **RAG Albert** : indexation des documents dans Albert à chaque analyse (activée par défaut), dépôt aussi dans les autres collections du document, taille et chevauchement des extraits, nombre d'extraits par question et méthode de recherche par défaut, (voir l'onglet RAG).
 - **Analyse** : similarité à partir de laquelle deux surlignages portent sur le même passage, nombre minimum de passages communs pour calculer un kappa, nombre de thèmes de discussion, et **fusion des documents en double** (activée par défaut) : quand plusieurs membres du groupe ont ajouté le même document à la collection (même fichier, même DOI, même URL, ou même titre et même année), il n'est enregistré qu'une fois dans Omeka S et cumule les surlignages, notes et marqueurs de tous ses exemplaires. L'onglet Participation signale ces documents (« N exemplaires fusionnés ») et le rapport les liste.
 
+![exploZoteroAnno, onglet Grille : collection et signification de chaque couleur](img/explo-grille.png)
+
 **Enregistrer** garde les réglages sans lancer de traitement ; **Rétablir la grille par défaut** remet les couleurs d'origine. **Enregistrer et analyser** lance le workflow ; il peut être relancé à tout moment pendant l'annotation : les nouvelles annotations de Zotero sont prises en compte, sans réextraire les documents déjà enregistrés dans Omeka S.
 
 ### Suivre le traitement (onglet Exécution)
@@ -257,6 +273,8 @@ Le journal s'affiche en direct : documents lus, doublons fusionnés, annotations
 ### Recharger une analyse déjà effectuée (onglet Analyses)
 
 Les onglets de résultats affichent par défaut la **dernière analyse**. L'onglet **Analyses** liste toutes les analyses déjà effectuées (date, collection, statut, durée, participation, tokens, coût estimé) : celles de l'archive locale et celles enregistrées dans Omeka S, y compris les analyses lancées depuis une autre machine ou avant une réinstallation.
+
+![Onglet Analyses : les analyses archivées, à charger ou dont reprendre les réglages](img/explo-analyses.png)
 
 - **Charger** affiche les résultats de l'analyse choisie dans les onglets Participation, Collaborations, Thèmes et Rapport. Un bandeau rappelle quelle analyse est affichée ; **Revenir à la dernière analyse** rétablit l'affichage courant. Rien n'est recalculé : les fichiers de l'analyse sont relus (archive locale, sinon médias de son item de configuration dans Omeka S).
 - **Reprendre les réglages** recopie la collection, la grille et les paramètres de cette analyse dans l'onglet Grille, pour la relancer à l'identique ou comparer ; rien n'est enregistré avant **Enregistrer**.
@@ -272,6 +290,8 @@ Recharger des analyses successives d'une même collection permet de suivre l'év
 - le détail par personne (commentaires, mots surlignés, documents, part de l'effort, jours actifs, première et dernière annotation) ;
 - la couverture de la collection : qui a annoté quel document, et les documents encore sans annotation ; un document présent en plusieurs exemplaires porte la mention « N exemplaires fusionnés » (le détail des clés Zotero s'affiche au survol).
 
+![Onglet Participation : chiffres clés, annotations par collaborateur et chronologie](img/explo-participation.png)
+
 ### Analyser les collaborations (onglet Collaborations)
 
 - **passages en commun** : deux surlignages d'un même document sont rapprochés quand leurs mots se recouvrent suffisamment ;
@@ -282,13 +302,19 @@ Recharger des analyses successives d'une même collection permet de suivre l'év
 - les **passages aux lectures divergentes**, du plus tendu au moins tendu, avec la lecture et le commentaire de chacun ;
 - le **réseau** collaborateurs–documents (graphe de forces d3.js) : glisser un nœud le déplace, le survoler montre ses voisins, cliquer affiche ses liens ; l'épaisseur d'un lien suit le nombre d'annotations ou de passages communs, et la couleur des liens entre collaborateurs leur tension (du gris au rouge).
 
+![Onglet Collaborations : passages en commun, matrice et paires de collaborateurs](img/explo-collaborations.png)
+
 ### Générer des thèmes de discussion (onglet Thèmes)
 
 Un agent propose des thèmes pour une séance collective à partir des passages divergents et convergents, des commentaires, des notes et des marqueurs : pour chaque thème, une question ouverte, la raison du choix, les passages à relire (avec les personnes concernées) et une piste d'animation. Il veille à impliquer aussi les participants les moins actifs.
 
+![Onglet Thèmes : question à débattre, raisons du choix et passages à relire](img/explo-themes.png)
+
 ### Interroger la collection (onglet RAG)
 
 Le **RAG** (génération augmentée par la recherche, [guide Albert](https://guides.ia.numerique.gouv.fr/albert-api/guides/rag)) permet de poser une question à la collection : les passages les plus pertinents sont cherchés dans le texte des documents, puis un modèle de langage répond à partir de ces seuls passages, en les citant.
+
+![Onglet RAG : question, modèle de prompt et réglages de la recherche](img/explo-rag.png)
 
 ```mermaid
 flowchart LR
@@ -323,6 +349,8 @@ flowchart LR
 ### Rapport et enregistrement (onglet Rapport)
 
 Le rapport reprend participation (dont les documents en double fusionnés), collaborations, thèmes et indexation RAG (collections Albert, documents déposés ou déjà présents), ainsi que les tokens consommés et le coût estimé (énergie, carbone, argent). Chaque analyse crée dans Omeka S un item « Configuration explo-zotero-anno » (classe `dcterms:MethodOfInstruction`) avec la grille et les paramètres, son statut, sa consommation et, en médias : guide d'annotation, rapport, thèmes, réseau, données de participation et de collaborations. Les documents et annotations de la collection sont enregistrés comme dans l'Atelier d'articles (`oa:Annotation` avec auteur, couleur, date).
+
+![Onglet Rapport : documents produits et rapport de l'analyse](img/explo-rapport.png)
 
 ## 4. chaoticumSeminario : jouer une conférence participative
 
@@ -375,15 +403,17 @@ La carte indique l'état des index. Les indexations sont suivies dans l'onglet E
 - **Transcription de la parole (lecteur)** : moteur par défaut (Albert ou navigateur), modèle de reconnaissance vocale d'Albert (`whisper-large-v3`), langue, durée des tranches d'audio, niveau sonore minimal d'une tranche, sous-titres affichés ou non par défaut (voir *Jouer la partition*).
 - **Modèles** : le modèle de chaque agent (curateur, compositeur de séquences, correcteur d'écran, descripteurs de diapositives et d'images) se choisit dans l'onglet **Workflow** (voir *L'onglet Workflow*).
 
+![chaoticumSeminario, onglet Partition : conférence, tirage et déroulé](img/chaoticum-partition.png)
+
 Les **questions** sont courtes (une phrase de 15 mots au plus), pour être lues d'un coup d'œil sur un grand écran.
 
 **Enregistrer et générer** lance le workflow (onglet Exécution) : lecture du programme, choix des citations, rendu des présentations et copie d'écran des diapos tirées, description des copies d'écran, puis question et diagramme de chaque cycle. La partition, son rapport et les copies d'écran sont enregistrés localement et dans Omeka S, avec le coût de la génération (tokens, énergie, carbone, argent).
 
-### Jouer la partition (lecteur)
-
 ### Modifier les écrans de la partition
 
 Une fois la partition créée, chaque écran peut être modifié à la main avec des outils adaptés à son type, de deux endroits : le **déroulé** de la partition (**Partitions et séances › Séances › Modifier**) et le **lecteur** lui-même (bouton ✎ ou touche E, sur l'écran affiché ; la séance en cours continue).
+
+![Partitions et séances : liste des partitions et déroulé modifiable écran par écran](img/chaoticum-seances.png)
 
 | Écran | Outils |
 |---|---|
@@ -401,6 +431,10 @@ Une nouvelle proposition d'Albert n'est enregistrée qu'après **Enregistrer l'�
 ### Jouer la partition (lecteur)
 
 Dans l'onglet **Partitions et séances**, **Jouer** ouvre le lecteur dans un nouvel onglet (à passer en plein écran sur l'écran de projection).
+
+![Ouverture du lecteur : Démarrer la séance ou Parcourir sans enregistrer](img/chaoticum-lecteur-accueil.png)
+
+![Le lecteur : barre de navigation et d'outils, chronomètre, QR code de participation, frise des écrans](img/chaoticum-lecteur.png)
 
 - **Démarrer la séance** lance l'enregistrement ; **Parcourir sans enregistrer** permet de répéter. Le lien **← Partitions** ramène à la liste des partitions.
 - **QR code de participation** : il reste affiché dans un coin de chaque écran (clic ou touche Q pour le réduire) ; sur les écrans « Contributions », il est affiché en grand.
@@ -441,6 +475,8 @@ Dans **Partitions et séances**, **Supprimer** propose de retirer la partition d
 ### Rejouer une séance
 
 **Séances** (dans la liste des partitions) affiche les séances jouées, leur rapport et la partition ; **Rejouer** ouvre le lecteur en mode rejeu : les écrans défilent selon les temps enregistrés, à la vitesse choisie (×1 à ×30), et les contributions apparaissent au moment où elles ont été reçues et affichées. Lecture et pause : bouton ⏯ ou barre d'espace.
+
+![Partitions et séances : Jouer, Séances (rejeu) et Supprimer](img/chaoticum-partitions.png)
 
 ## 5. Ce qui est enregistré dans Omeka S
 

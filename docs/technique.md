@@ -138,7 +138,7 @@ src/
     └── public/               paper.html, explo.html, chaoticum.html, jouer.html (lecteur), settings.html (page Paramètres commune)
 ```
 
-Hors de `src/` : `docs/` (documentation, `grille_annotation.md`), `scripts/build-docs.ts`, `docker/entrypoint.sh`, `.vscode/launch.json` (configurations de débogage des workflows et des serveurs), `install/` (instance Omeka S préparée, distribuée à part). Les fichiers produits vont dans `resultats/atelier/`, `resultats/explo/` et `resultats/chaoticum/` (réglages `outputDir`), dans le répertoire de données : la racine du projet en local, le volume `data/` avec Docker.
+Hors de `src/` : `docs/` (documentation, `grille_annotation.md`), `scripts/build-docs.ts`, `scripts/captures-docs.ts` (copies d'écran du guide, `docs/img/`), `docker/entrypoint.sh`, `.vscode/launch.json` (configurations de débogage des workflows et des serveurs), `install/` (instance Omeka S préparée, distribuée à part). Les fichiers produits vont dans `resultats/atelier/`, `resultats/explo/` et `resultats/chaoticum/` (réglages `outputDir`), dans le répertoire de données : la racine du projet en local, le volume `data/` avec Docker.
 
 ### Agents (`src/agents/`)
 
@@ -436,7 +436,7 @@ Routes communes aux deux serveurs (chacune s'applique à l'application du serveu
 | `GET /api/albert/models` | modèles disponibles |
 | `POST /api/run`, `POST /api/run/stop`, `GET /api/run` | lancer, arrêter, état |
 | `GET /api/run/events` | journal et statut en Server-Sent Events |
-| `GET /docs/…` | documentation HTML |
+| `GET /docs/…` | documentation HTML ; `/docs/img/<nom>.png` : copies d'écran du guide (`docs/img/`) |
 
 Routes propres à l'Atelier d'articles :
 
@@ -613,7 +613,8 @@ Routes propres au serveur chaoticumSeminario (`src/ui/chaoticumRoutes.ts`) : `GE
 
 ## 14. Documentation et conteneur
 
-- `npm run docs` convertit `docs/*.md` en `docs/html/*.html` (script `scripts/build-docs.ts`, bibliothèque **marked** ; les diagrammes **Mermaid** sont rendus dans le navigateur).
+- `npm run docs` convertit `docs/*.md` en `docs/html/*.html` (script `scripts/build-docs.ts`, bibliothèque **marked** ; les diagrammes **Mermaid** sont rendus dans le navigateur ; une image markdown `![légende](img/x.png)` devient une figure légendée).
+- `npm run docs:captures [nom…]` reprend les copies d'écran du guide utilisateur (`docs/img/*.png`, script `scripts/captures-docs.ts`, **Playwright**, fenêtre 1280×800) sur les trois serveurs locaux, qui doivent être lancés (`PAPER_URL`, `EXPLO_URL`, `CHAOTICUM_URL` pour d'autres adresses) : chaque capture ouvre un onglet, joue ses actions (charger une analyse, ouvrir un agent, parcourir une partition sans enregistrer de séance) ; les identifiants de la page Paramètres sont masqués. Les captures montrent les données de la bibliothèque connectée : les reprendre sur une collection de démonstration avant publication.
 - `Dockerfile` : image `node:22-bookworm-slim`, code dans `/app`, données dans le volume `/data`, Chromium de Playwright (`PLAYWRIGHT_BROWSERS_PATH=/ms-playwright`, avec ses bibliothèques système), commandes `workflow-ui` (serveur de l'application `WORKFLOW_APP`), `workflow`, `workflow-explo` et `workflow-chaoticum` (lignes de commande).
 - `docker-compose.yml` : trois services à partir de la même image, `workflow` (Atelier, 7272), `explo` (exploZoteroAnno, 7273) et `chaoticum` (chaoticumSeminario, 7276), publiés sur `127.0.0.1` et partageant `./data`.
 - `docker/entrypoint.sh` : le conteneur démarre en root, rétablit si besoin la propriété de `/data` pour l'utilisateur `node` (uid 1000), puis exécute la commande sous `node` avec `setpriv`. Les commandes `workflow`, `workflow-explo` et `workflow-ui` lancées par `docker compose exec` (en root) passent aussi par ce point d'entrée.

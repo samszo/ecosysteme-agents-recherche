@@ -25,6 +25,10 @@ function render(markdown: string) {
   const marked = new Marked({
     gfm: true,
     renderer: {
+      // copies d'écran (docs/img) : figure légendée par le texte alternatif, servie sur /docs/img/
+      image({ href, text }) {
+        return `<figure><a href="${escapeHtml(href)}" target="_blank" rel="noopener"><img src="${escapeHtml(href)}" alt="${escapeHtml(text)}" loading="lazy"></a><figcaption>${escapeHtml(text)}</figcaption></figure>`;
+      },
       // blocs mermaid rendus dans le navigateur
       code({ text, lang }) {
         if (lang === "mermaid") return `<pre class="mermaid">${escapeHtml(text)}</pre>\n`;
@@ -96,6 +100,9 @@ function page(current: (typeof PAGES)[number], body: string, toc: { level: numbe
   table { border-collapse: collapse; width: 100%; font-size: 14.5px; margin: 12px 0 20px; display: block; overflow-x: auto; }
   th, td { border: 1px solid var(--line); padding: 6px 10px; text-align: left; vertical-align: top; }
   th { background: var(--bg); }
+  figure { margin: 16px 0 22px; }
+  figure img { display: block; max-width: 100%; height: auto; border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+  figcaption { margin-top: 6px; font-size: 13.5px; color: var(--muted); text-align: center; }
   blockquote { margin: 12px 0; padding: 4px 14px; border-left: 3px solid var(--accent); color: var(--muted); background: var(--bg); border-radius: 0 6px 6px 0; }
   @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } .toc { display: none; } main { padding: 4px 16px 24px; } }
 </style>

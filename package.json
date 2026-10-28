@@ -8,6 +8,7 @@
     "start": "tsx src/runners/paper.ts",
     "ui": "tsx src/ui/server.ts",
     "docs": "tsx scripts/build-docs.ts",
+    "docs:captures": "tsx scripts/captures-docs.ts",
     "explo": "tsx src/runners/explo.ts",
     "ui:explo": "tsx src/ui/server.ts explo",
     "chaoticum": "tsx src/runners/chaoticum.ts",

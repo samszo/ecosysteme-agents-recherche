@@ -89,6 +89,7 @@ Commandes disponibles :
 | `npm start` | Lance le workflow de l'Atelier d'articles en ligne de commande avec la configuration enregistrée |
 | `npm run explo` | Lance le workflow exploZoteroAnno (annotation collective) en ligne de commande |
 | `npm run docs` | Régénère la documentation HTML (`docs/html/`) à partir des fichiers markdown |
+| `npm run docs:captures` | Reprend les copies d'écran du guide utilisateur (`docs/img/`) sur les serveurs lancés |
 
 Les fichiers produits sont écrits dans `resultats/atelier/` (AttenduAPP, PropAPP, rapport, relecture, graphe, désaccords) et `resultats/explo/` (guide d'annotation, participation, collaborations, réseau, thèmes, rapport) : à la racine du projet en local, dans `data/resultats/` avec Docker.
 

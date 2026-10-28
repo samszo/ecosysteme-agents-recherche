@@ -13,6 +13,7 @@ npm run ui:explo          # exploZoteroAnno     http://127.0.0.1:7273
 npm run ui:chaoticum      # chaoticumSeminario  http://127.0.0.1:7276
 npm start | npm run explo | npm run chaoticum   # workflows en ligne de commande (configuration enregistrée)
 npm run docs              # docs/*.md → docs/html/*.html (servi sur /docs/)
+npm run docs:captures     # copies d'écran du guide (docs/img/*.png), serveurs lancés
 docker compose up -d --build   # un service par application, volume ./data
 ```
 

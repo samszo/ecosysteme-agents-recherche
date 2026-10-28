@@ -994,7 +994,16 @@ const APP_ONLY: Record<string, AppName> = {
 
 // documentation HTML générée par npm run docs (docs/html)
 const DOCS_DIR = path.join(APP_DIR, "docs", "html");
+// copies d'écran du guide (docs/img, produites par npm run docs:captures)
+const DOCS_IMG_DIR = path.join(APP_DIR, "docs", "img");
 function serveDocs(res: http.ServerResponse, pathname: string) {
+  const img = /^\/docs\/img\/([\w-]{1,80})\.png$/.exec(pathname);
+  if (img) {
+    const file = path.join(DOCS_IMG_DIR, `${img[1]}.png`);
+    if (!fs.existsSync(file)) return sendJson(res, 404, { error: "Image introuvable" });
+    res.writeHead(200, { "Content-Type": "image/png", "Cache-Control": "max-age=3600" });
+    return res.end(fs.readFileSync(file));
+  }
   const name = path.basename(pathname.replace(/^\/docs\/?/, "") || "index.html");
   const file = path.join(DOCS_DIR, name);
   if (!name.endsWith(".html") || !fs.existsSync(file)) return sendJson(res, 404, { error: "Page de documentation introuvable (lancer npm run docs)" });

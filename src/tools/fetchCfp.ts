@@ -8,6 +8,8 @@ import { extractAttachment, decodeEntities } from "../lib/extraction/attachmentE
 import { workflowConfig } from "../config";
 
 export const CFP_TYPE = "Appel à propositions";
+// ancien texte d'exemple de la configuration par défaut : repris par les exécutions passées, il n'est pas une précision
+const LEGACY_SAMPLE_TEXT = "Appel à propositions sur l'éthique des écosystèmes d'information numérique...";
 
 const CfpSchema = z.object({
   // lien vers l'appel (page web ou PDF)
@@ -71,8 +73,12 @@ export const fetchCfp = new Tool({
   description: "Récupère l'appel à propositions (lien vers une page web ou un PDF, ou texte fourni), en extrait le texte et l'enregistre dans Omeka S (un item par appel, réutilisé d'une exécution à l'autre).",
   schema: CfpSchema,
   execute: async ({ data }) => {
-    const { url, file: localFile, text: extraText = "", collectionItemId } = data as z.infer<typeof CfpSchema>;
+    const { url, file: localFile, text: rawText = "", collectionItemId } = data as z.infer<typeof CfpSchema>;
+    const extraText = rawText.trim() === LEGACY_SAMPLE_TEXT ? "" : rawText;
     const omk = await getOmk();
+    // paramètres effectivement utilisés (journal) : le fichier local prime sur le lien
+    console.log(`\n📣 Paramètres de l'appel : ${[url ? `lien ${url}` : "", localFile ? `fichier ${localFile}` : "", extraText.trim() ? `texte/précisions (${extraText.trim().length} caractères)` : ""].filter(Boolean).join(" · ") || "aucun"}`);
+    if (url && localFile) console.warn(`⚠️ Un fichier et un lien sont renseignés : le fichier ${localFile} est lu, le lien sert d'identifiant. Retirer le fichier pour télécharger le lien.`);
 
     let title = "", text = "", file: { buffer: Buffer; fileName: string; type: string } | null = null;
     // contenu de l'appel : fichier local en priorité (enregistré depuis un navigateur), sinon téléchargement du lien
@@ -136,10 +142,19 @@ export const fetchCfp = new Tool({
       const item = await omk.createItem(metadata);
       aapItemId = item["o:id"];
       console.log(`📣 [OMEKA] Appel à propositions enregistré (Item ID ${aapItemId})`);
-      // document original (une seule fois)
-      if (file) {
-        await omk.uploadMedia(aapItemId, file, { "dcterms:title": `Document original de l'appel : ${title}` })
-          .catch(e => console.warn(`⚠️ [OMEKA] Document de l'appel non importé :`, (e as Error).message));
+    }
+    // document original : déposé s'il n'est pas déjà dans l'item (empreinte SHA-256 d'Omeka S), donc aussi quand il a changé
+    if (file) {
+      try {
+        const sha = crypto.createHash("sha256").update(file.buffer).digest("hex");
+        const medias = existing ? await omk.request(omk.url("media", { item_id: aapItemId, per_page: 500 })) : [];
+        if ((medias ?? []).some((m: any) => m["o:sha256"] === sha)) console.log(`   ♻️ Document original de l'appel inchangé`);
+        else {
+          await omk.uploadMedia(aapItemId, file, { "dcterms:title": `Document original de l'appel : ${title}`, "dcterms:date": new Date().toISOString() });
+          console.log(`   📎 [OMEKA] Document original de l'appel ${existing ? "mis à jour" : "importé"}`);
+        }
+      } catch (e) {
+        console.warn(`⚠️ [OMEKA] Document de l'appel non importé :`, (e as Error).message);
       }
     }
     if (collectionItemId) await omk.addLinks(aapItemId, "dcterms:relation", [collectionItemId]).catch(() => {});

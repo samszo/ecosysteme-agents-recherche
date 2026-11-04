@@ -16,8 +16,9 @@ export const defaultWorkflowConfig = {
     cfpUrl: "",
     // fichier local de l'appel (PDF, HTML…) quand le site bloque le téléchargement automatique (ex. protection Cloudflare)
     cfpFile: "",
-    // texte de l'appel (utilisé seul sans lien, ou en complément du document en ligne)
-    cfpText: "Appel à propositions sur l'éthique des écosystèmes d'information numérique...",
+    // texte de l'appel (utilisé seul sans lien, ou en complément du document en ligne) ; vide par défaut :
+    // un texte d'exemple serait ajouté comme « précisions » à chaque appel
+    cfpText: "",
     zoteroCollection: "9MXWYNIG",
   },
 

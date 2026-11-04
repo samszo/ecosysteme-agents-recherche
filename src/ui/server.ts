@@ -20,7 +20,7 @@ import { mergeConfig, readConfigOverride, writeConfigOverride, CONFIG_FILE } fro
 import { Zotero } from "../lib/zotero/zotero";
 import { Omk, containerUrl } from "../lib/omeka/omk";
 import crypto from "crypto";
-import { readHistory, type HistoryEntry } from "../workflow/runs/history";
+import { readHistory, removeHistory, type HistoryEntry } from "../workflow/runs/history";
 import { Albert } from "../lib/albert/albert";
 import { albertCollectionByName, createDefaultPrompts, listAnswers, listPrompts, queryRag, saveAnswer, savePrompt, type RagAnswer } from "../lib/rag/ragQuery";
 
@@ -379,6 +379,44 @@ async function history() {
     call.runs.push(r);
   }
   return { calls: [...calls.values()], omekaAdmin, omekaError: omeka.error ?? null };
+}
+
+// suppression d'un appel traité : items de configuration de ses exécutions et item de l'appel (avec leurs médias :
+// rapports, AttenduAPP, PropAPP…) dans Omeka S si demandé, puis ses entrées de l'historique local.
+// Omeka S d'abord, pour ne rien retirer de l'historique si la suppression y échoue ; concepts et annotations sont conservés.
+async function deleteCall(key: string, withOmeka: boolean) {
+  if (!key || key.length > 2000) throw new Error("Appel invalide");
+  if (run?.status === "running") throw new Error("Un traitement est en cours : attendre sa fin avant de supprimer un appel.");
+  const { calls } = await history();
+  const call = calls.find(c => c.key === key);
+  if (!call) throw new Error("Appel introuvable dans la liste des appels traités");
+  const runIds: string[] = call.runs.map((r: HistoryEntry) => r.runId);
+  const deleted: number[] = [];
+  if (withOmeka) {
+    const omk = await serverOmk();
+    const val = (it: any, t: string) => it?.[t]?.[0]?.["@value"] ?? null;
+    // seulement des items de configuration de l'Atelier d'articles (vérifiés avant suppression)
+    for (const id of new Set(call.runs.map((r: HistoryEntry) => r.configItemId).filter(Boolean) as number[])) {
+      const it = await omk.getItem(id).catch(() => null);
+      if (!it || val(it, "dcterms:type") !== "Configuration de workflow") continue;
+      let wf: string | undefined;
+      try { wf = JSON.parse(val(it, "dcterms:description") ?? "{}").workflowId; } catch { /* description illisible */ }
+      if (wf && wf !== defaultWorkflowConfig.workflowId) continue;
+      await omk.deleteResource(id);
+      deleted.push(id);
+    }
+    // l'item de l'appel, s'il n'est pas partagé avec un autre appel de la liste
+    const shared = calls.some(c => c.key !== key && c.aapItemId === call.aapItemId);
+    if (call.aapItemId && !shared) {
+      const it = await omk.getItem(call.aapItemId).catch(() => null);
+      if (it?.["dcterms:type"]?.some((v: any) => v["@value"] === "Appel à propositions")) {
+        await omk.deleteResource(call.aapItemId);
+        deleted.push(call.aapItemId);
+      }
+    }
+  }
+  const local = await removeHistory(runIds);
+  return { runs: runIds.length, local, omekaItems: deleted };
 }
 
 // ==========================================
@@ -960,6 +998,12 @@ const routes: Record<string, (req: http.IncomingMessage, res: http.ServerRespons
   "GET /api/results": (_req, res) => sendJson(res, 200, resultFiles()),
 
   "GET /api/history": async (_req, res) => sendJson(res, 200, await history()),
+  // supprime un appel traité ({ key, omeka }) : historique local et, si omeka, ses items dans Omeka S
+  "POST /api/history/delete": async (req, res) => {
+    const { key, omeka } = await readBody(req);
+    try { sendJson(res, 200, { ok: true, ...(await deleteCall(String(key ?? ""), !!omeka)) }); }
+    catch (e) { sendJson(res, 400, { error: (e as Error).message }); }
+  },
 
   "GET /api/file": (_req, res, url) => {
     const name = url.searchParams.get("name") ?? "";
@@ -983,7 +1027,7 @@ Object.assign(routes, CHAOTICUM_ROUTES);
 // routes propres à une application (les autres sont communes à tous les serveurs)
 const APP_ONLY: Record<string, AppName> = {
   ...Object.fromEntries(Object.keys(CHAOTICUM_ROUTES).map(k => [k, "chaoticum" as AppName])),
-  "POST /api/cfp-file": "paper", "GET /api/results": "paper", "GET /api/history": "paper", "GET /api/file": "paper",
+  "POST /api/cfp-file": "paper", "GET /api/results": "paper", "GET /api/history": "paper", "POST /api/history/delete": "paper", "GET /api/file": "paper",
   "GET /api/explo/settings": "explo", "POST /api/explo/settings": "explo", "POST /api/explo/guide": "explo",
   "POST /api/explo/tension": "explo", "GET /api/chaoticum/explo-grid": "chaoticum",
   "GET /api/explo/results": "explo", "GET /api/explo/file": "explo", "GET /api/explo/runs": "explo", "POST /api/explo/runs/delete": "explo",

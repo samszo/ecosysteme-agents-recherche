@@ -311,7 +311,7 @@
 </thead>
 <tbody><tr>
 <td><code>fetchCfp</code></td>
-<td>télécharge ou lit l&#39;appel (URL ou fichier local), extrait le texte, crée ou met à jour l&#39;item Omeka de l&#39;appel</td>
+<td>télécharge ou lit l&#39;appel (fichier local prioritaire sur l&#39;URL), extrait le texte, crée ou met à jour l&#39;item Omeka de l&#39;appel ; redépose le document original si son empreinte SHA-256 a changé</td>
 </tr>
 <tr>
 <td><code>fetchZoteroData</code></td>
@@ -593,7 +593,7 @@
 </thead>
 <tbody><tr>
 <td><code>input.cfpUrl</code>, <code>input.cfpFile</code>, <code>input.cfpText</code></td>
-<td>appel à propositions : lien, fichier local, texte ou précisions</td>
+<td>appel à propositions : lien, fichier local (prioritaire sur le lien), texte ou précisions (vide par défaut)</td>
 </tr>
 <tr>
 <td><code>input.zoteroCollection</code></td>
@@ -609,7 +609,7 @@
 </tr>
 <tr>
 <td><code>extraction.chunkSize</code>, <code>chunkOverlap</code>, <code>maxAnnotationChars</code></td>
-<td>découpage des textes, taille du bloc d&#39;annotations</td>
+<td>découpage des textes (chevauchement plafonné à la moitié de <code>chunkSize</code>), taille du bloc d&#39;annotations</td>
 </tr>
 <tr>
 <td><code>tagCategory</code></td>
@@ -798,6 +798,10 @@
 <tr>
 <td><code>GET /api/history</code></td>
 <td>appels traités : historique local et configurations Omeka S, regroupés par appel</td>
+</tr>
+<tr>
+<td><code>POST /api/history/delete</code></td>
+<td>supprime un appel traité <code>{ key, omeka }</code> : ses entrées de <code>workflow.history.json</code> et, si <code>omeka</code>, les items de configuration de ses exécutions et l&#39;item de l&#39;appel (s&#39;il n&#39;est pas partagé), après vérification de leur <code>dcterms:type</code> ; refusé pendant un traitement</td>
 </tr>
 </tbody></table>
 <p>Routes propres à exploZoteroAnno : <code>GET</code> et <code>POST /api/explo/settings</code>, <code>POST /api/explo/guide</code> (guide d&#39;annotation à partir de la grille), <code>GET /api/explo/runs</code> (analyses déjà effectuées), <code>GET /api/explo/results?run=</code>, <code>GET /api/explo/file?name=&amp;run=</code> (sans <code>run</code> : dernière analyse), et pour le RAG :</p>

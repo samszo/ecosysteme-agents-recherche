@@ -46,6 +46,11 @@
   button.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
   button.btn.danger { color: var(--err); }
   button.btn:disabled { opacity: .5; cursor: default; }
+  dialog#del-call { border: 1px solid var(--line); border-radius: 10px; background: var(--panel); color: var(--ink); padding: 18px 20px; max-width: min(520px, calc(100vw - 32px)); }
+  dialog#del-call::backdrop { background: rgb(0 0 0 / .35); }
+  dialog#del-call h2 { margin: 0 0 8px; font-size: 17px; }
+  dialog#del-call p { margin: 6px 0; font-size: 14px; }
+  dialog#del-call label { display: flex; gap: 8px; align-items: flex-start; font-size: 14px; margin: 12px 0 4px; }
   button.link { background: none; border: 0; color: var(--accent); cursor: pointer; font: inherit; padding: 0; }
   .badge { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
   .badge.running { color: var(--warn); border-color: currentColor; }
@@ -181,6 +186,22 @@
     <section class="card"><div id="viewer" class="muted">Choisir un document.</div></section>
   </div>
 </main>
+
+<dialog id="del-call">
+  <form method="dialog">
+    <h2>Supprimer l'appel traité</h2>
+    <p id="del-call-label" style="font-weight:600"></p>
+    <p id="del-call-local" class="muted"></p>
+    <label id="del-call-omeka-row"><input type="checkbox" id="del-call-omeka"> <span id="del-call-omeka-text"></span></label>
+    <p class="help" id="del-call-help"></p>
+    <p class="muted" style="font-size:13px">Les concepts, annotations et pièces jointes de la collection Zotero ne sont pas modifiés.</p>
+    <p class="ko" style="font-size:13px">Cette suppression est définitive.</p>
+    <div class="toolbar" style="margin-top:14px;justify-content:flex-end">
+      <button value="cancel" class="btn">Annuler</button>
+      <button value="confirm" class="btn primary" style="background:var(--err);border-color:var(--err)">Supprimer</button>
+    </div>
+  </form>
+</dialog>
 <div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js"></script>
@@ -401,9 +422,15 @@ function renderConfig() {
 }
 $("#cfp").oninput = e => config.input.cfpText = e.target.value;
 $("#cfp-url").oninput = e => config.input.cfpUrl = e.target.value.trim();
+// le fichier local prime sur le lien : un fichier importé pour l'appel précédent masquerait le nouveau lien
+$("#cfp-url").onchange = () => {
+  if (config.input.cfpFile && confirm(`Le fichier ${config.input.cfpFile} est lu à la place du lien. Le retirer pour utiliser le nouveau lien ?`)) {
+    config.input.cfpFile = ""; renderCfpFile();
+  }
+};
 function renderCfpFile() {
   const f = config.input.cfpFile ?? "";
-  $("#cfp-file").textContent = f ? `Fichier utilisé : ${f}` : "Aucun fichier : le lien est téléchargé.";
+  $("#cfp-file").textContent = f ? `Fichier utilisé à la place du lien : ${f}` : "Aucun fichier : le lien est téléchargé.";
   $("#cfp-file-clear").classList.toggle("hidden", !f);
 }
 $("#cfp-file-input").onchange = async e => {
@@ -642,7 +669,9 @@ async function loadHistory() {
       el("div", { className: "toolbar" },
         el("label", { textContent: "Collection :", style: "font-weight:600" }), select,
         el("button", { className: "btn primary", textContent: "Rejouer", disabled: call.fileExists === false, onclick: () => replay(inputFor(last), call.title) }),
-        el("button", { className: "btn", textContent: "Charger dans les paramètres", onclick: () => loadInput(inputFor(last)) })),
+        el("button", { className: "btn", textContent: "Charger dans les paramètres", onclick: () => loadInput(inputFor(last)) }),
+        el("div", { className: "spacer" }),
+        el("button", { className: "btn danger", textContent: "Supprimer", onclick: () => deleteCall(call) })),
       el("div", { className: "table-wrap" }, runsTable)));
   }
 }
@@ -655,10 +684,17 @@ function loadInput(input) {
   toast("Appel et collection chargés — enregistrer pour confirmer");
 }
 
+// même appel que celui des paramètres (même lien, ou même fichier sans lien)
+const sameCall = (a, b) => a.cfpUrl ? a.cfpUrl === b.cfpUrl : !b.cfpUrl && !!a.cfpFile && a.cfpFile === b.cfpFile;
+
 async function replay(input, title) {
   if (lastState?.status === "running") return toast("Un traitement est déjà en cours.");
-  if (!confirm(`Rejouer l'analyse de l'appel « ${title} » sur la collection ${collectionName(input.zoteroCollection)} avec les paramètres et connexions actuels ?`)) return;
-  config.input = { ...config.input, cfpUrl: input.cfpUrl ?? "", cfpFile: input.cfpFile ?? "", cfpText: input.cfpText ?? "", zoteroCollection: input.zoteroCollection };
+  // appel en cours d'édition dans les paramètres : ses modifications (fichier, précisions) sont conservées
+  const keep = sameCall(config.input, input);
+  if (!confirm(`Rejouer l'analyse de l'appel « ${title} » sur la collection ${collectionName(input.zoteroCollection)} avec les paramètres et connexions actuels${keep ? " (fichier et précisions de l'appel tels qu'ils sont dans les paramètres)" : ""} ?`)) return;
+  config.input = keep
+    ? { ...config.input, zoteroCollection: input.zoteroCollection }
+    : { ...config.input, cfpUrl: input.cfpUrl ?? "", cfpFile: input.cfpFile ?? "", cfpText: input.cfpText ?? "", zoteroCollection: input.zoteroCollection };
   renderConfig();
   try {
     await save(true);
@@ -666,6 +702,36 @@ async function replay(input, title) {
     await api("/api/run", { method: "POST" });
     showTab("run");
   } catch (e) { toast("Erreur : " + e.message); }
+}
+// suppression d'un appel traité : historique local et, au choix, ses items dans Omeka S (configurations, appel)
+function deleteCall(call) {
+  const dlg = $("#del-call"), box = $("#del-call-omeka");
+  const localRuns = call.runs.filter(r => r.source?.includes("local")).length;
+  const configs = [...new Set(call.runs.map(r => r.configItemId).filter(Boolean))];
+  const omeka = configs.length > 0 || !!call.aapItemId;
+  $("#del-call-label").textContent = call.title;
+  $("#del-call-local").textContent = localRuns
+    ? `${localRuns} exécution(s) retirée(s) de l'historique local.`
+    : "Cet appel n'est pas dans l'historique local : il est relu depuis Omeka S.";
+  $("#del-call-omeka-row").classList.toggle("hidden", !omeka);
+  $("#del-call-omeka-text").textContent = "Supprimer aussi dans Omeka S " + [
+    configs.length ? `${configs.length} item(s) de configuration d'exécution (rapport, relecture, graphe)` : "",
+    call.aapItemId ? `l'item n°${call.aapItemId} de l'appel (AttenduAPP, PropAPP, document original)` : "",
+  ].filter(Boolean).join(" et ");
+  // appel seulement dans Omeka S : sans cette case, il n'y a rien à supprimer
+  box.checked = omeka; box.disabled = omeka && !localRuns;
+  const help = () => { $("#del-call-help").textContent = omeka && !box.checked ? "L'appel restera dans la liste s'il a des exécutions enregistrées dans Omeka S." : ""; };
+  box.onchange = help; help();
+  dlg.onclose = async () => {
+    if (dlg.returnValue !== "confirm") return;
+    try {
+      const res = await api("/api/history/delete", { method: "POST", body: { key: call.key, omeka: omeka && box.checked } });
+      toast(`Appel supprimé${res.omekaItems?.length ? ` (et ${res.omekaItems.length} item(s) dans Omeka S)` : ""}`);
+      loadHistory();
+    } catch (e) { toast("Suppression impossible : " + e.message); }
+  };
+  dlg.returnValue = "";
+  dlg.showModal();
 }
 $("#btn-history").onclick = loadHistory;
 

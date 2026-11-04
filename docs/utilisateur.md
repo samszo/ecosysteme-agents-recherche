@@ -234,6 +234,9 @@ Pour chaque appel :
 
 - **Rejouer** relance l'analyse avec la collection choisie (par défaut, la dernière utilisée), **avec les paramètres et les connexions actuels** : c'est l'usage prévu après une modification de la collection Zotero (nouveaux documents, annotations, notes), un changement de modèle ou de connexion ;
 - **Charger dans les paramètres** reprend l'appel et la collection dans l'onglet Configuration, pour les ajuster avant de lancer.
+- **Supprimer** retire l'appel et ses exécutions de l'historique local ; la case *Supprimer aussi dans Omeka S* supprime en plus les items de configuration de ses exécutions (rapport, relecture, graphe) et l'item de l'appel (AttenduAPP, PropAPP, document original). Les concepts, annotations et pièces jointes de la collection ne sont pas touchés. Sans cette case, un appel dont les exécutions sont enregistrées dans Omeka S réapparaît dans la liste.
+
+Quand l'appel en cours dans l'onglet Configuration est celui qu'on rejoue (même lien, ou même fichier), **Rejouer** conserve son fichier et ses précisions tels qu'ils sont dans les paramètres : on peut donc corriger le texte de l'appel puis le rejouer. Le fichier local d'un appel prime sur son lien : en changeant de lien, l'interface propose de retirer le fichier importé pour l'appel précédent. Au lancement, le journal indique les paramètres de l'appel effectivement utilisés ; le texte et le document original de l'item Omeka de l'appel sont mis à jour s'ils ont changé.
 
 Seuls les documents nouveaux ou modifiés sont retraités : ceux dont l'extraction est déjà faite sont relus dans Omeka S. Un appel importé depuis un fichier local ne peut être rejoué que si le fichier est toujours présent dans `aap/`.
 

@@ -163,7 +163,7 @@ Les **outils** (`fetchCfp`, `fetchZoteroData`, `buildLLMWiki`, `exportToOpenKnow
 
 | Module | Rôle |
 |---|---|
-| `fetchCfp` | télécharge ou lit l'appel (URL ou fichier local), extrait le texte, crée ou met à jour l'item Omeka de l'appel |
+| `fetchCfp` | télécharge ou lit l'appel (fichier local prioritaire sur l'URL), extrait le texte, crée ou met à jour l'item Omeka de l'appel ; redépose le document original si son empreinte SHA-256 a changé |
 | `fetchZoteroData` | parcourt la collection, regroupe les doublons (option `mergeDuplicates`), extrait chaque pièce jointe, fusionne annotations et notes, enregistre documents, annotations et médias dans Omeka |
 | `duplicates` | `groupDuplicates` : documents en double d'une collection (fichier, DOI, URL, titre et année), exemplaire principal |
 | `attachmentExtract` | extraction par format : PDF, page web enregistrée (zip), HTML, DOCX, ODT, EPUB, texte, image |
@@ -383,7 +383,7 @@ Les modifications faites dans l'interface sont enregistrées dans le fichier de 
 
 | Clé | Rôle |
 |---|---|
-| `input.cfpUrl`, `input.cfpFile`, `input.cfpText` | appel à propositions : lien, fichier local, texte ou précisions |
+| `input.cfpUrl`, `input.cfpFile`, `input.cfpText` | appel à propositions : lien, fichier local (prioritaire sur le lien), texte ou précisions (vide par défaut) |
 | `input.zoteroCollection` | clé de la collection Zotero |
 | `models.provider`, `models.analytics`, `models.fast` | API Albert et modèles |
 | `zotero.automaticTags` | inclure les marqueurs automatiques |
@@ -445,6 +445,7 @@ Routes propres à l'Atelier d'articles :
 | `POST /api/cfp-file?name=` | importe le fichier de l'appel dans `aap/` |
 | `GET /api/results`, `GET /api/file?name=` | liste et contenu des résultats (liste blanche) |
 | `GET /api/history` | appels traités : historique local et configurations Omeka S, regroupés par appel |
+| `POST /api/history/delete` | supprime un appel traité `{ key, omeka }` : ses entrées de `workflow.history.json` et, si `omeka`, les items de configuration de ses exécutions et l'item de l'appel (s'il n'est pas partagé), après vérification de leur `dcterms:type` ; refusé pendant un traitement |
 
 Routes propres à exploZoteroAnno : `GET` et `POST /api/explo/settings`, `POST /api/explo/guide` (guide d'annotation à partir de la grille), `GET /api/explo/runs` (analyses déjà effectuées), `GET /api/explo/results?run=`, `GET /api/explo/file?name=&run=` (sans `run` : dernière analyse), et pour le RAG :
 

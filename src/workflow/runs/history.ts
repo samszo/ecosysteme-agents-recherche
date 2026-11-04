@@ -34,3 +34,11 @@ export async function appendHistory(entry: HistoryEntry, file = HISTORY_FILE) {
   history.unshift(entry);
   await fs.writeFile(file, JSON.stringify(history.slice(0, MAX_ENTRIES), null, 2) + "\n", "utf-8");
 }
+
+// retire des exécutions de l'historique (suppression d'un appel traité) ; renvoie le nombre d'entrées retirées
+export async function removeHistory(runIds: string[], file = HISTORY_FILE) {
+  const history = await readHistory(file);
+  const kept = history.filter(h => !runIds.includes(h.runId));
+  if (kept.length !== history.length) await fs.writeFile(file, JSON.stringify(kept, null, 2) + "\n", "utf-8");
+  return history.length - kept.length;
+}

@@ -387,7 +387,7 @@ Les modifications faites dans l'interface sont enregistrées dans le fichier de 
 | `input.zoteroCollection` | clé de la collection Zotero |
 | `models.provider`, `models.analytics`, `models.fast` | API Albert et modèles |
 | `zotero.automaticTags` | inclure les marqueurs automatiques |
-| `extraction.chunkSize`, `chunkOverlap`, `maxAnnotationChars` | découpage des textes, taille du bloc d'annotations |
+| `extraction.chunkSize`, `chunkOverlap`, `maxAnnotationChars` | découpage des textes (chevauchement plafonné à la moitié de `chunkSize`), taille du bloc d'annotations |
 | `tagCategory` | catégorie des concepts issus des marqueurs |
 | `annotationPositions`, `annotationColorTolerance` | table couleur → positionnement → consigne |
 | `kappa.codes`, `unitSimilarity`, `targetKappa`, `csvPath` | accord inter-juges |

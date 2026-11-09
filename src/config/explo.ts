@@ -123,8 +123,17 @@ export const defaultExploConfig = {
     enabled: true,
     // liste des analyses réussies sur la page ; false : une analyse ne s'ouvre que par son lien (identifiant dans l'adresse)
     listRuns: true,
-    // onglet RAG : réponses enregistrées dans Omeka S pour la collection de l'analyse (jamais de nouvelle question)
+    // onglet RAG : réponses enregistrées dans Omeka S pour la collection de l'analyse
     ragAnswers: true,
+    // onglet RAG : questions posées à la collection de l'analyse depuis la page publique (modèle de l'assistant RAG,
+    // modèles de prompt d'Omeka S, rien n'est enregistré) ; chaque question consomme des ressources Albert, d'où les limites
+    ragQuery: true,
+    // questions par heure et par visiteur (adresse IP transmise par le proxy)
+    ragPerHour: 10,
+    // questions par jour pour l'ensemble des visiteurs
+    ragPerDay: 200,
+    // longueur maximale d'une question (caractères)
+    ragMaxQuestion: 1000,
   },
 
   // dossier des fichiers produits (dans le répertoire de données)

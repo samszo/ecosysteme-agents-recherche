@@ -419,6 +419,7 @@ Les modifications faites dans l'interface sont enregistrées dans le fichier de 
 | `rag.promptType`, `rag.promptClass`, `rag.answerType`, `rag.answerClass` | repérage et classes Omeka S des modèles de prompt et des réponses |
 | `rag.defaultPrompts` | modèles proposés par « Créer les modèles par défaut » |
 | `public.enabled`, `public.listRuns`, `public.ragAnswers` | page publique des analyses : activée (sinon 404), liste des analyses réussies affichée (sinon accès par lien seulement), réponses RAG enregistrées montrées |
+| `public.ragQuery`, `public.ragPerHour`, `public.ragPerDay`, `public.ragMaxQuestion` | questions RAG depuis la page publique : activées, quota par visiteur et par heure, quota global par jour, longueur maximale |
 | `outputDir` | dossier des fichiers produits (`resultats/explo`) |
 
 ## 10. API de l'interface
@@ -520,8 +521,10 @@ Fichiers produits dans `resultats/explo/` (réglage `outputDir`) : `guide_annota
 | `GET /public/api/explo/run?run=` | une analyse : résumé, `grid` (réglages archivés de l'analyse, sinon grille de `participation.json`), `tension` (`tensionMatrix` avec les tensions de l'analyse), `analysis`, `files` |
 | `GET /public/api/explo/file?run=&name=` | fichier de l'analyse (liste blanche `EXPLO_FILES`) ; `raw=1` sert le réseau HTML avec `Content-Security-Policy: sandbox` |
 | `GET /public/api/explo/rag?run=` | réponses RAG enregistrées pour la collection de l'analyse (titre, question, réponse, date) |
+| `GET /public/api/explo/rag/prompts` | `{ enabled, perHour, maxQuestion, prompts }` : modèles de prompt d'Omeka S (identifiant, titre, description) |
+| `POST /public/api/explo/rag/query` | `{ run, promptId, question }` : `queryRag` sur la collection de l'analyse, modèle `rag-assistant` ; renvoie réponse, extraits (1 500 caractères au plus), tokens, énergie et carbone ; rien n'est enregistré ; 429 au-delà des quotas |
 
-Rien n'y écrit ; les tokens, le coût en argent, l'item de configuration et les liens d'administration Omeka S ne sont pas renvoyés ; les pages et fichiers portent `X-Robots-Tag: noindex`. La liste des analyses (archive locale et Omeka S) est gardée une minute en mémoire (`publicRunsCache`) pour ne pas interroger Omeka S à chaque visite ; une analyse absente du cache le fait recharger. Le markdown (rapport, thèmes, réponses) est nettoyé par DOMPurify avant affichage. Désactivée par `public.enabled: false` : toutes ces routes répondent 404.
+Aucune route n'écrit ; les questions RAG publiques passent par des quotas en mémoire (`takePublicRagQuota` : par adresse IP, dernière entrée de `X-Forwarded-For` ajoutée par le proxy, sur une heure glissante, et pour tous sur un jour glissant), décomptés seulement pour une question recevable (analyse publiée, question non vide et assez courte) ; les tokens, le coût en argent, l'item de configuration et les liens d'administration Omeka S ne sont pas renvoyés ; les pages et fichiers portent `X-Robots-Tag: noindex`. La liste des analyses (archive locale et Omeka S) est gardée une minute en mémoire (`publicRunsCache`) pour ne pas interroger Omeka S à chaque visite ; une analyse absente du cache le fait recharger. Le markdown (rapport, thèmes, réponses) est nettoyé par DOMPurify avant affichage. Désactivée par `public.enabled: false` : toutes ces routes répondent 404.
 
 ### RAG Albert
 

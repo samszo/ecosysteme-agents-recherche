@@ -223,10 +223,12 @@ La page a six onglets :
 | **Participation** | comme dans l'application |
 | **Collaborations** | comme dans l'application, réseau compris (sans lien vers l'administration d'Omeka S) |
 | **Thèmes** | thèmes de discussion de l'analyse |
-| **RAG** | documents indexés dans Albert et **réponses enregistrées** pour la collection ; on ne peut pas poser de nouvelle question depuis la page publique (chaque question consomme des ressources Albert) |
+| **RAG** | **interroger la collection** de l'analyse : choisir un type de réponse (modèles de prompt d'Omeka S : Synthèse, Définitions, Questions de discussion, Citations…), poser une question, lire la réponse citée `[n]` et les extraits utilisés, avec son coût estimé ; puis le bilan d'indexation dans Albert et les **réponses enregistrées** depuis l'application |
 | **Rapport** | rapport de l'analyse et fichiers produits à télécharger |
 
 L'adresse garde l'analyse et l'onglet affichés (`?run=…&onglet=collab`, `participation`, `themes`, `rag`, `report`) : un lien peut ouvrir directement les passages divergents d'une analyse. Sans identifiant, la page affiche l'analyse la plus récente.
+
+**Questions posées depuis la page publique** : elles portent toujours sur la collection de l'analyse affichée, avec le modèle de langage de l'assistant RAG (onglet Workflow de l'application) et les réglages de recherche de l'application, que le visiteur ne peut pas changer. Les réponses ne sont pas enregistrées dans Omeka S (l'enregistrement reste réservé à l'application). Chaque question consomme des ressources Albert : elles sont limitées par visiteur et par jour (réglages ci-dessous) ; au-delà, la page affiche le délai avant de pouvoir reposer une question. Les quotas sont tenus en mémoire et repartent de zéro au redémarrage du serveur.
 
 **Ce qui n'est pas publié** : les connexions et réglages de l'application, la consommation détaillée en tokens et le coût en argent, les liens vers l'administration d'Omeka S, les analyses en échec. La page demande aux moteurs de recherche de ne pas l'indexer (`noindex`).
 
@@ -237,6 +239,10 @@ L'adresse garde l'analyse et l'onglet affichés (`?run=…&onglet=collab`, `part
 | `enabled` | `true` | `false` : la page publique et ses routes répondent 404 |
 | `listRuns` | `true` | `false` : la liste des analyses n'est pas affichée ; une analyse ne s'ouvre que par son lien (identifiant dans l'adresse) |
 | `ragAnswers` | `true` | `false` : les réponses RAG enregistrées ne sont pas montrées |
+| `ragQuery` | `true` | `false` : pas de question à la collection depuis la page publique |
+| `ragPerHour` | `10` | questions par heure et par visiteur (adresse IP) |
+| `ragPerDay` | `200` | questions par jour pour l'ensemble des visiteurs |
+| `ragMaxQuestion` | `1000` | longueur maximale d'une question (caractères) |
 
 ```json
 { "public": { "listRuns": false } }

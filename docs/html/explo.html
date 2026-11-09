@@ -326,7 +326,7 @@
 </tr>
 <tr>
 <td><strong>RAG</strong></td>
-<td>documents indexés dans Albert et <strong>réponses enregistrées</strong> pour la collection ; on ne peut pas poser de nouvelle question depuis la page publique (chaque question consomme des ressources Albert)</td>
+<td><strong>interroger la collection</strong> de l&#39;analyse : choisir un type de réponse (modèles de prompt d&#39;Omeka S : Synthèse, Définitions, Questions de discussion, Citations…), poser une question, lire la réponse citée <code>[n]</code> et les extraits utilisés, avec son coût estimé ; puis le bilan d&#39;indexation dans Albert et les <strong>réponses enregistrées</strong> depuis l&#39;application</td>
 </tr>
 <tr>
 <td><strong>Rapport</strong></td>
@@ -334,6 +334,7 @@
 </tr>
 </tbody></table>
 <p>L&#39;adresse garde l&#39;analyse et l&#39;onglet affichés (<code>?run=…&amp;onglet=collab</code>, <code>participation</code>, <code>themes</code>, <code>rag</code>, <code>report</code>) : un lien peut ouvrir directement les passages divergents d&#39;une analyse. Sans identifiant, la page affiche l&#39;analyse la plus récente.</p>
+<p><strong>Questions posées depuis la page publique</strong> : elles portent toujours sur la collection de l&#39;analyse affichée, avec le modèle de langage de l&#39;assistant RAG (onglet Workflow de l&#39;application) et les réglages de recherche de l&#39;application, que le visiteur ne peut pas changer. Les réponses ne sont pas enregistrées dans Omeka S (l&#39;enregistrement reste réservé à l&#39;application). Chaque question consomme des ressources Albert : elles sont limitées par visiteur et par jour (réglages ci-dessous) ; au-delà, la page affiche le délai avant de pouvoir reposer une question. Les quotas sont tenus en mémoire et repartent de zéro au redémarrage du serveur.</p>
 <p><strong>Ce qui n&#39;est pas publié</strong> : les connexions et réglages de l&#39;application, la consommation détaillée en tokens et le coût en argent, les liens vers l&#39;administration d&#39;Omeka S, les analyses en échec. La page demande aux moteurs de recherche de ne pas l&#39;indexer (<code>noindex</code>).</p>
 <p><strong>Réglages</strong> (fichier <code>explo.config.json</code>, rubrique <code>public</code>) :</p>
 <table>
@@ -358,6 +359,26 @@
 <td><code>ragAnswers</code></td>
 <td><code>true</code></td>
 <td><code>false</code> : les réponses RAG enregistrées ne sont pas montrées</td>
+</tr>
+<tr>
+<td><code>ragQuery</code></td>
+<td><code>true</code></td>
+<td><code>false</code> : pas de question à la collection depuis la page publique</td>
+</tr>
+<tr>
+<td><code>ragPerHour</code></td>
+<td><code>10</code></td>
+<td>questions par heure et par visiteur (adresse IP)</td>
+</tr>
+<tr>
+<td><code>ragPerDay</code></td>
+<td><code>200</code></td>
+<td>questions par jour pour l&#39;ensemble des visiteurs</td>
+</tr>
+<tr>
+<td><code>ragMaxQuestion</code></td>
+<td><code>1000</code></td>
+<td>longueur maximale d&#39;une question (caractères)</td>
 </tr>
 </tbody></table>
 <pre><code class="language-json">{ &quot;public&quot;: { &quot;listRuns&quot;: false } }</code></pre>

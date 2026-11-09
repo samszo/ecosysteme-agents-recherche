@@ -647,6 +647,29 @@ async function publicRunDetail(runId: string) {
     files: (await exploResultFiles(runId).catch(() => [])).map((f: any) => ({ name: f.name, title: f.title })),
   };
 }
+// questions RAG publiques : quotas en mémoire, par visiteur (heure glissante) et pour tous (jour glissant)
+const publicRagHits = new Map<string, number[]>();
+let publicRagDay: number[] = [];
+// adresse du visiteur : dernière entrée de X-Forwarded-For (ajoutée par le proxy, les précédentes viennent du client)
+function clientIp(req: http.IncomingMessage) {
+  const fwd = String(req.headers["x-forwarded-for"] ?? "").split(",").map(s => s.trim()).filter(Boolean);
+  return fwd[fwd.length - 1] || req.socket.remoteAddress || "inconnu";
+}
+// null si la question est acceptée (et comptée), sinon le message de refus
+function takePublicRagQuota(ip: string, perHour: number, perDay: number): string | null {
+  const now = Date.now();
+  publicRagDay = publicRagDay.filter(t => now - t < 86_400_000);
+  if (publicRagDay.length >= perDay) return "Nombre maximum de questions atteint pour aujourd'hui : réessayer demain.";
+  const hits = (publicRagHits.get(ip) ?? []).filter(t => now - t < 3_600_000);
+  if (hits.length >= perHour) {
+    const wait = Math.ceil((3_600_000 - (now - hits[0]!)) / 60_000);
+    return `Limite de ${perHour} questions par heure atteinte : réessayer dans ${wait} min.`;
+  }
+  hits.push(now); publicRagHits.set(ip, hits); publicRagDay.push(now);
+  // visiteurs inactifs depuis plus d'une heure oubliés
+  if (publicRagHits.size > 5000) for (const [k, v] of publicRagHits) if (!v.some(t => now - t < 3_600_000)) publicRagHits.delete(k);
+  return null;
+}
 const sendModule = (res: http.ServerResponse, name: string) => {
   res.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8" });
   res.end(fs.readFileSync(path.join(PUBLIC_DIR, name)));
@@ -1079,6 +1102,50 @@ const routes: Record<string, (req: http.IncomingMessage, res: http.ServerRespons
     } catch (e) { sendJson(res, 502, { error: (e as Error).message }); }
   },
 
+  // questions publiques : modèles de prompt proposés et limites en vigueur
+  "GET /public/api/explo/rag/prompts": async (_req, res) => {
+    const pub = currentExploConfig().public;
+    if (!pub.enabled || !pub.ragQuery) return sendJson(res, 200, { enabled: false, prompts: [] });
+    try {
+      const prompts = await listPrompts(await serverOmk(), currentExploConfig().rag);
+      sendJson(res, 200, { enabled: true, perHour: pub.ragPerHour, maxQuestion: pub.ragMaxQuestion, prompts: prompts.map(p => ({ id: p.id, title: p.title, description: p.description })) });
+    } catch (e) { sendJson(res, 502, { error: (e as Error).message }); }
+  },
+
+  // question à la collection de l'analyse ({ run, promptId, question }) : réponse et extraits, rien n'est enregistré
+  "POST /public/api/explo/rag/query": async (req, res) => {
+    const pub = currentExploConfig().public;
+    if (!pub.enabled || !pub.ragQuery) return sendJson(res, 404, { error: "Introuvable" });
+    const body = await readBody(req);
+    const question = String(body.question ?? "").trim();
+    if (!question) return sendJson(res, 400, { error: "Question vide" });
+    if (question.length > pub.ragMaxQuestion) return sendJson(res, 400, { error: `Question trop longue (${pub.ragMaxQuestion} caractères au plus)` });
+    let r: ExploRun;
+    try { r = await findPublicRun(String(body.run ?? "")); }
+    catch (e) { return sendJson(res, 404, { error: (e as Error).message }); }
+    // décompté seulement pour une question recevable
+    const quota = takePublicRagQuota(clientIp(req), pub.ragPerHour, pub.ragPerDay);
+    if (quota) return sendJson(res, 429, { error: quota });
+    try {
+      const config = currentExploConfig();
+      const prompt = (await listPrompts(await serverOmk(), config.rag)).find(p => p.id === Number(body.promptId));
+      if (!prompt) throw new Error("Modèle de prompt introuvable");
+      // collection de l'analyse, modèle et réglages de recherche de l'application (non modifiables depuis la page publique)
+      const answer = await queryRag({
+        albert: serverAlbert(), rag: config.rag, costs: currentConfig().costs,
+        model: agentModelId("rag-assistant", currentConfig().models.analytics),
+        collection: { key: r.collection.key, name: r.collection.name ?? (await zoteroCollection(r.collection.key)).name },
+        question, prompt,
+      });
+      console.log(`🔎 [RAG public] ${r.collection.name ?? r.collection.key} : ${answer.usage.totalTokens} tokens`);
+      sendJson(res, 200, {
+        question: answer.question, prompt: answer.prompt.title, model: answer.model, answer: answer.answer, durationMs: answer.durationMs,
+        sources: answer.sources.map(x => ({ n: x.n, title: x.title, creators: x.creators, year: x.year, score: x.score, content: x.content.trim().slice(0, 1500) })),
+        tokens: answer.usage.totalTokens, impact: { energyWh: answer.impact.energyWh, co2g: answer.impact.co2g },
+      });
+    } catch (e) { sendJson(res, 502, { error: (e as Error).message }); }
+  },
+
   "POST /api/run/stop": (_req, res) => {
     if (run?.child) {
       run.status = "stopped";
@@ -1139,6 +1206,7 @@ const APP_ONLY: Record<string, AppName> = {
   "GET /api/explo/rag/answers": "explo", "GET /exploResults.js": "explo",
   "GET /public/analyses": "explo", "GET /public/exploResults.js": "explo", "GET /public/forceGraph.js": "explo",
   "GET /public/api/explo/runs": "explo", "GET /public/api/explo/run": "explo", "GET /public/api/explo/file": "explo", "GET /public/api/explo/rag": "explo",
+  "GET /public/api/explo/rag/prompts": "explo", "POST /public/api/explo/rag/query": "explo",
 };
 
 // documentation HTML générée par npm run docs (docs/html)

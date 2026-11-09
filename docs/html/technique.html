@@ -722,6 +722,10 @@
 <td>page publique des analyses : activée (sinon 404), liste des analyses réussies affichée (sinon accès par lien seulement), réponses RAG enregistrées montrées</td>
 </tr>
 <tr>
+<td><code>public.ragQuery</code>, <code>public.ragPerHour</code>, <code>public.ragPerDay</code>, <code>public.ragMaxQuestion</code></td>
+<td>questions RAG depuis la page publique : activées, quota par visiteur et par heure, quota global par jour, longueur maximale</td>
+</tr>
+<tr>
 <td><code>outputDir</code></td>
 <td>dossier des fichiers produits (<code>resultats/explo</code>)</td>
 </tr>
@@ -939,8 +943,16 @@
 <td><code>GET /public/api/explo/rag?run=</code></td>
 <td>réponses RAG enregistrées pour la collection de l&#39;analyse (titre, question, réponse, date)</td>
 </tr>
+<tr>
+<td><code>GET /public/api/explo/rag/prompts</code></td>
+<td><code>{ enabled, perHour, maxQuestion, prompts }</code> : modèles de prompt d&#39;Omeka S (identifiant, titre, description)</td>
+</tr>
+<tr>
+<td><code>POST /public/api/explo/rag/query</code></td>
+<td><code>{ run, promptId, question }</code> : <code>queryRag</code> sur la collection de l&#39;analyse, modèle <code>rag-assistant</code> ; renvoie réponse, extraits (1 500 caractères au plus), tokens, énergie et carbone ; rien n&#39;est enregistré ; 429 au-delà des quotas</td>
+</tr>
 </tbody></table>
-<p>Rien n&#39;y écrit ; les tokens, le coût en argent, l&#39;item de configuration et les liens d&#39;administration Omeka S ne sont pas renvoyés ; les pages et fichiers portent <code>X-Robots-Tag: noindex</code>. La liste des analyses (archive locale et Omeka S) est gardée une minute en mémoire (<code>publicRunsCache</code>) pour ne pas interroger Omeka S à chaque visite ; une analyse absente du cache le fait recharger. Le markdown (rapport, thèmes, réponses) est nettoyé par DOMPurify avant affichage. Désactivée par <code>public.enabled: false</code> : toutes ces routes répondent 404.</p>
+<p>Aucune route n&#39;écrit ; les questions RAG publiques passent par des quotas en mémoire (<code>takePublicRagQuota</code> : par adresse IP, dernière entrée de <code>X-Forwarded-For</code> ajoutée par le proxy, sur une heure glissante, et pour tous sur un jour glissant), décomptés seulement pour une question recevable (analyse publiée, question non vide et assez courte) ; les tokens, le coût en argent, l&#39;item de configuration et les liens d&#39;administration Omeka S ne sont pas renvoyés ; les pages et fichiers portent <code>X-Robots-Tag: noindex</code>. La liste des analyses (archive locale et Omeka S) est gardée une minute en mémoire (<code>publicRunsCache</code>) pour ne pas interroger Omeka S à chaque visite ; une analyse absente du cache le fait recharger. Le markdown (rapport, thèmes, réponses) est nettoyé par DOMPurify avant affichage. Désactivée par <code>public.enabled: false</code> : toutes ces routes répondent 404.</p>
 <h3 id="rag-albert"><a class="anchor" href="#rag-albert">#</a>RAG Albert</h3>
 <p>Mise en œuvre du <a href="https://guides.ia.numerique.gouv.fr/albert-api/guides/rag" target="_blank" rel="noopener">guide RAG d&#39;Albert</a> avec le client <code>src/lib/albert/albert.ts</code> (<code>/v1/collections</code>, <code>/v1/documents</code>, <code>/v1/search</code>, <code>/v1/chat/completions</code>).</p>
 <pre class="mermaid">sequenceDiagram

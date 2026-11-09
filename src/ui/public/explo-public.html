@@ -81,6 +81,11 @@
   .facts { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; font-size: 14px; margin: 0; }
   .facts dt { color: var(--muted); }
   .facts dd { margin: 0; }
+  .form { display: flex; flex-direction: column; gap: 4px; max-width: 760px; }
+  .form label { font-size: 13px; font-weight: 600; margin-top: 8px; }
+  select, textarea { font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 7px 9px; width: 100%; }
+  textarea { resize: vertical; }
+  button.btn:disabled { opacity: .5; cursor: default; }
   details.answer { border-top: 1px solid var(--line); padding: 8px 0; }
   details.answer summary { cursor: pointer; font-weight: 600; }
   .toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 8px 16px; border-radius: 8px; font-size: 14px; opacity: 0; transition: opacity .2s; pointer-events: none; }
@@ -280,6 +285,7 @@ async function renderRag(r, idx, token) {
         .map(([v, l]) => el("div", { className: "tile" }, el("div", { className: "v", textContent: v ?? 0 }), el("div", { className: "l", textContent: l })))),
       idx.collections?.length ? el("p", { className: "help", textContent: `Collection(s) Albert : ${idx.collections.map(c => `« ${c.name} » (${c.present ?? 0} document(s))`).join(", ")}.` }) : null));
   } else cards.push(el("section", { className: "card" }, el("h2", { textContent: "Indexation des documents" }), el("p", { className: "muted", textContent: "Les documents n'ont pas été indexés dans Albert lors de cette analyse." })));
+  cards.unshift(askCard(r));
   const answers = el("section", { className: "card" }, el("h2", { textContent: "Réponses enregistrées" }), el("p", { className: "muted", textContent: list.ragAnswers ? "Chargement…" : "Les réponses ne sont pas publiées." }));
   cards.push(answers);
   box.replaceChildren(...cards);
@@ -293,6 +299,54 @@ async function renderRag(r, idx, token) {
         el("summary", { textContent: `${a.question || a.title}${a.date ? ` · ${new Date(a.date).toLocaleDateString("fr-FR")}` : ""}` }),
         el("div", { className: "md", innerHTML: md(a.answer ?? "") }))) : [el("p", { className: "muted", textContent: "Aucune réponse enregistrée pour cette collection." })]));
   } catch (e) { answers.lastChild.textContent = `Réponses indisponibles : ${e.message}`; }
+}
+
+// question à la collection de l'analyse : modèle de prompt d'Omeka S, réponse citée et extraits (rien n'est enregistré)
+function askCard(r) {
+  const card = el("section", { className: "card" }, el("h2", { textContent: "Interroger la collection" }), el("p", { className: "muted", textContent: "Chargement…" }));
+  api("/public/api/explo/rag/prompts").then(cfg => {
+    if (!cfg.enabled) { card.classList.add("hidden"); return; }
+    if (!cfg.prompts.length) { card.lastChild.textContent = "Aucun modèle de prompt disponible pour le moment."; return; }
+    const select = el("select", { id: "ask-prompt" }, cfg.prompts.map(p => el("option", { value: p.id, textContent: p.title })));
+    const desc = el("span", { className: "help" });
+    const showDesc = () => { desc.textContent = cfg.prompts.find(p => p.id === Number(select.value))?.description ?? ""; };
+    select.onchange = showDesc; showDesc();
+    const question = el("textarea", { id: "ask-question", rows: 3, maxLength: cfg.maxQuestion, placeholder: "Ex. : Comment les auteurs définissent-ils l'attention ?" });
+    const button = el("button", { className: "btn primary", textContent: "Interroger" });
+    const busy = el("span", { className: "help" });
+    const result = el("div");
+    const ask = async () => {
+      const q = question.value.trim();
+      if (!q) return toast("Saisir une question");
+      button.disabled = true; busy.textContent = "Recherche dans les documents puis rédaction de la réponse…"; result.replaceChildren();
+      try {
+        const res = await fetch("/public/api/explo/rag/query", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ run: r.runId, promptId: Number(select.value), question: q }) });
+        const a = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(a.error || `HTTP ${res.status}`);
+        busy.textContent = `Réponse en ${(a.durationMs / 1000).toLocaleString("fr-FR", { maximumFractionDigits: 1 })} s · ${a.tokens.toLocaleString("fr-FR")} tokens · ${fmtSig(a.impact.energyWh)} Wh · ${fmtSig(a.impact.co2g)} g CO₂e (estimation) · modèle ${a.model}`;
+        // citations [n] : lien vers l'extrait correspondant
+        const html = md(a.answer || "_(réponse vide)_").replace(/\[(\d+)\]/g, (m, n) => a.sources.some(x => x.n === Number(n)) ? `<a href="#src-${n}">[${n}]</a>` : m);
+        result.replaceChildren(
+          el("h3", { textContent: "Réponse" }), el("div", { className: "md", innerHTML: html }),
+          el("h3", { textContent: `Extraits utilisés (${a.sources.length})` }),
+          ...(a.sources.length ? a.sources.map(x => el("div", { className: "quote", id: `src-${x.n}` },
+            el("div", { style: "font-weight:600", textContent: `[${x.n}] ${x.title}${x.creators || x.year ? ` (${[x.creators, x.year].filter(Boolean).join(", ")})` : ""}` }),
+            el("div", { style: "white-space:pre-wrap;font-size:13.5px", textContent: x.content + (x.content.length >= 1500 ? "…" : "") }),
+            el("div", { className: "who", textContent: `score ${Number(x.score).toLocaleString("fr-FR", { maximumFractionDigits: 3 })}` }))) : [el("p", { className: "muted", textContent: "Aucun extrait trouvé." })]));
+      } catch (e) { busy.textContent = ""; result.replaceChildren(el("p", { className: "muted", textContent: `Question impossible : ${e.message}` })); }
+      finally { button.disabled = false; }
+    };
+    button.onclick = ask;
+    question.onkeydown = e => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) ask(); };
+    card.replaceChildren(el("h2", { textContent: "Interroger la collection" }),
+      el("p", { className: "lead", textContent: `La question est cherchée dans le texte des documents de la collection « ${collectionName(r)} », puis un modèle de langage répond à partir des seuls extraits trouvés, en les citant [n]. Réponse à vérifier dans les extraits ; elle n'est pas enregistrée. ${cfg.perHour} questions par heure au plus.` }),
+      el("div", { className: "form" },
+        el("label", { htmlFor: "ask-prompt", textContent: "Type de réponse" }), select, desc,
+        el("label", { htmlFor: "ask-question", textContent: "Question" }), question),
+      el("div", { className: "toolbar", style: "margin-top:10px" }, button, busy),
+      result);
+  }).catch(e => { card.lastChild.textContent = `Interrogation indisponible : ${e.message}`; });
+  return card;
 }
 
 // ==========================================

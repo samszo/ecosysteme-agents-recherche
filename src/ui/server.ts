@@ -1281,6 +1281,12 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === "/docs") { res.writeHead(302, { Location: "/docs/" }); return res.end(); }
     return serveDocs(res, url.pathname);
   }
+  // même documentation sous /public/docs/ : accessible sans authentification (exception /public/ du proxy) ;
+  // elle ne contient aucun secret (elle est aussi dans le dépôt public)
+  if (req.method === "GET" && (url.pathname === "/public/docs" || url.pathname.startsWith("/public/docs/"))) {
+    if (url.pathname === "/public/docs") { res.writeHead(302, { Location: "/public/docs/" }); return res.end(); }
+    return serveDocs(res, url.pathname.replace(/^\/public/, ""));
+  }
   const key = `${req.method} ${url.pathname}`;
   const handler = routes[key];
   if (!handler || (APP_ONLY[key] && APP_ONLY[key] !== APP)) return sendJson(res, 404, { error: "Introuvable" });

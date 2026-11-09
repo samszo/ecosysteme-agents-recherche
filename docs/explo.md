@@ -8,6 +8,7 @@ Ce guide est consacré à cette seule application. L'installation est décrite d
 |---|---|
 | Adresse | http://127.0.0.1:7273 (serveur propre, `npm run ui:explo`) |
 | Page publique | http://127.0.0.1:7273/public/analyses?run=&lt;identifiant&gt; |
+| Documentation publique | http://127.0.0.1:7273/public/docs/explo.html (lien « Documentation » de la page publique) |
 | Connexions | page **⚙ Paramètres** de l'application (`.env.explo`, qui complète `.env`) |
 | Réglages | onglet **Grille** (enregistrés dans `explo.config.json`) |
 

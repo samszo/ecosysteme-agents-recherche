@@ -787,6 +787,10 @@
 <td><code>GET /docs/…</code></td>
 <td>documentation HTML ; <code>/docs/img/&lt;nom&gt;.png</code> : copies d&#39;écran du guide (<code>docs/img/</code>)</td>
 </tr>
+<tr>
+<td><code>GET /public/docs/…</code></td>
+<td>même documentation, sans authentification (couverte par l&#39;exception <code>/public/</code> du proxy) ; <code>/public/docs</code> redirige vers <code>/public/docs/</code></td>
+</tr>
 </tbody></table>
 <p>Routes propres à l&#39;Atelier d&#39;articles :</p>
 <table>

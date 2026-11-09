@@ -29,4 +29,4 @@ flowchart LR
     R1 & R2 & R3 --> O[(Omeka S)]
 ```
 
-La version HTML de cette documentation est générée par `npm run docs` dans `docs/html/` ; elle est aussi servie par chacun des serveurs sur `/docs/` (http://127.0.0.1:7272/docs/, http://127.0.0.1:7273/docs/).
+La version HTML de cette documentation est générée par `npm run docs` dans `docs/html/` ; elle est aussi servie par chacun des serveurs sur `/docs/`, et sans authentification sur `/public/docs/` (même contenu, accessible par l'exception `/public/` du proxy, voir le guide d'installation) (http://127.0.0.1:7272/docs/, http://127.0.0.1:7273/docs/).

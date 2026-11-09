@@ -440,6 +440,7 @@ Routes communes aux deux serveurs (chacune s'applique à l'application du serveu
 | `POST /api/run`, `POST /api/run/stop`, `GET /api/run` | lancer, arrêter, état |
 | `GET /api/run/events` | journal et statut en Server-Sent Events |
 | `GET /docs/…` | documentation HTML ; `/docs/img/<nom>.png` : copies d'écran du guide (`docs/img/`) |
+| `GET /public/docs/…` | même documentation, sans authentification (couverte par l'exception `/public/` du proxy) ; `/public/docs` redirige vers `/public/docs/` |
 
 Routes propres à l'Atelier d'articles :
 

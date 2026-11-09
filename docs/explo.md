@@ -219,7 +219,7 @@ La page a six onglets :
 
 | Onglet | Contenu |
 |---|---|
-| **Analyses** | liste des analyses publiées ; pour l'analyse choisie : collection, date, durée, participation, réglages (similarité de passage, seuil du kappa), coût énergétique estimé, puis **la grille de couleurs utilisée pour cette analyse** (couleurs, significations, consignes, tolérance) et le **tableau des tensions** entre ses significations |
+| **Analyses** | liste des analyses publiées ; pour l'analyse choisie : collection (avec un **lien vers la collection sur zotero.org** et sa visibilité : consultable par tous, ou réservée aux membres du groupe), date, durée, participation, réglages (similarité de passage, seuil du kappa), coût énergétique estimé, puis **la grille de couleurs utilisée pour cette analyse** (couleurs, significations, consignes, tolérance) et le **tableau des tensions** entre ses significations |
 | **Participation** | comme dans l'application |
 | **Collaborations** | comme dans l'application, réseau compris (sans lien vers l'administration d'Omeka S) |
 | **Thèmes** | thèmes de discussion de l'analyse |

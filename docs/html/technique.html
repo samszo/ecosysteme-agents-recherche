@@ -933,7 +933,7 @@
 </tr>
 <tr>
 <td><code>GET /public/api/explo/run?run=</code></td>
-<td>une analyse : résumé, <code>grid</code> (réglages archivés de l&#39;analyse, sinon grille de <code>participation.json</code>), <code>tension</code> (<code>tensionMatrix</code> avec les tensions de l&#39;analyse), <code>analysis</code>, <code>files</code></td>
+<td>une analyse : résumé, <code>zotero</code> (<code>{ url, name, library, visibility }</code> : adresse web de la collection, <code>links.alternate</code> de l&#39;API Zotero, et visibilité <code>public</code>, <code>members</code> ou <code>personal</code> ; gardé une heure, <code>null</code> si la collection n&#39;est pas dans la bibliothèque des Paramètres), <code>grid</code> (réglages archivés de l&#39;analyse, sinon grille de <code>participation.json</code>), <code>tension</code> (<code>tensionMatrix</code> avec les tensions de l&#39;analyse), <code>analysis</code>, <code>files</code></td>
 </tr>
 <tr>
 <td><code>GET /public/api/explo/file?run=&amp;name=</code></td>

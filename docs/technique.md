@@ -518,7 +518,7 @@ Fichiers produits dans `resultats/explo/` (réglage `outputDir`) : `guide_annota
 | Route | Rôle |
 |---|---|
 | `GET /public/api/explo/runs` | `{ listed, ragAnswers, runs }` : analyses réussies (identifiant, dates, collection, totaux, énergie et carbone), vide si `public.listRuns` est `false` |
-| `GET /public/api/explo/run?run=` | une analyse : résumé, `grid` (réglages archivés de l'analyse, sinon grille de `participation.json`), `tension` (`tensionMatrix` avec les tensions de l'analyse), `analysis`, `files` |
+| `GET /public/api/explo/run?run=` | une analyse : résumé, `zotero` (`{ url, name, library, visibility }` : adresse web de la collection, `links.alternate` de l'API Zotero, et visibilité `public`, `members` ou `personal` ; gardé une heure, `null` si la collection n'est pas dans la bibliothèque des Paramètres), `grid` (réglages archivés de l'analyse, sinon grille de `participation.json`), `tension` (`tensionMatrix` avec les tensions de l'analyse), `analysis`, `files` |
 | `GET /public/api/explo/file?run=&name=` | fichier de l'analyse (liste blanche `EXPLO_FILES`) ; `raw=1` sert le réseau HTML avec `Content-Security-Policy: sandbox` |
 | `GET /public/api/explo/rag?run=` | réponses RAG enregistrées pour la collection de l'analyse (titre, question, réponse, date) |
 | `GET /public/api/explo/rag/prompts` | `{ enabled, perHour, maxQuestion, prompts }` : modèles de prompt d'Omeka S (identifiant, titre, description) |

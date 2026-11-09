@@ -236,8 +236,14 @@ async function openRun(id) {
   $("#btn-share").classList.remove("hidden");
 
   const dur = r.endedAt && r.startedAt ? Math.round((new Date(r.endedAt) - new Date(r.startedAt)) / 1000) : null;
+  // collection : lien vers la bibliothèque web de Zotero, avec sa visibilité
+  const z = r.zotero;
+  const collectionFact = z ? el("span", {},
+    el("a", { href: z.url, target: "_blank", rel: "noopener", textContent: `${collectionName(r)} ↗` }),
+    el("span", { className: "help", textContent: ` · ${z.library ? `bibliothèque « ${z.library} » · ` : ""}${z.visibility === "public" ? "consultable par tous" : z.visibility === "members" ? "réservée aux membres du groupe" : "bibliothèque personnelle, selon ses réglages de confidentialité"}` }))
+    : collectionName(r);
   const facts = [
-    ["Collection Zotero", collectionName(r)],
+    ["Collection Zotero", collectionFact],
     ["Date", fmtDate(r.startedAt)],
     ...(dur != null && dur >= 0 ? [["Durée du traitement", dur >= 60 ? `${Math.floor(dur / 60)} min ${dur % 60} s` : `${dur} s`]] : []),
     ["Participation", participationText(r.totals)],
@@ -248,7 +254,7 @@ async function openRun(id) {
   ];
   detail.replaceChildren(
     el("section", { className: "card" }, el("h2", { textContent: "Analyse affichée" }),
-      el("dl", { className: "facts" }, facts.flatMap(([k, v]) => [el("dt", { textContent: k }), el("dd", { textContent: v })]))),
+      el("dl", { className: "facts" }, facts.flatMap(([k, v]) => [el("dt", { textContent: k }), typeof v === "string" ? el("dd", { textContent: v }) : el("dd", {}, v)]))),
     r.grid?.positions?.length ? gridCard(r.grid, r.tension) : el("div", { className: "empty", textContent: "Grille de couleurs non archivée pour cette analyse." }),
     r.grid?.positions?.length ? el("p", { className: "help", textContent: "Cette grille est celle en vigueur au moment de l'analyse : les significations des couleurs ont pu changer depuis pour les analyses suivantes." }) : null);
 

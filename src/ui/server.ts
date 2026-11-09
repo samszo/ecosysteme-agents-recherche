@@ -630,6 +630,33 @@ const publicRunSummary = (r: ExploRun) => ({
   collection: { key: r.collection?.key, name: r.collection?.name ?? null }, totals: r.totals ?? null,
   impact: r.impact ? { energyWh: r.impact.energyWh, co2g: r.impact.co2g ?? null } : null,
 });
+// adresse web d'une collection (zotero.org) et visibilité de sa bibliothèque, gardées une heure ; null si introuvable
+// (collection d'une autre bibliothèque que celle des Paramètres, Zotero indisponible)
+type ZoteroLink = { url: string; name: string | null; library: string | null; visibility: "public" | "members" | "personal" } | null;
+const zoteroLinks = new Map<string, { at: number; link: ZoteroLink }>();
+async function zoteroCollectionLink(key: string): Promise<ZoteroLink> {
+  const cached = zoteroLinks.get(key);
+  if (cached && Date.now() - cached.at < 3_600_000) return cached.link;
+  let link: ZoteroLink = null;
+  try {
+    const env = readEnv();
+    if (!env.ZOTERO_API_KEY || !/^[A-Z0-9]{8}$/.test(key)) throw new Error("clé ou collection invalide");
+    const c: any = await new Zotero(env.ZOTERO_USER_ID ?? "", env.ZOTERO_API_KEY, env.ZOTERO_GROUP_ID || undefined).collection(key);
+    const url = c?.links?.alternate?.href;
+    if (typeof url === "string" && url.startsWith("https://www.zotero.org/")) {
+      let visibility: "public" | "members" | "personal" = "personal";
+      if (c.library?.type === "group") {
+        // groupe : bibliothèque lisible par tous (libraryReading = all) ou par ses seuls membres
+        const g: any = await (await fetch(`https://api.zotero.org/groups/${c.library.id}`, { headers: { "Zotero-API-Key": env.ZOTERO_API_KEY, "Zotero-API-Version": "3" } })).json();
+        visibility = g?.data?.libraryReading === "all" ? "public" : "members";
+      }
+      link = { url, name: c.data?.name ?? null, library: c.library?.name ?? null, visibility };
+    }
+  } catch (e) { console.warn("⚠️ Lien de la collection Zotero indisponible :", (e as Error).message); }
+  zoteroLinks.set(key, { at: Date.now(), link });
+  return link;
+}
+
 async function publicRunDetail(runId: string) {
   const r = await findPublicRun(runId);
   // grille de l'analyse ; analyses antérieures sans réglages archivés : grille reprise des données de participation
@@ -639,8 +666,13 @@ async function publicRunDetail(runId: string) {
     catch { /* pas de données de participation */ }
   }
   const tension = mergeConfig(defaultExploConfig.tension, r.config?.tension ?? {});
+  const zotero = r.collection?.key ? await zoteroCollectionLink(r.collection.key) : null;
+  const summary = publicRunSummary(r);
+  // analyses relues d'Omeka S sans nom de collection : nom actuel de la collection dans Zotero
+  if (!summary.collection.name && zotero?.name) summary.collection.name = zotero.name;
   return {
-    ...publicRunSummary(r),
+    ...summary,
+    zotero,
     grid,
     tension: grid?.positions?.length ? tensionMatrix({ positions: grid.positions, tolerance: grid.tolerance ?? defaultExploConfig.grid.tolerance }, tension) : null,
     analysis: r.config?.analysis ? { unitSimilarity: r.config.analysis.unitSimilarity, minPassagesForKappa: r.config.analysis.minPassagesForKappa, mergeDuplicates: r.config.analysis.mergeDuplicates } : null,

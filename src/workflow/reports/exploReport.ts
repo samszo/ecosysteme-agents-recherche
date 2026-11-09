@@ -3,6 +3,7 @@ import type { UsageSummary } from "../../lib/metrics/usage";
 import type { ImpactSummary } from "../../lib/metrics/impact";
 import { usageReport } from "./paperReport";
 import { exploConfig } from "../../config/explo";
+import { interpretKappa } from "../../tools/calculateFleissKappa";
 
 const pct = (x: number | null | undefined) => (x === null || x === undefined ? "—" : `${Math.round(x * 100)} %`);
 const cell = (s: unknown) => String(s ?? "").replace(/\|/g, "\\|").replace(/\n/g, " ");
@@ -69,7 +70,10 @@ export function buildExploReport(ctx: {
       "",
       `${c.passages.shared} passage(s) annoté(s) par au moins deux personnes : **${c.passages.convergent} convergent(s)** (même signification) et **${c.passages.divergent} divergent(s)**.`,
       "",
-      `Accord sur la signification des couleurs : kappa de Fleiss **${c.kappa.fleiss ?? "—"}**${c.kappa.cohen !== null ? `, de Cohen **${c.kappa.cohen}**` : ""} (${c.kappa.interpretation}, ${c.kappa.passages} passage(s)).`,
+      // chaque kappa avec sa propre interprétation (Cohen seulement pour deux personnes)
+      c.kappa.fleiss === null
+        ? `Accord sur la signification des couleurs : kappa non calculé (${c.kappa.interpretation}).`
+        : `Accord sur la signification des couleurs (${c.kappa.passages} passage(s)) : kappa de Fleiss **${c.kappa.fleiss}** (${interpretKappa(c.kappa.fleiss)})${c.kappa.cohen !== null ? `, kappa de Cohen **${c.kappa.cohen}** (${interpretKappa(c.kappa.cohen)})` : ""}.`,
       "",
       ...(c.tension?.mean != null ? [`Tension des lectures divergentes (rapport entre les couleurs, de 0 à 1) : moyenne **${c.tension.mean.toFixed(2)}**, maximum **${c.tension.max.toFixed(2)}** — ${Object.entries(c.tension.byRelation).map(([r, n]) => `${n} passage(s) aux couleurs ${r}`).join(", ")}.`, ""] : []),
       "| Paire | Documents en commun | Passages en commun | Même signification | Accord | Tension |",

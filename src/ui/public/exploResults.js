@@ -15,6 +15,11 @@ const personColor = (names, n) => PEOPLE_COLORS[names.indexOf(n) % PEOPLE_COLORS
 export const tensionColor = t => `color-mix(in srgb, #d0312d ${Math.round(Math.max(0, Math.min(1, t)) * 100)}%, #9aa0aa)`;
 export const tensionBadge = (t, title = "") => t == null ? el("span", { className: "muted", textContent: "—" }) : el("span", { className: "tbadge", style: `background:${tensionColor(t)}`, textContent: t.toFixed(2), title });
 export const dot = c => el("i", { className: "sw", style: `background:${c}` });
+// interprétation de Landis et Koch (1977), comme interpretKappa côté serveur
+const interpretKappa = k => k <= 0 ? "Aucun accord (pas mieux que le hasard)" : k <= 0.2 ? "Accord léger" : k <= 0.4 ? "Accord passable" : k <= 0.6 ? "Accord modéré" : k <= 0.8 ? "Accord substantiel" : "Accord presque parfait";
+// kappas : chacun avec sa propre interprétation (Cohen seulement pour deux personnes)
+const kappaTiles = k => k.fleiss == null ? [["—", `kappa (${k.interpretation})`]]
+  : [[k.fleiss, `kappa de Fleiss (${interpretKappa(k.fleiss)})`], ...(k.cohen != null ? [[k.cohen, `kappa de Cohen (${interpretKappa(k.cohen)})`]] : [])];
 const tile = ([v, l]) => el("div", { className: "tile" }, el("div", { className: "v", textContent: v }), el("div", { className: "l", textContent: l }));
 
 // ==========================================
@@ -121,7 +126,7 @@ export function renderCollab(box, c, options = {}) {
   box.className = "";
   const k = c.kappa;
   const tiles = el("div", { className: "tiles" },
-    [[c.passages.shared, "passages annotés en commun"], [c.passages.convergent, "convergents"], [c.passages.divergent, "divergents"], [k.fleiss ?? "—", `kappa (${k.interpretation})`]]
+    [[c.passages.shared, "passages annotés en commun"], [c.passages.convergent, "convergents"], [c.passages.divergent, "divergents"], ...kappaTiles(k)]
       .concat(c.tension ? [[c.tension.mean != null ? c.tension.mean.toFixed(2) : "—", "tension moyenne des divergences"]] : []).map(tile));
 
   const names = c.matrix.names;

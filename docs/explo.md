@@ -109,7 +109,7 @@ Le protocole est un **outil d'animation et d'exploration**, pas un instrument de
 - **La tension chromatique est une convention, pas une propriété du sens.** Les couleurs de Zotero n'ont pas été choisies pour leurs rapports sémantiques. Avec la grille par défaut, jaune (Idée clé) et violet (Méthode) sont presque complémentaires sur le cercle : leur tension vaut 1, comme Accord – Désaccord, alors que ces lectures sont parfaitement compatibles. Le cercle chromatique est un point de départ : il faut **fixer les tensions des paires** qui comptent et vérifier le tableau des tensions avant de lancer une campagne.
 - **Le rattachement des couleurs dépend de la tolérance.** Une couleur personnalisée ou un surlignage fait dans un autre lecteur PDF peut tomber « hors grille » ou être rattaché à la mauvaise signification. Le nombre de couleurs hors grille, dans l'onglet Participation, est à surveiller.
 - **Le repérage des passages communs est approximatif.** Deux personnes qui surlignent l'une une phrase, l'autre tout le paragraphe, ne se recouvrent pas assez pour être rapprochées : les passages communs sont plutôt sous-estimés. Abaisser la similarité les rapproche davantage, au risque de rapprocher des passages distincts.
-- **Le kappa demande des données.** En dessous du minimum de passages communs (5 par défaut), il n'est pas calculé. Au-dessus, il reste sensible à la répartition des catégories (une couleur très majoritaire tire l'accord vers le bas) et il ne porte que sur les passages choisis par les lecteurs, pas sur des unités imposées.
+- **Le kappa demande des données.** En dessous du minimum de passages communs (5 par défaut), il n'est pas calculé. Au-dessus, il reste sensible à la répartition des catégories (une couleur très majoritaire tire l'accord vers le bas) et il ne porte que sur les passages choisis par les lecteurs, pas sur des unités imposées. Voir l'[annexe sur les kappas](#annexe-comprendre-les-kappas).
 
 **Ce que les résultats ne doivent pas devenir**
 
@@ -185,7 +185,7 @@ Chiffres clés (collaborateurs, surlignages, notes, documents annotés, couleurs
 
 Passages annotés en commun, convergents et divergents, kappa, tension moyenne ; matrice des passages communs et de l'accord par paire ; passages divergents du plus tendu au moins tendu, avec la lecture et le commentaire de chacun ; passages convergents ; réseau collaborateurs–documents (glisser, survoler, cliquer ; couleur des liens entre personnes = tension).
 
-*À lire* : les passages divergents les plus tendus sont les meilleurs points de départ d'une discussion. Un kappa faible avec beaucoup de divergences de faible tension indique plutôt une grille comprise différemment qu'un désaccord de fond (voir les limites).
+*À lire* : les passages divergents les plus tendus sont les meilleurs points de départ d'une discussion. Le kappa est expliqué en [annexe](#annexe-comprendre-les-kappas). Un kappa faible avec beaucoup de divergences de faible tension indique plutôt une grille comprise différemment qu'un désaccord de fond (voir les limites).
 
 ### Thèmes
 
@@ -267,3 +267,96 @@ L'adresse garde l'analyse et l'onglet affichés (`?run=…&onglet=collab`, `part
 **La page publique demande un mot de passe.** Le proxy protège aussi `/public/` : ajouter l'exception décrite dans le guide d'installation.
 
 **La page publique répond « Analyse introuvable ».** L'analyse a été supprimée, a échoué, ou l'identifiant du lien est incomplet.
+
+## Annexe : comprendre les kappas
+
+L'onglet **Collaborations** et le rapport donnent un **kappa** : un indice d'accord entre lecteurs sur la signification des couleurs. Cette annexe explique ce qu'il mesure, comment il est calculé dans exploZoteroAnno et comment le lire, ou ne pas le lire.
+
+### Pourquoi ne pas se contenter d'un pourcentage d'accord ?
+
+Le plus simple serait de compter la part des passages communs où deux personnes ont choisi la même couleur. C'est ce que montrent la colonne **Accord** des paires de collaborateurs et la matrice des passages communs. Mais une part de cet accord est due au **hasard** : si deux lecteurs surlignent presque tout en vert, ils tomberont souvent d'accord sans s'être compris pour autant.
+
+Le kappa corrige le pourcentage d'accord de cet accord attendu par hasard :
+
+```
+kappa = (accord observé − accord attendu par hasard) / (1 − accord attendu par hasard)
+```
+
+- **1** : accord parfait ;
+- **0** : pas plus d'accord que si chacun avait choisi ses couleurs au hasard, en gardant ses habitudes (ses proportions de couleurs) ;
+- **valeur négative** : moins d'accord que le hasard, signe d'un désaccord systématique ou de catégories comprises à l'inverse.
+
+### Les deux kappas calculés
+
+- **Kappa de Cohen** (1960) : accord entre **deux** personnes. L'accord attendu par hasard tient compte des habitudes de *chacune* : si Alice met 50 % de vert et Bob 40 %, la probabilité qu'ils choisissent tous les deux le vert par hasard est 0,5 × 0,4 = 0,2. exploZoteroAnno ne le calcule que lorsque l'analyse compte exactement deux collaborateurs.
+- **Kappa de Fleiss** (1971) : accord entre **deux personnes ou plus**, toujours calculé. Pour chaque passage, il mesure la part des paires de lecteurs qui ont choisi la même couleur ; l'accord attendu par hasard repose sur la répartition des couleurs **de l'ensemble du groupe**. Il admet que les passages n'ont pas tous le même nombre de lecteurs, ce qui est le cas dans une annotation libre.
+
+Avec deux personnes, les deux valeurs sont proches mais peuvent tomber de part et d'autre d'un seuil d'interprétation : l'onglet Collaborations et le rapport affichent alors les deux kappas, chacun avec sa propre interprétation.
+
+### Comment exploZoteroAnno le calcule
+
+1. Les surlignages de personnes différentes sont regroupés en **passages communs** (mots en commun au-delà du seuil de *similarité de passage*, 60 % par défaut).
+2. Chaque surlignage est rattaché à une **signification de la grille** ; les couleurs **hors grille** ne comptent pas.
+3. Seuls les passages lus par **au moins deux personnes** avec une couleur de la grille entrent dans le calcul.
+4. En dessous du **minimum de passages communs** (5 par défaut, réglage *Passages communs minimum pour le kappa*), le kappa n'est pas calculé : l'onglet affiche « — » et le nombre de passages manquants.
+5. Le kappa est interprété avec l'échelle de Landis et Koch (1977) :
+
+| Kappa | Interprétation affichée |
+|---|---|
+| 0 ou moins | aucun accord (pas mieux que le hasard) |
+| 0,01 à 0,20 | accord léger |
+| 0,21 à 0,40 | accord passable |
+| 0,41 à 0,60 | accord modéré |
+| 0,61 à 0,80 | accord substantiel |
+| 0,81 à 1 | accord presque parfait |
+
+Ces seuils sont une convention, pas une norme statistique. Pour constituer un corpus d'entraînement, on vise souvent au moins 0,61. Pour une grille de discussion, un accord modéré est déjà utile, et un accord trop élevé peut même signifier que la grille ne laisse pas de place aux lectures divergentes.
+
+### Exemple : deux lecteurs, dix passages
+
+Alice et Bob ont surligné les mêmes dix passages avec trois couleurs : vert (Accord), rouge (Désaccord) et magenta (Question).
+
+| | Bob : Accord | Bob : Désaccord | Bob : Question | Total Alice |
+|---|---|---|---|---|
+| **Alice : Accord** | **4** | 1 | 0 | 5 |
+| **Alice : Désaccord** | 0 | **2** | 1 | 3 |
+| **Alice : Question** | 0 | 1 | **1** | 2 |
+| **Total Bob** | 4 | 4 | 2 | 10 |
+
+- Accord observé : (4 + 2 + 1) / 10 = **0,70**.
+- Accord attendu par hasard (Cohen) : 0,5 × 0,4 + 0,3 × 0,4 + 0,2 × 0,2 = **0,36**.
+- Kappa de Cohen : (0,70 − 0,36) / (1 − 0,36) = **0,53**, accord modéré.
+- Kappa de Fleiss : l'accord attendu repose sur les couleurs des deux lecteurs réunis (9 Accord, 7 Désaccord, 4 Question sur 20) : 0,45² + 0,35² + 0,20² = 0,365, d'où (0,70 − 0,365) / (1 − 0,365) = **0,53**.
+
+70 % d'accord brut ne correspond qu'à un kappa de 0,53 : une partie de cet accord serait obtenue par hasard.
+
+### Le piège des couleurs très majoritaires
+
+Sur dix autres passages, Alice et Bob mettent presque tout en vert. Ils sont d'accord sur 8 passages (Accord), puis chacun met une fois Désaccord là où l'autre a mis Accord.
+
+- Accord observé : **0,80**.
+- Chacun a 9 Accord et 1 Désaccord : accord attendu par hasard 0,9 × 0,9 + 0,1 × 0,1 = **0,82**.
+- Kappa : (0,80 − 0,82) / (1 − 0,82) = **−0,11**, aucun accord.
+
+80 % d'accord et un kappa négatif : quand une couleur domine, le hasard suffit à expliquer l'accord, et les rares désaccords portent justement sur les passages qui comptent. C'est le **paradoxe du kappa**. Il faut toujours lire le kappa avec la répartition des couleurs (onglet Participation) et les passages divergents.
+
+### Plus de deux lecteurs
+
+Pour un passage lu par trois personnes, dont deux mettent Accord et une Désaccord, Fleiss compte les paires de lecteurs : sur les 3 paires possibles, 1 seule est d'accord. L'accord sur ce passage vaut donc 1/3. Le kappa de Fleiss fait la moyenne de ces accords sur tous les passages communs et la compare à l'accord attendu d'après les couleurs de tout le groupe.
+
+### Ce que le kappa ne dit pas
+
+- **Il ne porte que sur les passages choisis.** Dans exploZoteroAnno, chacun décide quoi surligner. Le kappa ne mesure l'accord que sur les passages que plusieurs personnes ont *toutes* surlignés : il ne dit rien des passages qu'une seule a remarqués.
+- **Il traite toutes les divergences de la même façon.** Mettre « Idée clé » au lieu de « Définition » compte autant que mettre « Désaccord » au lieu d'« Accord ». La **tension** sert à graduer ces divergences.
+- **Il dépend du découpage des passages.** Changer la *similarité de passage* change les passages communs, donc le kappa. Deux analyses ne sont comparables qu'avec les mêmes réglages et la même grille.
+- **Il est instable avec peu de passages.** Avec 5 à 10 passages communs, un seul passage peut faire varier le kappa de plusieurs dixièmes. Le minimum de passages évite les valeurs absurdes, il ne les rend pas précises.
+- **Il ne juge pas les personnes.** Un kappa faible signale le plus souvent une grille comprise de façons différentes (consignes ambiguës, axes mélangés). C'est un signal pour **améliorer la grille** ou en discuter, pas pour désigner un « mauvais » lecteur.
+
+### Que faire d'un kappa faible ?
+
+1. Regarder les **passages divergents** : les mêmes couples de significations reviennent-ils (Idée clé / Définition, Accord / Question…) ?
+2. Si oui, préciser les **consignes** de ces couleurs ou les fusionner, ou fixer leur tension à 0 si leurs lectures sont compatibles.
+3. Faire une courte **séance de calibration** sur un document commun, puis relancer l'analyse et comparer les kappas.
+4. Si les divergences portent sur le fond (Accord / Désaccord), le kappa faible est un **résultat** : ce sont les sujets de la prochaine discussion.
+
+*Références :* J. Cohen, « A coefficient of agreement for nominal scales », *Educational and Psychological Measurement*, 1960. J. L. Fleiss, « Measuring nominal scale agreement among many raters », *Psychological Bulletin*, 1971. J. R. Landis et G. G. Koch, « The measurement of observer agreement for categorical data », *Biometrics*, 1977.

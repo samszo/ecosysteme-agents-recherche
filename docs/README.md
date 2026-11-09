@@ -12,6 +12,7 @@
 |---|---|---|
 | [Installation](installation.md) | administrateur | prérequis, installation locale, débogage et Docker (deux serveurs), préparation d'Omeka S et de Zotero, dépannage |
 | [Utilisateur](utilisateur.md) | chercheur, annotateur, animateur de groupe | préparer le corpus, utiliser l'Atelier d'articles et exploZoteroAnno, lire les résultats |
+| [exploZoteroAnno](explo.md) | animateur et membres d'un groupe d'annotation | protocole d'annotation par couleurs (intérêt, limites, bonnes pratiques), campagne d'annotation, lecture des résultats, page publique |
 | [Technique](technique.md) | développeur | architecture, les deux workflows, modules, modèle de données, configuration, API |
 
 ```mermaid

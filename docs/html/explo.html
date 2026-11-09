@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>exploZoteroAnno : guide d'utilisation – Écosystème d'agents</title>
+<style>
+  :root { --bg: #f6f5f1; --panel: #ffffff; --ink: #1d1f24; --muted: #6b6f78; --line: #e2e0d9; --accent: #2f5d8a; --code: #f0eee8; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #15171b; --panel: #1d2026; --ink: #e8e9ec; --muted: #9aa0aa; --line: #2e323a; --accent: #7fb0e0; --code: #111317; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { background: var(--panel); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 2; }
+  header .bar { max-width: 1180px; margin: 0 auto; padding: 10px 16px; display: flex; gap: 18px; align-items: center; flex-wrap: wrap; }
+  header .brand { font-weight: 650; }
+  header nav { display: flex; gap: 4px; flex-wrap: wrap; }
+  header nav a { color: var(--muted); text-decoration: none; padding: 4px 10px; border-radius: 6px; }
+  header nav a[aria-current] { color: var(--ink); background: var(--bg); }
+  .layout { max-width: 1180px; margin: 0 auto; padding: 24px 16px 80px; display: grid; grid-template-columns: minmax(0, 1fr) 230px; gap: 32px; }
+  main { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 8px 32px 32px; min-width: 0; }
+  .toc { position: sticky; top: 70px; align-self: start; font-size: 13.5px; display: flex; flex-direction: column; gap: 4px; max-height: calc(100vh - 90px); overflow: auto; }
+  .toc strong { margin-bottom: 4px; }
+  .toc a { color: var(--muted); text-decoration: none; }
+  .toc a.l3 { padding-left: 12px; }
+  .toc a:hover { color: var(--accent); }
+  h1 { font-size: 28px; line-height: 1.25; }
+  h2 { font-size: 21px; margin-top: 36px; padding-top: 8px; border-top: 1px solid var(--line); }
+  h3 { font-size: 17px; margin-top: 26px; }
+  .anchor { color: var(--line); text-decoration: none; margin-right: 6px; font-weight: 400; }
+  h2:hover .anchor, h3:hover .anchor { color: var(--accent); }
+  a { color: var(--accent); }
+  code { background: var(--code); padding: 1px 5px; border-radius: 4px; font-size: .9em; }
+  pre { background: var(--code); padding: 12px 14px; border-radius: 8px; overflow: auto; font-size: 13.5px; line-height: 1.45; }
+  pre code { background: none; padding: 0; }
+  pre.mermaid { background: var(--panel); border: 1px solid var(--line); text-align: center; }
+  table { border-collapse: collapse; width: 100%; font-size: 14.5px; margin: 12px 0 20px; display: block; overflow-x: auto; }
+  th, td { border: 1px solid var(--line); padding: 6px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--bg); }
+  figure { margin: 16px 0 22px; }
+  figure img { display: block; max-width: 100%; height: auto; border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+  figcaption { margin-top: 6px; font-size: 13.5px; color: var(--muted); text-align: center; }
+  blockquote { margin: 12px 0; padding: 4px 14px; border-left: 3px solid var(--accent); color: var(--muted); background: var(--bg); border-radius: 0 6px 6px 0; }
+  @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } .toc { display: none; } main { padding: 4px 16px 24px; } }
+</style>
+</head>
+<body>
+<header><div class="bar"><span class="brand">Écosystème d'agents – documentation</span><nav><a href="index.html">Accueil</a><a href="installation.html">Installation</a><a href="utilisateur.html">Utilisateur</a><a href="explo.html" aria-current="page">exploZoteroAnno</a><a href="technique.html">Technique</a></nav></div></header>
+<div class="layout">
+<main>
+<h1 id="explozoteroanno-guide-d-39-utilisation"><a class="anchor" href="#explozoteroanno-guide-d-39-utilisation">#</a>exploZoteroAnno : guide d&#39;utilisation</h1>
+<p><strong>exploZoteroAnno</strong> accompagne un groupe qui lit et annote ensemble une collection Zotero : séminaire, atelier de lecture, équipe de recherche, cours. Chacun surligne les documents dans le lecteur de Zotero avec une couleur dont la <strong>signification est commune au groupe</strong>. L&#39;application lit ces surlignages, mesure la participation, repère les passages où les lectures convergent ou divergent, propose des thèmes de discussion, permet d&#39;interroger la collection (RAG) et archive le tout dans Omeka S. Les résultats peuvent être publiés sur une <strong>page publique</strong> en lecture seule.</p>
+<p>Ce guide est consacré à cette seule application. L&#39;installation est décrite dans le <a href="installation.html">guide d&#39;installation</a> ; les autres applications de l&#39;écosystème dans le <a href="utilisateur.html">guide utilisateur</a>.</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Adresse</td>
+<td><a href="http://127.0.0.1:7273" target="_blank" rel="noopener">http://127.0.0.1:7273</a> (serveur propre, <code>npm run ui:explo</code>)</td>
+</tr>
+<tr>
+<td>Page publique</td>
+<td><a href="http://127.0.0.1:7273/public/analyses?run=&amp;lt;identifiant" target="_blank" rel="noopener">http://127.0.0.1:7273/public/analyses?run=&lt;identifiant</a>&gt;</td>
+</tr>
+<tr>
+<td>Connexions</td>
+<td>page <strong>⚙ Paramètres</strong> de l&#39;application (<code>.env.explo</code>, qui complète <code>.env</code>)</td>
+</tr>
+<tr>
+<td>Réglages</td>
+<td>onglet <strong>Grille</strong> (enregistrés dans <code>explo.config.json</code>)</td>
+</tr>
+</tbody></table>
+<pre class="mermaid">flowchart LR
+    G[1. Définir la grille&lt;br/&gt;de couleurs] --&gt; P[2. Partager le guide&lt;br/&gt;d'annotation]
+    P --&gt; A[&quot;3. Annoter dans Zotero&lt;br/&gt;(bibliothèque de groupe)&quot;]
+    A --&gt; R[4. Analyser]
+    R --&gt; V[Participation, collaborations,&lt;br/&gt;thèmes, RAG]
+    V --&gt; S[5. Séance de discussion]
+    S -- révision de la grille,&lt;br/&gt;nouvelles lectures --&gt; A
+    R --&gt; PUB[Page publique]</pre>
+<h2 id="1-le-protocole-d-39-annotation-par-couleurs"><a class="anchor" href="#1-le-protocole-d-39-annotation-par-couleurs">#</a>1. Le protocole d&#39;annotation par couleurs</h2>
+<h3 id="le-principe-une-couleur-une-lecture"><a class="anchor" href="#le-principe-une-couleur-une-lecture">#</a>Le principe : une couleur, une lecture</h3>
+<p>Le lecteur de Zotero propose huit couleurs de surlignage. Le protocole leur donne un sens partagé : avant de lire, le groupe adopte une <strong>grille</strong> qui associe à chaque couleur une <strong>signification</strong> et une <strong>consigne</strong> (« quand l&#39;utiliser »). Par défaut :</p>
+<table>
+<thead>
+<tr>
+<th>Couleur</th>
+<th>Signification</th>
+<th>Quand l&#39;utiliser</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>🟨 jaune</td>
+<td>Idée clé</td>
+<td>passage central pour comprendre le document</td>
+</tr>
+<tr>
+<td>🟩 vert</td>
+<td>Accord</td>
+<td>idée que je partage ou que je souhaite reprendre</td>
+</tr>
+<tr>
+<td>🟥 rouge</td>
+<td>Désaccord</td>
+<td>affirmation que je conteste ou qui me pose problème</td>
+</tr>
+<tr>
+<td>🟦 bleu</td>
+<td>Définition</td>
+<td>définition d&#39;un concept ou d&#39;un terme</td>
+</tr>
+<tr>
+<td>🟪 violet</td>
+<td>Méthode</td>
+<td>méthode, protocole ou démarche de recherche</td>
+</tr>
+<tr>
+<td>🟣 magenta</td>
+<td>Question</td>
+<td>point à discuter en groupe, question ouverte</td>
+</tr>
+<tr>
+<td>🟧 orange</td>
+<td>Exemple</td>
+<td>exemple, cas, terrain d&#39;étude</td>
+</tr>
+<tr>
+<td>⬜ gris</td>
+<td>Contexte</td>
+<td>élément de contexte, information secondaire</td>
+</tr>
+</tbody></table>
+<p>Trois gestes complètent la couleur :</p>
+<ul>
+<li>un <strong>commentaire</strong> sur le surlignage précise le point de vue (« d&#39;accord, mais seulement pour… ») ;</li>
+<li>une <strong>note</strong> rattachée à la notice résume une idée ou cite un passage avec son repère (§ 15, p. 12) ;</li>
+<li>un <strong>marqueur</strong> (tag) désigne un concept.</li>
+</ul>
+<p>Le surlignage n&#39;est donc pas une simple mise en évidence : c&#39;est une <strong>prise de position codée</strong>, que l&#39;application peut compter et comparer d&#39;un lecteur à l&#39;autre.</p>
+<pre class="mermaid">flowchart LR
+    S[&quot;Surlignage&lt;br/&gt;(couleur #ff6666)&quot;] -- distance RVB ≤ tolérance --&gt; P[Signification&lt;br/&gt;« Désaccord »]
+    S -- trop loin de toute couleur --&gt; H[Hors grille]
+    P --&gt; U{Même passage&lt;br/&gt;qu'un autre lecteur ?&lt;br/&gt;recouvrement des mots}
+    U -- même signification --&gt; C[Convergence]
+    U -- significations différentes --&gt; D[Divergence&lt;br/&gt;+ tension de 0 à 1]
+    U -- non --&gt; I[Lecture isolée]</pre>
+<p>L&#39;analyse procède en trois temps :</p>
+<ol>
+<li><strong>Rattacher chaque couleur à la grille</strong> : la couleur d&#39;un surlignage est comparée aux couleurs de la grille (distance dans l&#39;espace RVB) ; la plus proche l&#39;emporte si elle est à moins de la <strong>tolérance</strong> (80 par défaut), sinon le surlignage est compté « hors grille ».</li>
+<li><strong>Repérer les passages communs</strong> : deux surlignages d&#39;un même document portent sur le même passage quand leurs mots se recouvrent assez (indice de Jaccard, 60 % par défaut).</li>
+<li><strong>Comparer les lectures</strong> : sur un passage commun, même signification = <strong>convergence</strong>, significations différentes = <strong>divergence</strong>. Chaque divergence reçoit une <strong>tension</strong>, de 0 (lectures compatibles) à 1 (lectures opposées), et l&#39;accord d&#39;ensemble est mesuré par un <strong>kappa</strong> (Fleiss, et Cohen pour deux personnes).</li>
+</ol>
+<h3 id="la-tension-entre-deux-couleurs"><a class="anchor" href="#la-tension-entre-deux-couleurs">#</a>La tension entre deux couleurs</h3>
+<p>Deux lectures différentes ne s&#39;opposent pas toutes autant : « Idée clé » et « Définition » cohabitent, « Accord » et « Désaccord » s&#39;excluent. La tension traduit cet écart. Elle suit d&#39;abord le <strong>rapport entre les deux couleurs sur le cercle chromatique</strong>, chaque rapport ayant une valeur réglable :</p>
+<table>
+<thead>
+<tr>
+<th>Rapport des couleurs</th>
+<th>Écart de teinte</th>
+<th>Tension par défaut</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>identiques</td>
+<td>—</td>
+<td>0</td>
+</tr>
+<tr>
+<td>analogues</td>
+<td>moins de 45°</td>
+<td>0,2</td>
+</tr>
+<tr>
+<td>avec un gris</td>
+<td>une couleur peu saturée</td>
+<td>0,3</td>
+</tr>
+<tr>
+<td>en carré</td>
+<td>autour de 90°</td>
+<td>0,5</td>
+</tr>
+<tr>
+<td>triadiques</td>
+<td>autour de 120°</td>
+<td>0,75</td>
+</tr>
+<tr>
+<td>complémentaires</td>
+<td>plus de 150°</td>
+<td>1</td>
+</tr>
+</tbody></table>
+<p>Une tension peut aussi être <strong>fixée pour une paire de significations</strong>, ce qui l&#39;emporte sur le rapport des couleurs (par défaut : Accord – Désaccord = 1). La tension ordonne les passages divergents (du plus tendu au moins tendu), colore les liens du réseau entre personnes et oriente le choix des thèmes de discussion. Le tableau de l&#39;onglet Grille, repris sur la page publique, montre la tension obtenue entre toutes les significations.</p>
+<h3 id="ce-que-le-protocole-apporte"><a class="anchor" href="#ce-que-le-protocole-apporte">#</a>Ce que le protocole apporte</h3>
+<ul>
+<li><strong>Un geste léger, au fil de la lecture.</strong> Surligner en couleur est un geste que chacun fait déjà : pas d&#39;outil de codage à apprendre, pas de formulaire. L&#39;annotation se fait dans le lecteur de Zotero, sur ordinateur, tablette ou téléphone, à son rythme.</li>
+<li><strong>Une lecture rendue visible et discutable.</strong> La couleur dit <em>comment</em> on lit, pas seulement <em>ce qu&#39;on</em> retient. Les lectures de chacun deviennent comparables et la discussion part de passages précis plutôt que d&#39;impressions générales.</li>
+<li><strong>La divergence comme matériau.</strong> Le protocole ne cherche pas à faire converger : un passage lu « Accord » par l&#39;un et « Désaccord » par l&#39;autre est un excellent point de départ pour une séance. Les thèmes de discussion sont construits à partir de ces écarts.</li>
+<li><strong>Une gradation plutôt qu&#39;un oui/non.</strong> La tension distingue les divergences anodines (deux teintes voisines) des oppositions franches, et chaque groupe peut l&#39;ajuster à sa grille.</li>
+<li><strong>Une mesure de l&#39;accord.</strong> Le kappa indique si la grille est comprise de la même façon par tous : un accord faible sur des passages communs signale souvent une consigne ambiguë plus qu&#39;un désaccord de fond.</li>
+<li><strong>Une participation observable.</strong> Qui annote quoi, quand, avec quelles couleurs : l&#39;animateur voit les documents délaissés et les personnes à solliciter, et peut ajuster la répartition des lectures.</li>
+<li><strong>Un dispositif itératif et traçable.</strong> La grille se révise entre deux séances ; chaque analyse archive la grille en vigueur, ses réglages et ses résultats (archive locale et Omeka S), ce qui permet de suivre l&#39;évolution d&#39;une campagne et de rendre compte de la méthode.</li>
+</ul>
+<h3 id="les-limites-de-la-demarche"><a class="anchor" href="#les-limites-de-la-demarche">#</a>Les limites de la démarche</h3>
+<p>Le protocole est un <strong>outil d&#39;animation et d&#39;exploration</strong>, pas un instrument de codage qualitatif rigoureux. Ses limites tiennent à la couleur elle-même, à la grille, aux calculs et à l&#39;usage des résultats.</p>
+<p><strong>Ce que la couleur ne peut pas dire</strong></p>
+<ul>
+<li><strong>Une seule signification par surlignage.</strong> Un passage qui est à la fois une définition et un point de désaccord doit être réduit à l&#39;une des deux. Le commentaire permet de nuancer, mais l&#39;analyse ne compte que la couleur.</li>
+<li><strong>Huit couleurs au plus.</strong> La palette de Zotero limite la grille à quelques catégories larges. Un codage fin (sous-catégories, codes argumentatifs) relève des <strong>marqueurs</strong>, comme dans le codebook de l&#39;Atelier d&#39;articles, pas des couleurs.</li>
+<li><strong>Le choix de ce qu&#39;on surligne échappe à la mesure.</strong> Chacun décide quoi surligner. Ne pas surligner un passage n&#39;est ni un accord ni un désaccord : les comparaisons ne portent que sur ce que deux personnes ont <em>toutes deux</em> choisi de marquer.</li>
+<li><strong>Les habitudes personnelles résistent.</strong> Beaucoup de lecteurs ont déjà leur propre code couleur (jaune pour « important », par exemple). Sans rappel régulier, l&#39;ancien code revient et brouille l&#39;analyse.</li>
+</ul>
+<p><strong>Ce que la grille peut mélanger</strong></p>
+<ul>
+<li><strong>Des axes hétérogènes.</strong> La grille par défaut mélange trois questions : <em>l&#39;importance</em> (Idée clé, Contexte), <em>la posture</em> (Accord, Désaccord, Question) et <em>le type de contenu</em> (Définition, Méthode, Exemple). Deux personnes qui surlignent le même passage en « Idée clé » et en « Définition » ne sont pas en désaccord : elles répondent à des questions différentes. L&#39;analyse compte pourtant une divergence.</li>
+<li><strong>Une grille qui change en cours de campagne.</strong> Modifier une signification entre deux analyses rend leurs résultats difficilement comparables ; les surlignages déjà faits gardent leur couleur, mais pas leur sens d&#39;origine. La page publique affiche, pour cette raison, la grille <strong>de chaque analyse</strong>.</li>
+</ul>
+<p><strong>Ce que les calculs approximent</strong></p>
+<ul>
+<li><strong>La tension chromatique est une convention, pas une propriété du sens.</strong> Les couleurs de Zotero n&#39;ont pas été choisies pour leurs rapports sémantiques. Avec la grille par défaut, jaune (Idée clé) et violet (Méthode) sont presque complémentaires sur le cercle : leur tension vaut 1, comme Accord – Désaccord, alors que ces lectures sont parfaitement compatibles. Le cercle chromatique est un point de départ : il faut <strong>fixer les tensions des paires</strong> qui comptent et vérifier le tableau des tensions avant de lancer une campagne.</li>
+<li><strong>Le rattachement des couleurs dépend de la tolérance.</strong> Une couleur personnalisée ou un surlignage fait dans un autre lecteur PDF peut tomber « hors grille » ou être rattaché à la mauvaise signification. Le nombre de couleurs hors grille, dans l&#39;onglet Participation, est à surveiller.</li>
+<li><strong>Le repérage des passages communs est approximatif.</strong> Deux personnes qui surlignent l&#39;une une phrase, l&#39;autre tout le paragraphe, ne se recouvrent pas assez pour être rapprochées : les passages communs sont plutôt sous-estimés. Abaisser la similarité les rapproche davantage, au risque de rapprocher des passages distincts.</li>
+<li><strong>Le kappa demande des données.</strong> En dessous du minimum de passages communs (5 par défaut), il n&#39;est pas calculé. Au-dessus, il reste sensible à la répartition des catégories (une couleur très majoritaire tire l&#39;accord vers le bas) et il ne porte que sur les passages choisis par les lecteurs, pas sur des unités imposées.</li>
+</ul>
+<p><strong>Ce que les résultats ne doivent pas devenir</strong></p>
+<ul>
+<li><strong>La couleur n&#39;est pas perçue par tous de la même façon.</strong> Le rouge et le vert, cœur de la grille par défaut (Désaccord, Accord), sont les couleurs que confondent le plus souvent les personnes daltoniennes. Le guide d&#39;annotation doit donner le <strong>nom</strong> des couleurs, et la grille éviter de reposer sur une seule paire rouge/vert.</li>
+<li><strong>Compter n&#39;est pas évaluer.</strong> Le nombre de surlignages mesure une activité visible, pas la qualité d&#39;une lecture : une personne qui annote peu mais commente finement contribue autant qu&#39;une autre. Utiliser les chiffres de participation pour noter ou classer des personnes détourne le dispositif et pousse à surligner pour être vu.</li>
+<li><strong>Les annotations sont nominatives.</strong> Les résultats montrent qui a lu quoi et comment, avec des citations et des commentaires. Avant de publier une analyse (section 4), le groupe doit en être informé et d&#39;accord.</li>
+<li><strong>Les thèmes et les réponses RAG sont produits par un modèle de langage.</strong> Ce sont des propositions à vérifier dans les passages cités, pas des synthèses faisant autorité.</li>
+</ul>
+<h3 id="bonnes-pratiques"><a class="anchor" href="#bonnes-pratiques">#</a>Bonnes pratiques</h3>
+<ol>
+<li><strong>Construire la grille avec le groupe</strong>, et pour un but précis (préparer une discussion, repérer des concepts, comparer des positions). Une grille courte, comprise de tous, vaut mieux qu&#39;une grille complète.</li>
+<li><strong>Choisir un axe principal.</strong> Par exemple une grille de <em>posture</em> : Accord (vert), Nuance (jaune), Désaccord (rouge), Question (magenta), Contexte (gris). Les types de contenu (définition, méthode, exemple) passent alors par des marqueurs. Si les axes restent mélangés, fixer à 0 la tension entre significations compatibles.</li>
+<li><strong>Vérifier le tableau des tensions</strong> dans l&#39;onglet Grille et fixer les paires dont le rapport de couleurs ne reflète pas le sens.</li>
+<li><strong>Calibrer avant de lancer.</strong> Faire annoter le même court document par tous, lancer une analyse, regarder les divergences et le kappa, puis préciser les consignes là où les lectures divergent pour des raisons de compréhension de la grille.</li>
+<li><strong>Demander un commentaire</strong> pour les couleurs qui engagent (Désaccord, Question) : c&#39;est lui qui nourrit la discussion.</li>
+<li><strong>Partager le guide d&#39;annotation</strong> produit par l&#39;application (avec le nom des couleurs) et le rappeler à chaque séance.</li>
+<li><strong>Ne pas modifier la grille en cours de campagne</strong> ; si c&#39;est nécessaire, lancer une analyse juste avant, pour garder une trace de l&#39;état précédent.</li>
+<li><strong>Relancer l&#39;analyse régulièrement</strong> (avant chaque séance) : les nouvelles annotations sont prises en compte sans réextraire les documents déjà enregistrés, et les analyses successives montrent l&#39;évolution du groupe.</li>
+<li><strong>Présenter les résultats comme un support de discussion</strong>, jamais comme une évaluation individuelle.</li>
+</ol>
+<h2 id="2-preparer-une-campagne-d-39-annotation"><a class="anchor" href="#2-preparer-une-campagne-d-39-annotation">#</a>2. Préparer une campagne d&#39;annotation</h2>
+<h3 id="bibliotheque-de-groupe-et-collection"><a class="anchor" href="#bibliotheque-de-groupe-et-collection">#</a>Bibliothèque de groupe et collection</h3>
+<ul>
+<li>Créer (ou réutiliser) une <strong>bibliothèque de groupe</strong> Zotero et y inviter les participants : c&#39;est ce qui permet de savoir qui a fait chaque annotation. Dans une bibliothèque personnelle, toutes les annotations sont attribuées à « (non attribué) ».</li>
+<li>Rassembler les documents à lire dans une <strong>collection</strong> (PDF, EPUB, pages web enregistrées…). Si plusieurs personnes ajoutent le même document, l&#39;application détecte les doublons (même fichier, DOI, URL, ou titre et année) et cumule leurs annotations sur un seul document.</li>
+<li>Sur la page <strong>⚙ Paramètres</strong> : clé et identifiant du groupe Zotero, clé de l&#39;API Albert, connexion Omeka S. <strong>Tester les connexions</strong> vérifie chacune.</li>
+</ul>
+<h3 id="regler-la-grille-onglet-grille"><a class="anchor" href="#regler-la-grille-onglet-grille">#</a>Régler la grille (onglet Grille)</h3>
+<p><figure><a href="img/explo-grille.png" target="_blank" rel="noopener"><img src="img/explo-grille.png" alt="exploZoteroAnno, onglet Grille : collection et signification de chaque couleur" loading="lazy"></a><figcaption>exploZoteroAnno, onglet Grille : collection et signification de chaque couleur</figcaption></figure></p>
+<ul>
+<li><strong>Collection</strong> : la collection annotée (la liste suit la bibliothèque enregistrée dans les Paramètres).</li>
+<li><strong>Grille de couleurs</strong> : titre, introduction, puis pour chaque couleur son nom, sa signification et sa consigne. Couleurs, libellés et nombre de lignes se modifient librement.</li>
+<li><strong>Tolérance de couleur</strong> : écart accepté (distance RVB) pour rattacher un surlignage à une couleur de la grille.</li>
+<li><strong>Tension entre les couleurs</strong> : valeur de chaque rapport de couleurs, tensions fixées par paire de significations, tableau des tensions obtenues.</li>
+<li><strong>RAG Albert</strong> : indexation des documents dans Albert à chaque analyse, taille des extraits, réglages de recherche par défaut.</li>
+<li><strong>Analyse</strong> : similarité de passage, libellé des annotations sans auteur, fusion des doublons, minimum de passages communs pour le kappa, nombre de thèmes, nombre de passages transmis à l&#39;agent des thèmes.</li>
+<li><strong>Guide d&#39;annotation à partager</strong> : aperçu du guide produit à partir de la grille, à <strong>copier</strong> ou <strong>télécharger</strong> (markdown) pour l&#39;envoyer au groupe ; il est aussi enregistré dans Omeka S à chaque analyse.</li>
+</ul>
+<p><strong>Enregistrer</strong> garde les réglages ; <strong>Rétablir la grille par défaut</strong> remet les couleurs d&#39;origine (la collection est conservée).</p>
+<h3 id="lancer-et-suivre-une-analyse"><a class="anchor" href="#lancer-et-suivre-une-analyse">#</a>Lancer et suivre une analyse</h3>
+<p><strong>Enregistrer et analyser</strong> lance le traitement ; l&#39;onglet <strong>Exécution</strong> affiche son journal en direct, <strong>Arrêter</strong> l&#39;interrompt. Une analyse lit les documents et leurs annotations, les enregistre dans Omeka S, calcule participation et collaborations, indexe les textes dans Albert puis demande à un agent des thèmes de discussion. Elle peut être relancée à tout moment : les documents déjà enregistrés ne sont pas réextraits.</p>
+<p>L&#39;onglet <strong>Workflow</strong> montre les étapes et les agents ; un clic sur un agent permet de lire et modifier ses instructions et son modèle.</p>
+<h2 id="3-lire-les-resultats"><a class="anchor" href="#3-lire-les-resultats">#</a>3. Lire les résultats</h2>
+<h3 id="analyses"><a class="anchor" href="#analyses">#</a>Analyses</h3>
+<p><figure><a href="img/explo-analyses.png" target="_blank" rel="noopener"><img src="img/explo-analyses.png" alt="Onglet Analyses : les analyses archivées, à charger ou dont reprendre les réglages" loading="lazy"></a><figcaption>Onglet Analyses : les analyses archivées, à charger ou dont reprendre les réglages</figcaption></figure></p>
+<p>Toutes les analyses effectuées, de l&#39;archive locale et d&#39;Omeka S : date, collection, statut, durée, participation, tokens, coût estimé.</p>
+<ul>
+<li><strong>Charger</strong> affiche ses résultats dans les onglets suivants (un bandeau rappelle l&#39;analyse affichée) ;</li>
+<li><strong>Reprendre les réglages</strong> recopie sa collection, sa grille et ses paramètres dans l&#39;onglet Grille ;</li>
+<li><strong>Supprimer</strong> efface son archive locale et, au choix, son item de configuration dans Omeka S ;</li>
+<li><strong>Page publique ↗</strong> ouvre ses résultats sur la page publique, à l&#39;adresse à partager (section 4).</li>
+</ul>
+<h3 id="participation"><a class="anchor" href="#participation">#</a>Participation</h3>
+<p><figure><a href="img/explo-participation.png" target="_blank" rel="noopener"><img src="img/explo-participation.png" alt="Onglet Participation : chiffres clés, annotations par collaborateur et chronologie" loading="lazy"></a><figcaption>Onglet Participation : chiffres clés, annotations par collaborateur et chronologie</figcaption></figure></p>
+<p>Chiffres clés (collaborateurs, surlignages, notes, documents annotés, couleurs hors grille, doublons fusionnés), une barre par personne découpée selon les significations de la grille, la chronologie par semaine, le détail par personne et la couverture de la collection (qui a annoté quel document).</p>
+<p><em>À lire</em> : un nombre élevé de couleurs hors grille signale des habitudes personnelles ou une tolérance trop faible ; des documents sans annotation, une répartition à revoir. La barre d&#39;une personne montre sa façon de lire (beaucoup de questions, peu d&#39;accords…), pas sa valeur.</p>
+<h3 id="collaborations"><a class="anchor" href="#collaborations">#</a>Collaborations</h3>
+<p><figure><a href="img/explo-collaborations.png" target="_blank" rel="noopener"><img src="img/explo-collaborations.png" alt="Onglet Collaborations : passages en commun, matrice et paires de collaborateurs" loading="lazy"></a><figcaption>Onglet Collaborations : passages en commun, matrice et paires de collaborateurs</figcaption></figure></p>
+<p>Passages annotés en commun, convergents et divergents, kappa, tension moyenne ; matrice des passages communs et de l&#39;accord par paire ; passages divergents du plus tendu au moins tendu, avec la lecture et le commentaire de chacun ; passages convergents ; réseau collaborateurs–documents (glisser, survoler, cliquer ; couleur des liens entre personnes = tension).</p>
+<p><em>À lire</em> : les passages divergents les plus tendus sont les meilleurs points de départ d&#39;une discussion. Un kappa faible avec beaucoup de divergences de faible tension indique plutôt une grille comprise différemment qu&#39;un désaccord de fond (voir les limites).</p>
+<h3 id="themes"><a class="anchor" href="#themes">#</a>Thèmes</h3>
+<p><figure><a href="img/explo-themes.png" target="_blank" rel="noopener"><img src="img/explo-themes.png" alt="Onglet Thèmes : question à débattre, raisons du choix et passages à relire" loading="lazy"></a><figcaption>Onglet Thèmes : question à débattre, raisons du choix et passages à relire</figcaption></figure></p>
+<p>Un agent propose des thèmes pour une séance : pour chacun, une question ouverte, la raison du choix, les passages à relire et les personnes concernées, une piste d&#39;animation. Il veille à impliquer les participants les moins actifs. Ce sont des propositions, à reprendre ou écarter.</p>
+<h3 id="rag"><a class="anchor" href="#rag">#</a>RAG</h3>
+<p><figure><a href="img/explo-rag.png" target="_blank" rel="noopener"><img src="img/explo-rag.png" alt="Onglet RAG : question, modèle de prompt et réglages de la recherche" loading="lazy"></a><figcaption>Onglet RAG : question, modèle de prompt et réglages de la recherche</figcaption></figure></p>
+<p>Le texte des documents est déposé dans une collection privée d&#39;Albert portant le nom de la collection Zotero. Une question y est cherchée (recherche hybride, sémantique ou lexicale), puis un modèle répond à partir des seuls extraits trouvés, en les citant <code>[n]</code>, selon un <strong>modèle de prompt</strong> enregistré dans Omeka S (Synthèse, Définitions, Questions de discussion, Citations, ou modèles du groupe). Le coût de chaque consultation s&#39;affiche ; une réponse utile peut être <strong>enregistrée dans Omeka S</strong>, elle apparaît alors dans les réponses enregistrées de la collection, et sur la page publique.</p>
+<h3 id="rapport"><a class="anchor" href="#rapport">#</a>Rapport</h3>
+<p><figure><a href="img/explo-rapport.png" target="_blank" rel="noopener"><img src="img/explo-rapport.png" alt="Onglet Rapport : documents produits et rapport de l'analyse" loading="lazy"></a><figcaption>Onglet Rapport : documents produits et rapport de l'analyse</figcaption></figure></p>
+<p>Le rapport reprend participation, collaborations, thèmes, indexation RAG, tokens consommés et coût estimé (énergie, carbone, équivalent API). Les fichiers produits (guide, réseau, données JSON) se téléchargent depuis cet onglet. Tout est enregistré dans Omeka S : un item de configuration par analyse, avec ses médias.</p>
+<h2 id="4-publier-les-resultats-la-page-publique"><a class="anchor" href="#4-publier-les-resultats-la-page-publique">#</a>4. Publier les résultats : la page publique</h2>
+<p>Chaque analyse réussie peut être consultée <strong>sans connexion et en lecture seule</strong> sur une page dédiée :</p>
+<pre><code class="language-">http://127.0.0.1:7273/public/analyses?run=&lt;identifiant de l'analyse&gt;</code></pre>
+<p>En ligne, l&#39;adresse publique de l&#39;application remplace <code>http://127.0.0.1:7273</code> (par exemple <code>https://explo.example.org/public/analyses?run=…</code>). Le lien d&#39;une analyse s&#39;obtient par <strong>Page publique ↗</strong> dans l&#39;onglet Analyses de l&#39;application, ou par <strong>Copier le lien</strong> sur la page publique elle-même.</p>
+<p>La page a six onglets :</p>
+<table>
+<thead>
+<tr>
+<th>Onglet</th>
+<th>Contenu</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Analyses</strong></td>
+<td>liste des analyses publiées ; pour l&#39;analyse choisie : collection, date, durée, participation, réglages (similarité de passage, seuil du kappa), coût énergétique estimé, puis <strong>la grille de couleurs utilisée pour cette analyse</strong> (couleurs, significations, consignes, tolérance) et le <strong>tableau des tensions</strong> entre ses significations</td>
+</tr>
+<tr>
+<td><strong>Participation</strong></td>
+<td>comme dans l&#39;application</td>
+</tr>
+<tr>
+<td><strong>Collaborations</strong></td>
+<td>comme dans l&#39;application, réseau compris (sans lien vers l&#39;administration d&#39;Omeka S)</td>
+</tr>
+<tr>
+<td><strong>Thèmes</strong></td>
+<td>thèmes de discussion de l&#39;analyse</td>
+</tr>
+<tr>
+<td><strong>RAG</strong></td>
+<td>documents indexés dans Albert et <strong>réponses enregistrées</strong> pour la collection ; on ne peut pas poser de nouvelle question depuis la page publique (chaque question consomme des ressources Albert)</td>
+</tr>
+<tr>
+<td><strong>Rapport</strong></td>
+<td>rapport de l&#39;analyse et fichiers produits à télécharger</td>
+</tr>
+</tbody></table>
+<p>L&#39;adresse garde l&#39;analyse et l&#39;onglet affichés (<code>?run=…&amp;onglet=collab</code>, <code>participation</code>, <code>themes</code>, <code>rag</code>, <code>report</code>) : un lien peut ouvrir directement les passages divergents d&#39;une analyse. Sans identifiant, la page affiche l&#39;analyse la plus récente.</p>
+<p><strong>Ce qui n&#39;est pas publié</strong> : les connexions et réglages de l&#39;application, la consommation détaillée en tokens et le coût en argent, les liens vers l&#39;administration d&#39;Omeka S, les analyses en échec. La page demande aux moteurs de recherche de ne pas l&#39;indexer (<code>noindex</code>).</p>
+<p><strong>Réglages</strong> (fichier <code>explo.config.json</code>, rubrique <code>public</code>) :</p>
+<table>
+<thead>
+<tr>
+<th>Clé</th>
+<th>Par défaut</th>
+<th>Effet</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>enabled</code></td>
+<td><code>true</code></td>
+<td><code>false</code> : la page publique et ses routes répondent 404</td>
+</tr>
+<tr>
+<td><code>listRuns</code></td>
+<td><code>true</code></td>
+<td><code>false</code> : la liste des analyses n&#39;est pas affichée ; une analyse ne s&#39;ouvre que par son lien (identifiant dans l&#39;adresse)</td>
+</tr>
+<tr>
+<td><code>ragAnswers</code></td>
+<td><code>true</code></td>
+<td><code>false</code> : les réponses RAG enregistrées ne sont pas montrées</td>
+</tr>
+</tbody></table>
+<pre><code class="language-json">{ &quot;public&quot;: { &quot;listRuns&quot;: false } }</code></pre>
+<p><strong>Mise en ligne</strong> : derrière Apache, l&#39;application est protégée par mot de passe ; il faut exempter <code>/public/</code> de cette protection pour que la page soit accessible à tous (voir le <a href="installation.html">guide d&#39;installation</a>, section du proxy) et renseigner <code>EXPLO_URL</code> pour que les liens partagés contiennent l&#39;adresse publique.</p>
+<blockquote>
+<p>⚠️ La page publique montre le nom des collaborateurs, leurs surlignages, leurs commentaires et des extraits des documents. Avant de partager un lien, s&#39;assurer que le groupe est d&#39;accord et que la diffusion des extraits est compatible avec les droits des documents. Avec <code>listRuns: false</code>, seules les personnes qui ont reçu le lien d&#39;une analyse peuvent la consulter (l&#39;identifiant est difficile à deviner, mais il ne s&#39;agit pas d&#39;une protection par mot de passe).</p>
+</blockquote>
+<h2 id="5-questions-frequentes"><a class="anchor" href="#5-questions-frequentes">#</a>5. Questions fréquentes</h2>
+<p><strong>Toutes les annotations sont attribuées à « (non attribué) ».</strong> La collection est dans une bibliothèque personnelle, ou l&#39;identifiant du groupe n&#39;est pas renseigné dans les Paramètres.</p>
+<p><strong>Beaucoup de couleurs « hors grille ».</strong> Des surlignages ont été faits avec une couleur personnalisée ou dans un autre lecteur PDF. Augmenter la tolérance, ou ajouter la couleur à la grille.</p>
+<p><strong>Le kappa n&#39;est pas calculé.</strong> Trop peu de passages annotés en commun : demander de lire les mêmes documents, ou abaisser le minimum (au risque d&#39;un kappa peu interprétable).</p>
+<p><strong>Deux lectures compatibles apparaissent très « tendues ».</strong> Leurs couleurs sont éloignées sur le cercle chromatique. Fixer la tension de cette paire de significations dans l&#39;onglet Grille (par exemple 0), puis relancer l&#39;analyse.</p>
+<p><strong>J&#39;ai modifié la grille : les anciennes analyses ont-elles changé ?</strong> Non. Chaque analyse garde la grille en vigueur au moment où elle a été lancée ; la page publique l&#39;affiche dans l&#39;onglet Analyses.</p>
+<p><strong>La page publique demande un mot de passe.</strong> Le proxy protège aussi <code>/public/</code> : ajouter l&#39;exception décrite dans le guide d&#39;installation.</p>
+<p><strong>La page publique répond « Analyse introuvable ».</strong> L&#39;analyse a été supprimée, a échoué, ou l&#39;identifiant du lien est incomplet.</p>
+
+</main>
+<nav class="toc"><strong>Sur cette page</strong><a class="l2" href="#1-le-protocole-d-39-annotation-par-couleurs">1. Le protocole d&#39;annotation par couleurs</a><a class="l3" href="#le-principe-une-couleur-une-lecture">Le principe : une couleur, une lecture</a><a class="l3" href="#la-tension-entre-deux-couleurs">La tension entre deux couleurs</a><a class="l3" href="#ce-que-le-protocole-apporte">Ce que le protocole apporte</a><a class="l3" href="#les-limites-de-la-demarche">Les limites de la démarche</a><a class="l3" href="#bonnes-pratiques">Bonnes pratiques</a><a class="l2" href="#2-preparer-une-campagne-d-39-annotation">2. Préparer une campagne d&#39;annotation</a><a class="l3" href="#bibliotheque-de-groupe-et-collection">Bibliothèque de groupe et collection</a><a class="l3" href="#regler-la-grille-onglet-grille">Régler la grille (onglet Grille)</a><a class="l3" href="#lancer-et-suivre-une-analyse">Lancer et suivre une analyse</a><a class="l2" href="#3-lire-les-resultats">3. Lire les résultats</a><a class="l3" href="#analyses">Analyses</a><a class="l3" href="#participation">Participation</a><a class="l3" href="#collaborations">Collaborations</a><a class="l3" href="#themes">Thèmes</a><a class="l3" href="#rag">RAG</a><a class="l3" href="#rapport">Rapport</a><a class="l2" href="#4-publier-les-resultats-la-page-publique">4. Publier les résultats : la page publique</a><a class="l2" href="#5-questions-frequentes">5. Questions fréquentes</a></nav>
+</div>
+<script type="module">
+import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+mermaid.initialize({ startOnLoad: true, theme: matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "default", flowchart: { htmlLabels: true } });
+</script>
+</body>
+</html>

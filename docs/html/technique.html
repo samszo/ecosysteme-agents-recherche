@@ -45,7 +45,7 @@
 </style>
 </head>
 <body>
-<header><div class="bar"><span class="brand">Écosystème d'agents – documentation</span><nav><a href="index.html">Accueil</a><a href="installation.html">Installation</a><a href="utilisateur.html">Utilisateur</a><a href="technique.html" aria-current="page">Technique</a></nav></div></header>
+<header><div class="bar"><span class="brand">Écosystème d'agents – documentation</span><nav><a href="index.html">Accueil</a><a href="installation.html">Installation</a><a href="utilisateur.html">Utilisateur</a><a href="explo.html">exploZoteroAnno</a><a href="technique.html" aria-current="page">Technique</a></nav></div></header>
 <div class="layout">
 <main>
 <h1 id="documentation-technique"><a class="anchor" href="#documentation-technique">#</a>Documentation technique</h1>
@@ -241,7 +241,8 @@
 └── ui/
     ├── server.ts             serveur d'une application (npm run ui / ui:explo / ui:chaoticum)
     ├── chaoticumRoutes.ts    routes de chaoticumSeminario (partitions, lecteur, contributions, séances)
-    └── public/               paper.html, explo.html, chaoticum.html, jouer.html (lecteur), settings.html (page Paramètres commune)</code></pre>
+    └── public/               paper.html, explo.html, explo-public.html (page publique des analyses), exploResults.js (rendu partagé des résultats explo),
+                              chaoticum.html, jouer.html (lecteur), settings.html (page Paramètres commune)</code></pre>
 <p>Hors de <code>src/</code> : <code>docs/</code> (documentation, <code>grille_annotation.md</code>), <code>scripts/build-docs.ts</code>, <code>scripts/captures-docs.ts</code> (copies d&#39;écran du guide, <code>docs/img/</code>), <code>docker/entrypoint.sh</code>, <code>.vscode/launch.json</code> (configurations de débogage des workflows et des serveurs), <code>install/</code> (instance Omeka S préparée, distribuée à part). Les fichiers produits vont dans <code>resultats/atelier/</code>, <code>resultats/explo/</code> et <code>resultats/chaoticum/</code> (réglages <code>outputDir</code>), dans le répertoire de données : la racine du projet en local, le volume <code>data/</code> avec Docker.</p>
 <h3 id="agents-src-agents"><a class="anchor" href="#agents-src-agents">#</a>Agents (<code>src/agents/</code>)</h3>
 <table>
@@ -717,6 +718,10 @@
 <td>modèles proposés par « Créer les modèles par défaut »</td>
 </tr>
 <tr>
+<td><code>public.enabled</code>, <code>public.listRuns</code>, <code>public.ragAnswers</code></td>
+<td>page publique des analyses : activée (sinon 404), liste des analyses réussies affichée (sinon accès par lien seulement), réponses RAG enregistrées montrées</td>
+</tr>
+<tr>
 <td><code>outputDir</code></td>
 <td>dossier des fichiers produits (<code>resultats/explo</code>)</td>
 </tr>
@@ -804,7 +809,7 @@
 <td>supprime un appel traité <code>{ key, omeka }</code> : ses entrées de <code>workflow.history.json</code> et, si <code>omeka</code>, les items de configuration de ses exécutions et l&#39;item de l&#39;appel (s&#39;il n&#39;est pas partagé), après vérification de leur <code>dcterms:type</code> ; refusé pendant un traitement</td>
 </tr>
 </tbody></table>
-<p>Routes propres à exploZoteroAnno : <code>GET</code> et <code>POST /api/explo/settings</code>, <code>POST /api/explo/guide</code> (guide d&#39;annotation à partir de la grille), <code>GET /api/explo/runs</code> (analyses déjà effectuées), <code>GET /api/explo/results?run=</code>, <code>GET /api/explo/file?name=&amp;run=</code> (sans <code>run</code> : dernière analyse), et pour le RAG :</p>
+<p>Routes propres à exploZoteroAnno : <code>GET</code> et <code>POST /api/explo/settings</code>, <code>POST /api/explo/guide</code> (guide d&#39;annotation à partir de la grille), <code>GET /api/explo/runs</code> (analyses déjà effectuées ; <code>publicUrl</code> : adresse de la page publique, <code>null</code> si désactivée), <code>GET /api/explo/results?run=</code>, <code>GET /api/explo/file?name=&amp;run=</code> (sans <code>run</code> : dernière analyse), et pour le RAG :</p>
 <table>
 <thead>
 <tr>
@@ -909,6 +914,33 @@
 <p>Fichiers produits dans <code>resultats/explo/</code> (réglage <code>outputDir</code>) : <code>guide_annotation.md</code>, <code>participation.json</code>, <code>collaborations.json</code>, <code>reseau_collaborations.html</code>, <code>themes_discussion.md</code>, <code>rapport_explo.md</code>, <code>rag_indexation.json</code> (bilan de l&#39;indexation). Ces fichiers sont ceux de la <strong>dernière analyse</strong> ; chaque analyse est aussi archivée dans <code>resultats/explo/analyses/&lt;runId&gt;/</code> (copie des fichiers et <code>analyse.json</code> : statut, dates, collection, item de configuration, tokens, coût, totaux, configuration).</p>
 <h3 id="analyses-deja-effectuees"><a class="anchor" href="#analyses-deja-effectuees">#</a>Analyses déjà effectuées</h3>
 <p><code>GET /api/explo/runs</code> fusionne l&#39;archive locale et les items de configuration d&#39;Omeka S dont la description porte <code>workflowId = explo-zotero-anno</code> (l&#39;historique de l&#39;Atelier écarte ces items, et inversement). <code>GET /api/explo/results?run=</code> et <code>GET /api/explo/file?name=&amp;run=</code> servent les fichiers d&#39;une analyse : archive locale si elle existe, sinon médias de l&#39;item de configuration (repérés par leur <code>dcterms:identifier</code> <code>&lt;runId&gt;/&lt;fichier&gt;</code>, lus par leur <code>o:original_url</code>). L&#39;identifiant d&#39;analyse est validé (<code>[\w-]</code>) et seuls les noms de fichiers connus sont servis. La page garde l&#39;analyse affichée dans <code>currentRun</code> (<code>null</code> = dernière analyse) et ajoute <code>run=</code> à ses requêtes.</p>
+<h3 id="page-publique-des-analyses"><a class="anchor" href="#page-publique-des-analyses">#</a>Page publique des analyses</h3>
+<p><code>GET /public/analyses?run=&lt;runId&gt;&amp;onglet=&lt;onglet&gt;</code> sert <code>explo-public.html</code> : résultats d&#39;une analyse <strong>réussie</strong> en lecture seule, sans authentification (en ligne, <code>/public/</code> est exempté de l&#39;authentification du proxy, voir le guide d&#39;installation). Onglets Analyses (liste, description et <strong>grille de couleurs de l&#39;analyse</strong> avec le tableau des tensions), Participation, Collaborations, Thèmes, RAG (bilan d&#39;indexation et réponses enregistrées, sans consultation) et Rapport. Le rendu de la participation, des collaborations, du réseau et de la grille est dans le module <code>src/ui/public/exploResults.js</code>, partagé avec <code>explo.html</code> (servi sur <code>/exploResults.js</code> et <code>/public/exploResults.js</code> ; il importe <code>./forceGraph.js</code>, d&#39;où <code>/public/forceGraph.js</code>).</p>
+<table>
+<thead>
+<tr>
+<th>Route</th>
+<th>Rôle</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>GET /public/api/explo/runs</code></td>
+<td><code>{ listed, ragAnswers, runs }</code> : analyses réussies (identifiant, dates, collection, totaux, énergie et carbone), vide si <code>public.listRuns</code> est <code>false</code></td>
+</tr>
+<tr>
+<td><code>GET /public/api/explo/run?run=</code></td>
+<td>une analyse : résumé, <code>grid</code> (réglages archivés de l&#39;analyse, sinon grille de <code>participation.json</code>), <code>tension</code> (<code>tensionMatrix</code> avec les tensions de l&#39;analyse), <code>analysis</code>, <code>files</code></td>
+</tr>
+<tr>
+<td><code>GET /public/api/explo/file?run=&amp;name=</code></td>
+<td>fichier de l&#39;analyse (liste blanche <code>EXPLO_FILES</code>) ; <code>raw=1</code> sert le réseau HTML avec <code>Content-Security-Policy: sandbox</code></td>
+</tr>
+<tr>
+<td><code>GET /public/api/explo/rag?run=</code></td>
+<td>réponses RAG enregistrées pour la collection de l&#39;analyse (titre, question, réponse, date)</td>
+</tr>
+</tbody></table>
+<p>Rien n&#39;y écrit ; les tokens, le coût en argent, l&#39;item de configuration et les liens d&#39;administration Omeka S ne sont pas renvoyés ; les pages et fichiers portent <code>X-Robots-Tag: noindex</code>. La liste des analyses (archive locale et Omeka S) est gardée une minute en mémoire (<code>publicRunsCache</code>) pour ne pas interroger Omeka S à chaque visite ; une analyse absente du cache le fait recharger. Le markdown (rapport, thèmes, réponses) est nettoyé par DOMPurify avant affichage. Désactivée par <code>public.enabled: false</code> : toutes ces routes répondent 404.</p>
 <h3 id="rag-albert"><a class="anchor" href="#rag-albert">#</a>RAG Albert</h3>
 <p>Mise en œuvre du <a href="https://guides.ia.numerique.gouv.fr/albert-api/guides/rag" target="_blank" rel="noopener">guide RAG d&#39;Albert</a> avec le client <code>src/lib/albert/albert.ts</code> (<code>/v1/collections</code>, <code>/v1/documents</code>, <code>/v1/search</code>, <code>/v1/chat/completions</code>).</p>
 <pre class="mermaid">sequenceDiagram
@@ -1131,7 +1163,7 @@
 </ul>
 
 </main>
-<nav class="toc"><strong>Sur cette page</strong><a class="l2" href="#1-architecture">1. Architecture</a><a class="l2" href="#2-le-workflow-de-l-39-atelier-d-39-articles">2. Le workflow de l&#39;Atelier d&#39;articles</a><a class="l2" href="#3-organisation-du-code">3. Organisation du code</a><a class="l3" href="#agents-src-agents">Agents (src/agents/)</a><a class="l3" href="#outils-src-tools-et-bibliotheques-src-lib">Outils (src/tools/) et bibliothèques (src/lib/)</a><a class="l3" href="#comptage-des-tokens-src-lib-metrics-usage-ts">Comptage des tokens (src/lib/metrics/usage.ts)</a><a class="l3" href="#estimation-du-cout-src-lib-metrics-impact-ts">Estimation du coût (src/lib/metrics/impact.ts)</a><a class="l3" href="#historique-des-executions-src-workflow-runs-history-ts">Historique des exécutions (src/workflow/runs/history.ts)</a><a class="l2" href="#4-extraction-des-documents">4. Extraction des documents</a><a class="l2" href="#5-graphe-de-concepts">5. Graphe de concepts</a><a class="l2" href="#6-accord-inter-juges">6. Accord inter-juges</a><a class="l2" href="#7-proposition-d-39-article-propapp">7. Proposition d&#39;article (PropAPP)</a><a class="l2" href="#8-modele-de-donnees-omeka-s">8. Modèle de données Omeka S</a><a class="l2" href="#9-configuration">9. Configuration</a><a class="l2" href="#10-api-de-l-39-interface">10. API de l&#39;interface</a><a class="l2" href="#11-etendre-le-projet">11. Étendre le projet</a><a class="l2" href="#12-workflow-explozoteroanno">12. Workflow exploZoteroAnno</a><a class="l3" href="#analyses-deja-effectuees">Analyses déjà effectuées</a><a class="l3" href="#rag-albert">RAG Albert</a><a class="l3" href="#un-serveur-par-application">Un serveur par application</a><a class="l2" href="#13-workflow-chaoticumseminario">13. Workflow chaoticumSeminario</a><a class="l2" href="#14-documentation-et-conteneur">14. Documentation et conteneur</a><a class="l2" href="#15-limites-connues">15. Limites connues</a></nav>
+<nav class="toc"><strong>Sur cette page</strong><a class="l2" href="#1-architecture">1. Architecture</a><a class="l2" href="#2-le-workflow-de-l-39-atelier-d-39-articles">2. Le workflow de l&#39;Atelier d&#39;articles</a><a class="l2" href="#3-organisation-du-code">3. Organisation du code</a><a class="l3" href="#agents-src-agents">Agents (src/agents/)</a><a class="l3" href="#outils-src-tools-et-bibliotheques-src-lib">Outils (src/tools/) et bibliothèques (src/lib/)</a><a class="l3" href="#comptage-des-tokens-src-lib-metrics-usage-ts">Comptage des tokens (src/lib/metrics/usage.ts)</a><a class="l3" href="#estimation-du-cout-src-lib-metrics-impact-ts">Estimation du coût (src/lib/metrics/impact.ts)</a><a class="l3" href="#historique-des-executions-src-workflow-runs-history-ts">Historique des exécutions (src/workflow/runs/history.ts)</a><a class="l2" href="#4-extraction-des-documents">4. Extraction des documents</a><a class="l2" href="#5-graphe-de-concepts">5. Graphe de concepts</a><a class="l2" href="#6-accord-inter-juges">6. Accord inter-juges</a><a class="l2" href="#7-proposition-d-39-article-propapp">7. Proposition d&#39;article (PropAPP)</a><a class="l2" href="#8-modele-de-donnees-omeka-s">8. Modèle de données Omeka S</a><a class="l2" href="#9-configuration">9. Configuration</a><a class="l2" href="#10-api-de-l-39-interface">10. API de l&#39;interface</a><a class="l2" href="#11-etendre-le-projet">11. Étendre le projet</a><a class="l2" href="#12-workflow-explozoteroanno">12. Workflow exploZoteroAnno</a><a class="l3" href="#analyses-deja-effectuees">Analyses déjà effectuées</a><a class="l3" href="#page-publique-des-analyses">Page publique des analyses</a><a class="l3" href="#rag-albert">RAG Albert</a><a class="l3" href="#un-serveur-par-application">Un serveur par application</a><a class="l2" href="#13-workflow-chaoticumseminario">13. Workflow chaoticumSeminario</a><a class="l2" href="#14-documentation-et-conteneur">14. Documentation et conteneur</a><a class="l2" href="#15-limites-connues">15. Limites connues</a></nav>
 </div>
 <script type="module">
 import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";

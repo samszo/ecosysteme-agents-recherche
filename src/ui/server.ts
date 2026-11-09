@@ -607,6 +607,52 @@ async function readExploFile(name: string, runId?: string | null): Promise<Buffe
 }
 
 // ==========================================
+// Page publique des analyses : seulement les résultats et les réglages (ni coût détaillé, ni liens d'administration)
+// ==========================================
+
+// liste des analyses gardée une minute : la page publique ne doit pas interroger Omeka S à chaque visite
+let publicRunsCache: { at: number; runs: ExploRun[] } | null = null;
+async function publicRuns() {
+  if (!publicRunsCache || Date.now() - publicRunsCache.at > 60_000) publicRunsCache = { at: Date.now(), runs: (await exploRuns()).runs };
+  return publicRunsCache.runs;
+}
+async function findPublicRun(runId: string) {
+  if (!validRunId(runId)) throw new Error("Identifiant d'analyse invalide");
+  let r = (await publicRuns()).find(x => x.runId === runId);
+  // analyse terminée depuis la mise en cache
+  if (!r) { publicRunsCache = null; r = (await publicRuns()).find(x => x.runId === runId); }
+  // seules les analyses réussies sont publiées
+  if (!r || r.status !== "success") throw new Error("Analyse introuvable");
+  return r;
+}
+const publicRunSummary = (r: ExploRun) => ({
+  runId: r.runId, status: r.status, startedAt: r.startedAt, endedAt: r.endedAt,
+  collection: { key: r.collection?.key, name: r.collection?.name ?? null }, totals: r.totals ?? null,
+  impact: r.impact ? { energyWh: r.impact.energyWh, co2g: r.impact.co2g ?? null } : null,
+});
+async function publicRunDetail(runId: string) {
+  const r = await findPublicRun(runId);
+  // grille de l'analyse ; analyses antérieures sans réglages archivés : grille reprise des données de participation
+  let grid = r.config?.grid ?? null;
+  if (!grid) {
+    try { grid = { title: "Grille de couleurs", introduction: "", positions: JSON.parse((await readExploFile("participation.json", runId)).toString("utf-8")).grid, tolerance: null }; }
+    catch { /* pas de données de participation */ }
+  }
+  const tension = mergeConfig(defaultExploConfig.tension, r.config?.tension ?? {});
+  return {
+    ...publicRunSummary(r),
+    grid,
+    tension: grid?.positions?.length ? tensionMatrix({ positions: grid.positions, tolerance: grid.tolerance ?? defaultExploConfig.grid.tolerance }, tension) : null,
+    analysis: r.config?.analysis ? { unitSimilarity: r.config.analysis.unitSimilarity, minPassagesForKappa: r.config.analysis.minPassagesForKappa, mergeDuplicates: r.config.analysis.mergeDuplicates } : null,
+    files: (await exploResultFiles(runId).catch(() => [])).map((f: any) => ({ name: f.name, title: f.title })),
+  };
+}
+const sendModule = (res: http.ServerResponse, name: string) => {
+  res.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8" });
+  res.end(fs.readFileSync(path.join(PUBLIC_DIR, name)));
+};
+
+// ==========================================
 // Résultats
 // ==========================================
 
@@ -878,7 +924,8 @@ const routes: Record<string, (req: http.IncomingMessage, res: http.ServerRespons
   },
 
   // analyses déjà effectuées (archive locale et Omeka S)
-  "GET /api/explo/runs": async (_req, res) => sendJson(res, 200, await exploRuns()),
+  // publicUrl : adresse de la page publique des analyses (liens à partager), null si elle est désactivée
+  "GET /api/explo/runs": async (_req, res) => sendJson(res, 200, { ...(await exploRuns()), publicUrl: currentExploConfig().public.enabled ? `${appUrls().explo!.url.replace(/\/+$/, "")}/public/analyses` : null }),
 
   // supprime une analyse ({ runId, omeka }) : archive locale et, si omeka, son item de configuration dans Omeka S
   "POST /api/explo/runs/delete": async (req, res) => {
@@ -976,6 +1023,62 @@ const routes: Record<string, (req: http.IncomingMessage, res: http.ServerRespons
     res.end(content);
   },
 
+  // module des résultats (participation, collaborations, grille), partagé avec la page publique
+  "GET /exploResults.js": (_req, res) => sendModule(res, "exploResults.js"),
+
+  // ==========================================
+  // Page publique des analyses (lecture seule, sans authentification : exempter /public/ dans le proxy)
+  // ==========================================
+  "GET /public/analyses": (_req, res) => {
+    if (!currentExploConfig().public.enabled) return sendJson(res, 404, { error: "Introuvable" });
+    res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "X-Robots-Tag": "noindex" });
+    res.end(fs.readFileSync(path.join(PUBLIC_DIR, "explo-public.html")));
+  },
+  "GET /public/exploResults.js": (_req, res) => sendModule(res, "exploResults.js"),
+  "GET /public/forceGraph.js": (_req, res) => sendModule(res, "forceGraph.js"),
+
+  // analyses réussies (vide si la liste n'est pas publique : une analyse s'ouvre alors par son lien)
+  "GET /public/api/explo/runs": async (_req, res) => {
+    const pub = currentExploConfig().public;
+    if (!pub.enabled) return sendJson(res, 404, { error: "Introuvable" });
+    const runs = pub.listRuns ? (await publicRuns()).filter(r => r.status === "success").map(publicRunSummary) : [];
+    sendJson(res, 200, { listed: pub.listRuns, ragAnswers: pub.ragAnswers, runs });
+  },
+
+  // une analyse : réglages (grille, tensions entre ses significations), fichiers disponibles
+  "GET /public/api/explo/run": async (_req, res, url) => {
+    if (!currentExploConfig().public.enabled) return sendJson(res, 404, { error: "Introuvable" });
+    try { sendJson(res, 200, await publicRunDetail(url.searchParams.get("run") ?? "")); }
+    catch (e) { sendJson(res, 404, { error: (e as Error).message }); }
+  },
+
+  // fichier d'une analyse (liste blanche EXPLO_FILES) ; la page HTML du réseau est isolée (CSP sandbox)
+  "GET /public/api/explo/file": async (_req, res, url) => {
+    if (!currentExploConfig().public.enabled) return sendJson(res, 404, { error: "Introuvable" });
+    const name = url.searchParams.get("name") ?? "";
+    let content: Buffer;
+    try {
+      await findPublicRun(url.searchParams.get("run") ?? "");
+      content = await readExploFile(name, url.searchParams.get("run"));
+    } catch (e) { return sendJson(res, 404, { error: (e as Error).message }); }
+    const raw = url.searchParams.get("raw") === "1" && name.endsWith(".html");
+    const type = name.endsWith(".json") ? "application/json" : raw ? "text/html" : "text/plain";
+    res.writeHead(200, { "Content-Type": `${type}; charset=utf-8`, "X-Robots-Tag": "noindex", ...(raw ? { "Content-Security-Policy": "sandbox allow-scripts allow-popups" } : {}) });
+    res.end(content);
+  },
+
+  // réponses RAG enregistrées dans Omeka S pour la collection de l'analyse (consultation seulement)
+  "GET /public/api/explo/rag": async (_req, res, url) => {
+    const pub = currentExploConfig().public;
+    if (!pub.enabled) return sendJson(res, 404, { error: "Introuvable" });
+    if (!pub.ragAnswers) return sendJson(res, 200, { enabled: false, answers: [] });
+    try {
+      const r = await findPublicRun(url.searchParams.get("run") ?? "");
+      const answers = await listAnswers(await serverOmk(), currentExploConfig().rag, r.collection.key);
+      sendJson(res, 200, { enabled: true, answers: answers.map(a => ({ title: a.title, question: a.question, answer: a.answer, date: a.date })) });
+    } catch (e) { sendJson(res, 502, { error: (e as Error).message }); }
+  },
+
   "POST /api/run/stop": (_req, res) => {
     if (run?.child) {
       run.status = "stopped";
@@ -1033,7 +1136,9 @@ const APP_ONLY: Record<string, AppName> = {
   "GET /api/explo/results": "explo", "GET /api/explo/file": "explo", "GET /api/explo/runs": "explo", "POST /api/explo/runs/delete": "explo",
   "GET /api/explo/rag/status": "explo", "GET /api/explo/rag/prompts": "explo", "POST /api/explo/rag/prompts": "explo",
   "POST /api/explo/rag/prompts/defaults": "explo", "POST /api/explo/rag/query": "explo", "POST /api/explo/rag/save": "explo",
-  "GET /api/explo/rag/answers": "explo",
+  "GET /api/explo/rag/answers": "explo", "GET /exploResults.js": "explo",
+  "GET /public/analyses": "explo", "GET /public/exploResults.js": "explo", "GET /public/forceGraph.js": "explo",
+  "GET /public/api/explo/runs": "explo", "GET /public/api/explo/run": "explo", "GET /public/api/explo/file": "explo", "GET /public/api/explo/rag": "explo",
 };
 
 // documentation HTML générée par npm run docs (docs/html)
@@ -1058,7 +1163,7 @@ function serveDocs(res: http.ServerResponse, pathname: string) {
 // documentation servie : dans les pages destinées aux utilisateurs (accueil, guide), les adresses locales des
 // applications (http://127.0.0.1:7272…) remplacées par leurs adresses publiques (PAPER_URL, EXPLO_URL, CHAOTICUM_URL).
 // Le guide d'installation garde les adresses locales : elles y désignent les serveurs vus de la machine (Apache, Docker).
-const PUBLIC_DOC_PAGES = new Set(["index.html", "utilisateur.html"]);
+const PUBLIC_DOC_PAGES = new Set(["index.html", "utilisateur.html", "explo.html"]);
 function publicDocAddresses(page: string, html: string) {
   if (!PUBLIC_DOC_PAGES.has(page)) return html;
   const urls = appUrls();

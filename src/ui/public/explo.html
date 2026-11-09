@@ -226,7 +226,7 @@
   <div id="tab-runs" class="hidden">
     <section class="card">
       <h2>Analyses déjà effectuées</h2>
-      <p class="lead">Chaque analyse est archivée localement et dans Omeka S (item de configuration et ses médias). <strong>Charger</strong> affiche ses résultats dans les onglets Participation, Collaborations, Thèmes et Rapport ; <strong>Reprendre les réglages</strong> recopie sa collection, sa grille et ses paramètres d'analyse dans l'onglet Grille ; <strong>Supprimer</strong> efface son archive locale et, au choix, son item de configuration dans Omeka S.</p>
+      <p class="lead">Chaque analyse est archivée localement et dans Omeka S (item de configuration et ses médias). <strong>Charger</strong> affiche ses résultats dans les onglets Participation, Collaborations, Thèmes et Rapport ; <strong>Reprendre les réglages</strong> recopie sa collection, sa grille et ses paramètres d'analyse dans l'onglet Grille ; <strong>Supprimer</strong> efface son archive locale et, au choix, son item de configuration dans Omeka S. <strong>Page publique</strong> ouvre ses résultats en lecture seule, sans connexion, à une adresse à partager (<code>/public/analyses?run=…</code>).</p>
       <div class="toolbar"><button id="runs-refresh" class="btn">Actualiser</button><span id="runs-info" class="muted" style="font-size:13px"></span></div>
       <div id="runs" class="muted">Chargement…</div>
     </section>
@@ -326,13 +326,9 @@
 // ==========================================
 // Utilitaires
 // ==========================================
+// participation, collaborations et réseau : module partagé avec la page publique des analyses
+import { el, esc, renderParticipation, renderCollab, dot } from "/exploResults.js";
 const $ = s => document.querySelector(s);
-const el = (tag, props = {}, ...children) => {
-  const e = Object.assign(document.createElement(tag), props);
-  for (const c of children.flat()) if (c != null && c !== false) e.append(c);
-  return e;
-};
-const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 const api = async (url, opts = {}) => {
   const res = await fetch(url, { headers: { "Content-Type": "application/json" }, ...opts, body: opts.body && JSON.stringify(opts.body) });
   const data = await res.json().catch(() => ({}));
@@ -341,10 +337,6 @@ const api = async (url, opts = {}) => {
 };
 function toast(msg) { const t = $("#toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove("show"), 2500); }
 const md = text => window.marked ? window.marked.parse(text) : `<pre>${esc(text)}</pre>`;
-const fmtPct = x => x === null || x === undefined ? "—" : `${Math.round(x * 100)} %`;
-// couleurs des collaborateurs (distinctes de celles de la grille)
-const PEOPLE_COLORS = ["#2f6db0", "#d0602e", "#2e8b57", "#8a4fb8", "#c0392b", "#1f8a8a", "#b8860b", "#c2477d", "#5d6d7e", "#7a8b1f"];
-const personColor = (names, n) => PEOPLE_COLORS[names.indexOf(n) % PEOPLE_COLORS.length] ?? "#888";
 
 // ==========================================
 // Onglets
@@ -406,10 +398,6 @@ const RELATIONS = [
   ["complementaire", "Complémentaires", "teintes opposées (écart > 150°)", 180],
   ["achromatique", "Avec un gris", "l'une des couleurs est peu saturée", null],
 ];
-// couleur d'une tension (0 : gris, 1 : rouge), la même que dans le réseau
-const tensionColor = t => `color-mix(in srgb, #d0312d ${Math.round(Math.max(0, Math.min(1, t)) * 100)}%, #9aa0aa)`;
-const tensionBadge = (t, title = "") => t == null ? el("span", { className: "muted", textContent: "—" }) : el("span", { className: "tbadge", style: `background:${tensionColor(t)}`, textContent: t.toFixed(2), title });
-const dot = c => el("i", { className: "sw", style: `background:${c}` });
 
 function renderTension() {
   const t = config.tension;
@@ -629,8 +617,8 @@ async function loadResults() {
   const [p, c, themes, report] = await Promise.all([get("participation.json"), get("collaborations.json"), get("themes_discussion.md"), get("rapport_explo.md")]);
   // une analyse rechargée remplace tout l'affichage, y compris ce qu'elle ne contient pas
   const empty = (sel, text) => { const b = $(sel); b.className = "empty"; b.textContent = text; };
-  if (p) renderParticipation(JSON.parse(p)); else empty("#participation", "Pas de données de participation pour cette analyse.");
-  if (c) renderCollab(JSON.parse(c), p ? JSON.parse(p) : null); else empty("#collab", "Pas de données de collaboration pour cette analyse.");
+  if (p) renderParticipation($("#participation"), JSON.parse(p)); else empty("#participation", "Pas de données de participation pour cette analyse.");
+  if (c) renderCollab($("#collab"), JSON.parse(c), { graphPageUrl: has("reseau_collaborations.html") ? fileUrl("reseau_collaborations.html", true) : null }); else empty("#collab", "Pas de données de collaboration pour cette analyse.");
   if (themes) { $("#themes").className = "md"; $("#themes").innerHTML = md(themes); } else { $("#themes").className = "md muted"; $("#themes").textContent = "Aucun thème pour cette analyse."; }
   if (report) { $("#report").className = "md"; $("#report").innerHTML = md(report); } else { $("#report").className = "md muted"; $("#report").textContent = "Aucun rapport pour cette analyse."; }
   $("#files").replaceChildren(...files.map(f => el("a", { href: fileUrl(f.name, f.name.endsWith(".html")), target: "_blank", className: "chip", textContent: `${f.title}${f.mtime ? ` · ${new Date(f.mtime).toLocaleString("fr-FR")}` : " · Omeka S"}` })));
@@ -669,7 +657,8 @@ async function loadRuns(force = false) {
       el("td", { style: "min-width:150px" },
         el("button", { className: "btn primary", style: "margin:0 4px 4px 0", textContent: "Charger", onclick: () => openRun(r) }),
         r.config?.grid ? el("button", { className: "btn", style: "margin:0 4px 4px 0", textContent: "Reprendre les réglages", onclick: () => reuseRun(r) }) : null,
-        el("button", { className: "btn danger", textContent: "Supprimer", onclick: () => deleteRun(r) }))))))));
+        el("button", { className: "btn danger", style: "margin:0 4px 4px 0", textContent: "Supprimer", onclick: () => deleteRun(r) }),
+        data.publicUrl && r.status === "success" ? el("a", { className: "chip", href: `${data.publicUrl}?run=${encodeURIComponent(r.runId)}`, target: "_blank", title: "Page publique de cette analyse, en lecture seule : lien à partager", textContent: "Page publique ↗" }) : null)))))));
 }
 $("#runs-refresh").onclick = () => loadRuns(true);
 
@@ -716,130 +705,6 @@ function reuseRun(r) {
     else toast(`Collection ${collectionLabel(r.collection)} absente de la bibliothèque actuelle : collection inchangée`);
   }
   renderSettings(); showTab("grid");
-}
-
-// participation : chiffres clés, barres empilées par couleur de la grille, chronologie, documents
-function renderParticipation(p) {
-  const box = $("#participation"); box.className = "";
-  const t = p.totals, grid = p.grid;
-  const tiles = el("div", { className: "tiles" },
-    [[t.collaborators, "collaborateurs"], [t.annotations, "surlignages"], [t.notes, "notes"], [`${t.annotatedDocuments}/${t.documents}`, "documents annotés"], [t.offGrid, "couleurs hors grille"], ...(t.mergedDuplicates ? [[t.mergedDuplicates, "doublons fusionnés"]] : [])]
-      .map(([v, l]) => el("div", { className: "tile" }, el("div", { className: "v", textContent: v }), el("div", { className: "l", textContent: l }))));
-
-  const legend = el("div", { className: "legend" }, grid.map(g => el("span", {}, el("i", { className: "sw", style: `background:${g.color}` }), g.position)),
-    el("span", {}, el("i", { className: "sw offgrid-fill" }), "couleur hors grille"), el("span", {}, el("i", { className: "sw notes-fill" }), "notes"));
-  const max = Math.max(1, ...p.collaborators.map(c => c.annotations + c.notes));
-  const bars = el("div", { className: "bars" }, p.collaborators.map(c => {
-    const total = c.annotations + c.notes;
-    const segs = [...grid.map(g => [c.positions[g.position] ?? 0, g.color, g.position, ""]), [c.offGrid, "", "couleur hors grille", "offgrid-fill"], [c.notes, "", "notes", "notes-fill"]]
-      .filter(([n]) => n > 0).map(([n, color, label, cls]) => el("span", { className: cls, style: `width:${(n / max) * 100}%;${color ? `background:${color}` : ""}`, title: `${label} : ${n}` }));
-    return el("div", { className: "row" }, el("span", { className: "name", textContent: c.name, title: c.name }), el("div", { className: "track" }, segs), el("span", { className: "total", textContent: total }));
-  }));
-
-  box.replaceChildren(tiles,
-    el("section", { className: "card" }, el("h2", { textContent: "Annotations par collaborateur" }), el("p", { className: "lead", textContent: "Chaque barre est découpée selon la signification des couleurs de la grille." }), legend, bars),
-    timelineCard(p),
-    el("section", { className: "card" }, el("h2", { textContent: "Détail par collaborateur" }),
-      el("div", { className: "table-wrap" }, el("table", { className: "data" },
-        el("thead", {}, el("tr", {}, ["Collaborateur", "Surlignages", "Notes", "Commentaires", "Mots surlignés", "Documents", "Part", "Jours actifs", "Première", "Dernière"].map(h => el("th", { textContent: h })))),
-        el("tbody", {}, p.collaborators.map(c => el("tr", {},
-          el("td", { textContent: c.name }), ...[c.annotations, c.notes, c.comments, c.words, c.documents].map(v => el("td", { className: "num", textContent: v })),
-          el("td", { className: "num", textContent: fmtPct(c.share) }), el("td", { className: "num", textContent: c.activeDays }),
-          el("td", { textContent: c.firstDate ? new Date(c.firstDate).toLocaleDateString("fr-FR") : "—" }), el("td", { textContent: c.lastDate ? new Date(c.lastDate).toLocaleDateString("fr-FR") : "—" })))))))),
-    el("section", { className: "card" }, el("h2", { textContent: "Documents" }), el("p", { className: "lead", textContent: "Couverture de la collection : qui a annoté quoi." }),
-      el("div", { className: "table-wrap" }, el("table", { className: "data" },
-        el("thead", {}, el("tr", {}, ["Document", "Surlignages", "Notes", "Collaborateurs"].map(h => el("th", { textContent: h })))),
-        el("tbody", {}, p.documents.map(d => el("tr", {},
-          el("td", {}, d.title, d.duplicates?.length ? el("span", { className: "chip", style: "margin-left:6px", title: `Exemplaires fusionnés : ${[d.zoteroKey, ...d.duplicates.map(x => x.zoteroKey)].join(", ")}`, textContent: `${d.duplicates.length + 1} exemplaires fusionnés` }) : null), el("td", { className: "num", textContent: d.annotations }), el("td", { className: "num", textContent: d.notes }),
-          el("td", {}, d.collaborators.length ? d.collaborators.map(x => el("span", { className: "chip", textContent: `${x.name} · ${x.count}` })) : el("span", { className: "muted", textContent: "aucune annotation" }))))))));
-}
-
-// chronologie : colonnes empilées par semaine et par collaborateur (SVG)
-function timelineCard(p) {
-  const card = el("section", { className: "card" }, el("h2", { textContent: "Chronologie" }));
-  const weeks = p.timeline.weeks, names = Object.keys(p.timeline.series);
-  if (!weeks.length) { card.append(el("p", { className: "lead", textContent: "Aucune date d'annotation disponible (annotations importées sans date)." })); return card; }
-  const W = 900, H = 220, pad = { l: 34, r: 8, t: 10, b: 36 };
-  const totals = weeks.map((_, i) => names.reduce((n, k) => n + p.timeline.series[k][i], 0));
-  const max = Math.max(1, ...totals);
-  // colonnes de 60 px au plus, centrées quand il y a peu de semaines
-  const slot = (W - pad.l - pad.r) / weeks.length, bw = Math.min(slot, 60), x0 = pad.l + (slot - bw) / 2;
-  const y = v => H - pad.b - (v / max) * (H - pad.t - pad.b);
-  let svg = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Annotations par semaine">`;
-  for (const v of [0, Math.round(max / 2), max]) svg += `<line x1="${pad.l}" x2="${W - pad.r}" y1="${y(v)}" y2="${y(v)}" stroke="currentColor" stroke-opacity=".12"/><text x="${pad.l - 6}" y="${y(v) + 4}" text-anchor="end">${v}</text>`;
-  weeks.forEach((w, i) => {
-    let acc = 0;
-    for (const n of names) {
-      const v = p.timeline.series[n][i];
-      if (!v) continue;
-      svg += `<rect x="${x0 + i * slot + 2}" y="${y(acc + v)}" width="${Math.max(2, bw - 4)}" height="${y(acc) - y(acc + v)}" fill="${personColor(names, n)}" rx="2"><title>${esc(n)} — semaine du ${new Date(w).toLocaleDateString("fr-FR")} : ${v}</title></rect>`;
-      acc += v;
-    }
-    if (weeks.length <= 16 || i % Math.ceil(weeks.length / 16) === 0) svg += `<text x="${x0 + i * slot + bw / 2}" y="${H - pad.b + 16}" text-anchor="middle">${new Date(w).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" })}</text>`;
-  });
-  svg += "</svg>";
-  card.append(el("p", { className: "lead", textContent: "Annotations et notes par semaine (lundi indiqué)." }),
-    el("div", { className: "legend" }, names.map(n => el("span", {}, el("i", { className: "sw", style: `background:${personColor(names, n)}` }), n))),
-    el("div", { className: "chart", innerHTML: svg }));
-  return card;
-}
-
-// collaborations : chiffres clés, matrice, paires, passages divergents, réseau
-function renderCollab(c) {
-  const box = $("#collab"); box.className = "";
-  const k = c.kappa;
-  const tiles = el("div", { className: "tiles" },
-    [[c.passages.shared, "passages annotés en commun"], [c.passages.convergent, "convergents"], [c.passages.divergent, "divergents"], [k.fleiss ?? "—", `kappa (${k.interpretation})`]]
-      .concat(c.tension ? [[c.tension.mean != null ? c.tension.mean.toFixed(2) : "—", "tension moyenne des divergences"]] : [])
-      .map(([v, l]) => el("div", { className: "tile" }, el("div", { className: "v", textContent: v }), el("div", { className: "l", textContent: l }))));
-
-  const names = c.matrix.names;
-  const maxShared = Math.max(1, ...c.matrix.sharedPassages.flat().filter(v => v !== null));
-  const matrix = el("table", { className: "data matrix" },
-    el("thead", {}, el("tr", {}, el("th"), names.map(n => el("th", { textContent: n })))),
-    el("tbody", {}, names.map((a, i) => el("tr", {}, el("th", { textContent: a }), names.map((b, j) => {
-      const v = c.matrix.sharedPassages[i][j];
-      if (v === null) return el("td", { className: "cell muted", textContent: "·" });
-      const agr = c.matrix.agreement[i][j], ten = c.matrix.tension?.[i][j];
-      return el("td", { className: "cell", title: `${a} – ${b} : ${v} passage(s) en commun, accord ${fmtPct(agr)}${ten != null ? `, tension ${ten.toFixed(2)}` : ""}`,
-        style: v ? `background: color-mix(in srgb, var(--accent) ${Math.round(12 + (v / maxShared) * 55)}%, transparent)` : "",
-        textContent: v ? `${v} · ${fmtPct(agr)}` : "0" });
-    })))));
-
-  const pairs = el("table", { className: "data" },
-    el("thead", {}, el("tr", {}, ["Paire", "Documents en commun", "Passages en commun", "Même signification", "Accord", ...(c.tension ? ["Tension moyenne"] : [])].map(h => el("th", { textContent: h })))),
-    el("tbody", {}, c.pairs.map(p => el("tr", {}, el("td", { textContent: `${p.a} – ${p.b}` }),
-      ...[p.sharedDocuments, p.sharedPassages, p.samePosition].map(v => el("td", { className: "num", textContent: v })), el("td", { className: "num", textContent: fmtPct(p.agreement) }),
-      c.tension ? el("td", { className: "num" }, tensionBadge(p.tension)) : null))));
-
-  const quotes = list => list.slice(0, 30).map(u => el("div", { className: "quote" },
-    el("div", { textContent: `« ${u.phrase} »` }),
-    el("div", { className: "who" }, `${u.document}`, u.tension != null && u.tension > 0 ? tensionBadge(u.tension, `tension des lectures : couleurs ${u.relation}`) : null, " — ", u.annotations.map(a => el("span", { className: "chip" }, el("i", { className: "sw", style: `background:${a.color ?? "var(--line)"}` }), `${a.author} : ${a.position ?? "hors grille"}${a.note ? ` — « ${a.note} »` : ""}`)))));
-
-  // réseau : dessiné ici avec d3.js ; les analyses antérieures (graphe absent des données) gardent leur page autonome
-  const hasGraph = files.some(f => f.name === "reseau_collaborations.html");
-  const graphBox = c.graph?.nodes?.length ? el("div", { id: "collab-graph", className: "muted", textContent: "Chargement du réseau…" }) : null;
-  box.replaceChildren(tiles,
-    el("section", { className: "card" }, el("h2", { textContent: "Matrice des passages en commun" }), el("p", { className: "lead", textContent: "Nombre de passages annotés par les deux personnes et part où elles leur donnent la même signification." }), el("div", { className: "table-wrap" }, matrix)),
-    el("section", { className: "card" }, el("h2", { textContent: "Paires de collaborateurs" }), el("div", { className: "table-wrap" }, pairs)),
-    el("section", { className: "card" }, el("h2", { textContent: `Passages aux lectures divergentes (${c.divergent.length})` }), el("p", { className: "lead", textContent: c.tension ? "Même passage, significations différentes, du plus tendu au moins tendu (tension selon le rapport entre les couleurs, réglable dans l'onglet Grille) : ce sont les meilleurs points de départ d'une discussion." : "Même passage, significations différentes : ce sont les meilleurs points de départ d'une discussion." }), c.divergent.length ? quotes(c.divergent) : el("p", { className: "muted", textContent: "Aucun." })),
-    el("section", { className: "card" }, el("h2", { textContent: `Passages convergents (${c.convergent.length})` }), c.convergent.length ? quotes(c.convergent) : el("p", { className: "muted", textContent: "Aucun." })),
-    graphBox || hasGraph ? el("section", { className: "card" }, el("h2", { textContent: "Réseau collaborateurs – documents" }),
-      el("p", { className: "lead" }, "Glisser un nœud pour le déplacer, survoler pour voir ses voisins, cliquer pour afficher ses liens. L'épaisseur d'un lien suit le nombre d'annotations ou de passages communs ; la couleur des liens entre personnes, la tension de leurs lectures. ",
-        hasGraph ? el("a", { href: fileUrl("reseau_collaborations.html", true), target: "_blank", textContent: "Ouvrir en plein écran" }) : null),
-      graphBox ?? el("iframe", { className: "frame", src: fileUrl("reseau_collaborations.html", true), sandbox: "allow-scripts allow-popups allow-popups-to-escape-sandbox" })) : null);
-  if (graphBox) drawGraph(graphBox, c.graph);
-}
-
-// réseau d3.js (module partagé avec la page autonome reseau_collaborations.html)
-let graphView = null;
-async function drawGraph(container, graph) {
-  graphView?.destroy();
-  try {
-    const { forceGraph } = await import("/forceGraph.js");
-    container.className = "";
-    graphView = forceGraph(container, graph, { title: "Collaborations", omekaAdminUrl: graph.omekaAdminUrl ?? "", height: 600 });
-  } catch (e) { container.textContent = "Réseau indisponible : " + e.message; }
 }
 
 // ==========================================

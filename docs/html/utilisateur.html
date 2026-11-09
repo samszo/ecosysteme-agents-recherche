@@ -45,7 +45,7 @@
 </style>
 </head>
 <body>
-<header><div class="bar"><span class="brand">Écosystème d'agents – documentation</span><nav><a href="index.html">Accueil</a><a href="installation.html">Installation</a><a href="utilisateur.html" aria-current="page">Utilisateur</a><a href="technique.html">Technique</a></nav></div></header>
+<header><div class="bar"><span class="brand">Écosystème d'agents – documentation</span><nav><a href="index.html">Accueil</a><a href="installation.html">Installation</a><a href="utilisateur.html" aria-current="page">Utilisateur</a><a href="explo.html">exploZoteroAnno</a><a href="technique.html">Technique</a></nav></div></header>
 <div class="layout">
 <main>
 <h1 id="documentation-utilisateur"><a class="anchor" href="#documentation-utilisateur">#</a>Documentation utilisateur</h1>
@@ -392,6 +392,9 @@ Consigne : mobiliser les concepts du graphe et les références de la collection
 <p>Quand l&#39;appel en cours dans l&#39;onglet Configuration est celui qu&#39;on rejoue (même lien, ou même fichier), <strong>Rejouer</strong> conserve son fichier et ses précisions tels qu&#39;ils sont dans les paramètres : on peut donc corriger le texte de l&#39;appel puis le rejouer. Le fichier local d&#39;un appel prime sur son lien : en changeant de lien, l&#39;interface propose de retirer le fichier importé pour l&#39;appel précédent. Au lancement, le journal indique les paramètres de l&#39;appel effectivement utilisés ; le texte et le document original de l&#39;item Omeka de l&#39;appel sont mis à jour s&#39;ils ont changé.</p>
 <p>Seuls les documents nouveaux ou modifiés sont retraités : ceux dont l&#39;extraction est déjà faite sont relus dans Omeka S. Un appel importé depuis un fichier local ne peut être rejoué que si le fichier est toujours présent dans <code>aap/</code>.</p>
 <h2 id="3-explozoteroanno-animer-une-annotation-collective"><a class="anchor" href="#3-explozoteroanno-animer-une-annotation-collective">#</a>3. exploZoteroAnno : animer une annotation collective</h2>
+<blockquote>
+<p>Un guide dédié, <a href="explo.html">exploZoteroAnno : guide d&#39;utilisation</a>, détaille le <strong>protocole d&#39;annotation par couleurs</strong> (son intérêt, ses limites, les bonnes pratiques) et la <strong>page publique</strong> des résultats.</p>
+</blockquote>
 <p><strong>exploZoteroAnno</strong> est la seconde application, avec son propre serveur : <a href="http://127.0.0.1:7273" target="_blank" rel="noopener">http://127.0.0.1:7273</a> (lien dans l&#39;en-tête de l&#39;Atelier d&#39;articles). Elle peut analyser pendant qu&#39;un traitement de l&#39;Atelier est en cours. Elle comporte neuf onglets : Grille, Workflow (prompts des agents, voir <em>L&#39;onglet Workflow</em>), Exécution, Analyses, Participation, Collaborations, Thèmes, RAG et Rapport ; ses connexions se règlent sur la page <strong>⚙ Paramètres</strong>. Elle accompagne un groupe qui annote ensemble une collection Zotero : elle fixe une grille de couleurs commune, mesure la participation de chacun, analyse les convergences et divergences de lecture, et propose des thèmes pour une séance de discussion. Tout est enregistré dans Omeka S.</p>
 <pre class="mermaid">flowchart LR
     G[Définir la grille&lt;br/&gt;de couleurs] --&gt; P[Partager le guide&lt;br/&gt;d'annotation]

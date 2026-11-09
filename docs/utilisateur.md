@@ -242,6 +242,8 @@ Seuls les documents nouveaux ou modifiés sont retraités : ceux dont l'extracti
 
 ## 3. exploZoteroAnno : animer une annotation collective
 
+> Un guide dédié, [exploZoteroAnno : guide d'utilisation](explo.md), détaille le **protocole d'annotation par couleurs** (son intérêt, ses limites, les bonnes pratiques) et la **page publique** des résultats.
+
 **exploZoteroAnno** est la seconde application, avec son propre serveur : http://127.0.0.1:7273 (lien dans l'en-tête de l'Atelier d'articles). Elle peut analyser pendant qu'un traitement de l'Atelier est en cours. Elle comporte neuf onglets : Grille, Workflow (prompts des agents, voir *L'onglet Workflow*), Exécution, Analyses, Participation, Collaborations, Thèmes, RAG et Rapport ; ses connexions se règlent sur la page **⚙ Paramètres**. Elle accompagne un groupe qui annote ensemble une collection Zotero : elle fixe une grille de couleurs commune, mesure la participation de chacun, analyse les convergences et divergences de lecture, et propose des thèmes pour une séance de discussion. Tout est enregistré dans Omeka S.
 
 ```mermaid

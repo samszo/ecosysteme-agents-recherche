@@ -12,6 +12,7 @@ const PAGES = [
   { file: "README.md", html: "index.html", title: "Accueil" },
   { file: "installation.md", html: "installation.html", title: "Installation" },
   { file: "utilisateur.md", html: "utilisateur.html", title: "Utilisateur" },
+  { file: "explo.md", html: "explo.html", title: "exploZoteroAnno" },
   { file: "technique.md", html: "technique.html", title: "Technique" },
 ];
 const htmlName = new Map(PAGES.map(p => [p.file, p.html]));

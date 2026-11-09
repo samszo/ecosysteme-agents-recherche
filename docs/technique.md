@@ -135,7 +135,8 @@ src/
 └── ui/
     ├── server.ts             serveur d'une application (npm run ui / ui:explo / ui:chaoticum)
     ├── chaoticumRoutes.ts    routes de chaoticumSeminario (partitions, lecteur, contributions, séances)
-    └── public/               paper.html, explo.html, chaoticum.html, jouer.html (lecteur), settings.html (page Paramètres commune)
+    └── public/               paper.html, explo.html, explo-public.html (page publique des analyses), exploResults.js (rendu partagé des résultats explo),
+                              chaoticum.html, jouer.html (lecteur), settings.html (page Paramètres commune)
 ```
 
 Hors de `src/` : `docs/` (documentation, `grille_annotation.md`), `scripts/build-docs.ts`, `scripts/captures-docs.ts` (copies d'écran du guide, `docs/img/`), `docker/entrypoint.sh`, `.vscode/launch.json` (configurations de débogage des workflows et des serveurs), `install/` (instance Omeka S préparée, distribuée à part). Les fichiers produits vont dans `resultats/atelier/`, `resultats/explo/` et `resultats/chaoticum/` (réglages `outputDir`), dans le répertoire de données : la racine du projet en local, le volume `data/` avec Docker.
@@ -417,6 +418,7 @@ Les modifications faites dans l'interface sont enregistrées dans le fichier de 
 | `rag.system` | instructions générales du modèle |
 | `rag.promptType`, `rag.promptClass`, `rag.answerType`, `rag.answerClass` | repérage et classes Omeka S des modèles de prompt et des réponses |
 | `rag.defaultPrompts` | modèles proposés par « Créer les modèles par défaut » |
+| `public.enabled`, `public.listRuns`, `public.ragAnswers` | page publique des analyses : activée (sinon 404), liste des analyses réussies affichée (sinon accès par lien seulement), réponses RAG enregistrées montrées |
 | `outputDir` | dossier des fichiers produits (`resultats/explo`) |
 
 ## 10. API de l'interface
@@ -447,7 +449,7 @@ Routes propres à l'Atelier d'articles :
 | `GET /api/history` | appels traités : historique local et configurations Omeka S, regroupés par appel |
 | `POST /api/history/delete` | supprime un appel traité `{ key, omeka }` : ses entrées de `workflow.history.json` et, si `omeka`, les items de configuration de ses exécutions et l'item de l'appel (s'il n'est pas partagé), après vérification de leur `dcterms:type` ; refusé pendant un traitement |
 
-Routes propres à exploZoteroAnno : `GET` et `POST /api/explo/settings`, `POST /api/explo/guide` (guide d'annotation à partir de la grille), `GET /api/explo/runs` (analyses déjà effectuées), `GET /api/explo/results?run=`, `GET /api/explo/file?name=&run=` (sans `run` : dernière analyse), et pour le RAG :
+Routes propres à exploZoteroAnno : `GET` et `POST /api/explo/settings`, `POST /api/explo/guide` (guide d'annotation à partir de la grille), `GET /api/explo/runs` (analyses déjà effectuées ; `publicUrl` : adresse de la page publique, `null` si désactivée), `GET /api/explo/results?run=`, `GET /api/explo/file?name=&run=` (sans `run` : dernière analyse), et pour le RAG :
 
 | Méthode et route | Rôle |
 |---|---|
@@ -507,6 +509,19 @@ Fichiers produits dans `resultats/explo/` (réglage `outputDir`) : `guide_annota
 ### Analyses déjà effectuées
 
 `GET /api/explo/runs` fusionne l'archive locale et les items de configuration d'Omeka S dont la description porte `workflowId = explo-zotero-anno` (l'historique de l'Atelier écarte ces items, et inversement). `GET /api/explo/results?run=` et `GET /api/explo/file?name=&run=` servent les fichiers d'une analyse : archive locale si elle existe, sinon médias de l'item de configuration (repérés par leur `dcterms:identifier` `<runId>/<fichier>`, lus par leur `o:original_url`). L'identifiant d'analyse est validé (`[\w-]`) et seuls les noms de fichiers connus sont servis. La page garde l'analyse affichée dans `currentRun` (`null` = dernière analyse) et ajoute `run=` à ses requêtes.
+
+### Page publique des analyses
+
+`GET /public/analyses?run=<runId>&onglet=<onglet>` sert `explo-public.html` : résultats d'une analyse **réussie** en lecture seule, sans authentification (en ligne, `/public/` est exempté de l'authentification du proxy, voir le guide d'installation). Onglets Analyses (liste, description et **grille de couleurs de l'analyse** avec le tableau des tensions), Participation, Collaborations, Thèmes, RAG (bilan d'indexation et réponses enregistrées, sans consultation) et Rapport. Le rendu de la participation, des collaborations, du réseau et de la grille est dans le module `src/ui/public/exploResults.js`, partagé avec `explo.html` (servi sur `/exploResults.js` et `/public/exploResults.js` ; il importe `./forceGraph.js`, d'où `/public/forceGraph.js`).
+
+| Route | Rôle |
+|---|---|
+| `GET /public/api/explo/runs` | `{ listed, ragAnswers, runs }` : analyses réussies (identifiant, dates, collection, totaux, énergie et carbone), vide si `public.listRuns` est `false` |
+| `GET /public/api/explo/run?run=` | une analyse : résumé, `grid` (réglages archivés de l'analyse, sinon grille de `participation.json`), `tension` (`tensionMatrix` avec les tensions de l'analyse), `analysis`, `files` |
+| `GET /public/api/explo/file?run=&name=` | fichier de l'analyse (liste blanche `EXPLO_FILES`) ; `raw=1` sert le réseau HTML avec `Content-Security-Policy: sandbox` |
+| `GET /public/api/explo/rag?run=` | réponses RAG enregistrées pour la collection de l'analyse (titre, question, réponse, date) |
+
+Rien n'y écrit ; les tokens, le coût en argent, l'item de configuration et les liens d'administration Omeka S ne sont pas renvoyés ; les pages et fichiers portent `X-Robots-Tag: noindex`. La liste des analyses (archive locale et Omeka S) est gardée une minute en mémoire (`publicRunsCache`) pour ne pas interroger Omeka S à chaque visite ; une analyse absente du cache le fait recharger. Le markdown (rapport, thèmes, réponses) est nettoyé par DOMPurify avant affichage. Désactivée par `public.enabled: false` : toutes ces routes répondent 404.
 
 ### RAG Albert
 

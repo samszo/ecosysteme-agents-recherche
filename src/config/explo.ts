@@ -116,6 +116,17 @@ export const defaultExploConfig = {
     ],
   },
 
+  // page publique des résultats (/public/analyses?run=<identifiant>), en lecture seule et sans connexion ;
+  // en ligne, exempter /public/ de l'authentification du proxy (guide d'installation)
+  public: {
+    // false : page et routes /public/ de exploZoteroAnno répondent 404
+    enabled: true,
+    // liste des analyses réussies sur la page ; false : une analyse ne s'ouvre que par son lien (identifiant dans l'adresse)
+    listRuns: true,
+    // onglet RAG : réponses enregistrées dans Omeka S pour la collection de l'analyse (jamais de nouvelle question)
+    ragAnswers: true,
+  },
+
   // dossier des fichiers produits (dans le répertoire de données)
   outputDir: "resultats/explo",
 };

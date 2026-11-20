@@ -23,7 +23,21 @@ export interface Screen {
   diagramme?: { title: string; mermaid: string };
   // écran de contributions : consigne affichée au public (éditeur d'écran)
   contribution?: { instruction: string };
+  // coût cumulé des traitements IA lancés depuis l'éditeur pour cet écran
+  editCost?: EditCost;
 }
+
+// coût cumulé de traitements IA (tokens et estimation de estimateImpact)
+export interface EditCost {
+  treatments: number;
+  tokens: number;
+  energyWh: number;
+  co2g: number;
+  electricityCost: number;
+  apiCost: number;
+  currency: string;
+}
+
 
 export interface Partition {
   runId: string;
@@ -43,6 +57,28 @@ export interface Partition {
   siteUrl: string;
   citationsScope: { scope: string; collection: string };
   screens: Screen[];
+  // coût de la génération (lanceur) et coût cumulé des traitements IA de l'éditeur, avec leur journal
+  tokens?: { calls: number; input: number; output: number; total: number };
+  impact?: Omit<EditCost, "treatments" | "tokens">;
+  editCost?: EditCost;
+  editCosts?: (Omit<EditCost, "treatments"> & { at: string; index: number; what: string })[];
+}
+
+// répartit une durée totale (secondes) selon des poids : arrondi à la seconde, 5 s au moins par écran,
+// l'arrondi étant reporté sur le dernier écran
+export function spreadDuration(weights: number[], total: number): number[] {
+  const sum = weights.reduce((s, w) => s + w, 0) || 1;
+  const durations = weights.map(w => Math.max(5, Math.round((total * w) / sum)));
+  const last = durations.length - 1;
+  durations[last] = Math.max(5, durations[last]! + total - durations.reduce((s, d) => s + d, 0));
+  return durations;
+}
+
+// numéros et débuts des écrans après une modification ; renvoie la durée totale
+export function retime(screens: Pick<Screen, "index" | "start" | "duration">[]): number {
+  let start = 0;
+  screens.forEach((x, i) => { x.index = i; x.start = start; start += x.duration; });
+  return start;
 }
 
 // écrans de la partition (types, cycles, durées), avant tirage et génération
@@ -51,11 +87,7 @@ export function planScreens(c: Pick<ChaoticumConfig, "screens" | "durationMinute
   const n = Math.max(1, Math.round(c.screens));
   const types = Array.from({ length: n }, (_, i) => pattern[i % pattern.length]!);
   const weight = (t: ScreenType) => Math.max(0.1, Number(c.weights[t]) || 1);
-  const total = Math.max(1, Math.round(c.durationMinutes * 60));
-  const sum = types.reduce((s, t) => s + weight(t), 0);
-  // durées arrondies à la seconde, l'arrondi étant reporté sur le dernier écran
-  const durations = types.map(t => Math.max(5, Math.round((total * weight(t)) / sum)));
-  durations[n - 1] = Math.max(5, durations[n - 1]! + total - durations.reduce((s, d) => s + d, 0));
+  const durations = spreadDuration(types.map(weight), Math.max(1, Math.round(c.durationMinutes * 60)));
   let start = 0;
   return types.map((type, index) => {
     const s: Screen = { index, type, cycle: Math.floor(index / pattern.length), duration: durations[index]!, start };

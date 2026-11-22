@@ -190,7 +190,10 @@
         <div class="field"><label class="check"><input id="g-moderation" type="checkbox"> Valider chaque URL avant de l'afficher</label><span class="help">Recommandé en public : l'animateur choisit les contributions affichées.</span></div>
       </div>
       <div class="toolbar" style="margin-top:12px">
-        <div class="qr" id="qr" title="QR code du formulaire"></div>
+        <div style="width:132px">
+          <div class="qr" id="qr" title="QR code du formulaire"></div>
+          <a id="qr-link" target="_blank" rel="noopener" style="display:block;margin-top:4px;font-size:11px;color:var(--accent);word-break:break-all"></a>
+        </div>
         <div>
           <button id="g-test" class="btn">Lire la table des réponses</button>
           <div id="g-result" class="help" style="margin-top:6px"></div>
@@ -482,7 +485,13 @@ $("#dg-images").onchange = e => { config.diigo.indexImages = e.target.checked; }
 $("#b-idx-diigo").onclick = () => runTask("index-diigo", `Indexer les annotations Diigo (${config.diigo.perRun ? `jusqu'à ${config.diigo.perRun} page(s)` : "toutes les pages"}${config.diigo.indexMedia ? `, avec le texte de leurs médias${config.diigo.indexImages ? " et l'analyse de leurs images par le modèle de vision" : ""}` : ""})`);
 $("#s-exclude").oninput = e => { config.slides.exclude = e.target.value.split("\n").map(s => s.trim()).filter(Boolean); };
 $("#ci-collection").onchange = e => { config.citations.collection = e.target.value; };
-function renderQr() { $("#qr").innerHTML = qrSvg(config.grist.formUrl); }
+// QR code du formulaire et, en dessous, le lien cliquable correspondant
+function renderQr() {
+  const url = config.grist.formUrl ?? "";
+  $("#qr").innerHTML = qrSvg(url);
+  Object.assign($("#qr-link"), { href: url || "#", textContent: url.replace(/^https?:\/\//, "") });
+  $("#qr-link").classList.toggle("hidden", !url);
+}
 
 async function loadCollections() {
   const sel = $("#ci-collection"), help = $("#ci-collection-help");
@@ -687,10 +696,11 @@ async function shareSession(runId, id) {
   const url = `${base.replace(/\/$/, "")}${r.sharePath}`;
     box.classList.remove("hidden");
     box.replaceChildren(el("div", { className: "toolbar", style: "align-items:flex-start" },
-      el("div", { className: "qr", style: "width:160px;height:160px", innerHTML: qrSvg(url) }),
+      el("div", { style: "width:160px" },
+        el("div", { className: "qr", style: "width:160px;height:160px", innerHTML: qrSvg(url) }),
+        el("a", { href: url, target: "_blank", rel: "noopener", textContent: url, style: "display:block;margin-top:4px;font-size:11px;color:var(--accent);word-break:break-all" })),
       el("div", {},
         el("strong", { textContent: "Lien public du rejeu (lecture seule)" }),
-        el("div", {}, el("a", { href: url, target: "_blank", textContent: url, style: "color:var(--accent);word-break:break-all" })),
         el("p", { className: "help", textContent: "Accessible sans mot de passe si le chemin /public/ est exempté de l'authentification (voir la documentation d'installation). On ne peut ni participer ni modifier les contributions depuis ce lien." }),
         el("button", { className: "btn", textContent: "Copier le lien", onclick: () => navigator.clipboard.writeText(url).then(() => toast("Lien copié")) }))));
   } catch (e) { toast("Lien indisponible : " + e.message); }

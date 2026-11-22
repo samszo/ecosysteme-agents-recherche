@@ -1,12 +1,13 @@
 # Documentation utilisateur
 
-L'écosystème d'agents propose trois applications, qui travaillent sur une **collection Zotero** annotée et archivent leurs résultats dans **Omeka S** :
+L'écosystème d'agents propose quatre applications, qui travaillent sur une **collection Zotero** et archivent leurs résultats dans **Omeka S** :
 
 | Application | Adresse | Quand l'utiliser | Section |
 |---|---|---|---|
 | **Atelier d'articles** | http://127.0.0.1:7272 | pour **répondre à un appel à propositions (AAP)** : analyse des attendus de l'appel, concepts de la collection, accord entre annotateurs, **proposition d'article** avec références, citations et mots-clés | 2 |
 | **exploZoteroAnno** | http://127.0.0.1:7273 | pour **animer une annotation collective** : grille de couleurs commune, participation de chacun, convergences et divergences de lecture, thèmes de discussion | 3 |
 | **chaoticumSeminario** | http://127.0.0.1:7276 | pour **préparer et jouer une conférence participative** : partition d'écrans (citations, diapos, questions, contributions du public, diagrammes), chronomètre, séances enregistrées et rejouables | 4 |
+| **mailbot** | http://127.0.0.1:7278 | pour **entretenir une correspondance argumentée avec des chercheurs** : archivage de l'historique d'un chercheur et des échanges du mailbot (Omeka S, RAG, pièces jointes dans Zotero), réponses contradictoires validées avant envoi, mails planifiés à un groupe | 5 |
 
 ### La page Paramètres (connexions)
 
@@ -442,7 +443,7 @@ Dans l'onglet **Partitions et séances**, **Jouer** ouvre le lecteur dans un nou
 ![Le lecteur : barre de navigation et d'outils, chronomètre, QR code de participation, frise des écrans](img/chaoticum-lecteur.png)
 
 - **Démarrer la séance** lance l'enregistrement ; **Parcourir sans enregistrer** permet de répéter. Le lien **← Partitions** ramène à la liste des partitions.
-- **QR code de participation** : il reste affiché dans un coin de chaque écran (clic ou touche Q pour le réduire) ; sur les écrans « Contributions », il est affiché en grand.
+- **QR code de participation** : il reste affiché dans un coin de chaque écran, avec en dessous le lien cliquable du formulaire et celui de l'adresse publique de suivi de la séance (`/public/suivre?run=…`) (clic ou touche Q pour le réduire) ; sur les écrans « Contributions », il est affiché en grand. Sous chaque QR code de l'application, le lien correspondant est cliquable.
 - **Chronomètre** : temps passé sur l'écran / durée prévue, en vert, orange puis rouge ; à côté, le temps de la séance et l'avance ou le retard sur la partition.
 - **Navigation** : écran précédent ou suivant (← →), début et fin, aller à un écran (numéro, touche G), **revenir** à l'écran affiché avant le dernier saut (↩, touche R), plein écran (F) ; la barre colorée du bas montre tous les écrans (clic pour y aller).
 - **Transcription de la parole** : le bouton 🎙 (touche T) transcrit ce que dit le présentateur ; le navigateur demande l'accès au micro. Le texte s'affiche en **sous-titres** sur l'écran projeté (bouton CC ou touche S pour les afficher ou les masquer) et, avec 📝, dans un panneau qui le liste avec l'heure et l'écran (clic pour y revenir), à copier ou télécharger. Deux moteurs, au choix dans ce panneau : **Albert** (par défaut) — l'audio est envoyé au serveur par tranches (15 s par défaut) et transcrit par le modèle de reconnaissance vocale d'Albert, le texte arrive donc avec ce décalage ; les tranches silencieuses ne sont pas envoyées — ou **Navigateur** — texte immédiat (Chrome, Edge, Safari), mais l'audio est envoyé au service de reconnaissance du navigateur (Google, Apple). Pendant la séance, le texte est enregistré avec elle : dans la séance (JSON) et, dans Omeka S, en média `transcription_<séance>.md` ; à **Terminer et enregistrer**, la dernière tranche est transcrite avant l'enregistrement. Avant le début de la séance (répétition), le texte s'affiche sans être enregistré. Au **rejeu**, y compris par le lien public, les sous-titres reviennent au moment où ils ont été prononcés et le panneau 📝 donne le texte complet.
@@ -483,7 +484,53 @@ Dans **Partitions et séances**, **Supprimer** propose de retirer la partition d
 
 ![Partitions et séances : Jouer, Séances (rejeu) et Supprimer](img/chaoticum-partitions.png)
 
-## 5. Ce qui est enregistré dans Omeka S
+## 5. mailbot : correspondance argumentée avec des chercheurs
+
+**mailbot** (http://127.0.0.1:7278) entretient une correspondance scientifique à partir de plusieurs boîtes mail :
+
+- une **boîte historique par profil** : chaque profil est un chercheur dont les échanges avec une liste de **destinataires** (les mails qu'il leur a envoyés et leurs réponses) sont archivés ; le reste de sa boîte n'est pas lu, et rien n'y est modifié ;
+- la **boîte du mailbot**, une adresse propre au bot et commune à tous les profils : c'est depuis elle qu'il écrit aux chercheurs et qu'il reçoit leurs réponses.
+
+Chaque profil a ses propres collections Zotero et Albert : les historiques des chercheurs ne sont pas mélangés. Une réponse du mailbot s'appuie sur l'historique du chercheur concerné par l'échange ; un mail au groupe, sur l'ensemble des historiques.
+
+1. **Synchronisation** : les messages suivis des deux boîtes sont archivés dans **Omeka S** (un item par message, pièces jointes en médias), indexés dans le **RAG d'Albert** (texte des messages et des pièces jointes) ; les pièces jointes sont aussi déposées dans une **collection Zotero** (une notice « courriel » par message).
+2. **Réponses contradictoires** : chaque nouveau mail reçu par le mailbot d'une **adresse autorisée** et resté sans réponse reçoit un **brouillon** rédigé par l'agent *Contradicteur* : il reconnaît ce qui est solide puis développe deux à quatre objections, appuyées sur les archives et les références de la collection, et termine par des questions. **Rien n'est envoyé sans votre validation.**
+3. **Mails au groupe** : à la fréquence choisie, l'agent *Rédacteur de courriels* écrit de lui-même à un **groupe de chercheurs** (un seul mail adressé à tout le groupe), à partir des échanges du mailbot et des historiques des chercheurs ; ces mails partent directement, ou passent eux aussi par la validation si vous le demandez.
+
+Chaque mail rédigé par un agent se termine par une **signature** qui le signale à ses destinataires (modifiable dans Réglages).
+
+### Mise en route
+
+1. **⚙ Paramètres** :
+   - **Boîte historique « profil »** (un bloc par profil, après son enregistrement dans Réglages) : serveur IMAP, identifiant et mot de passe. Avec Gmail, un **mot de passe d'application** est obligatoire (compte Google › Sécurité › Validation en deux étapes › Mots de passe des applications).
+   - **Boîte du mailbot** : serveur IMAP (ex. `mail.infomaniak.com`, port 993) et serveur SMTP (port **465**, ou 587 ; ne pas reprendre le port IMAP 993) ; l'identifiant et le mot de passe saisis pour l'un servent à l'autre s'ils sont laissés vides.
+   - « Enregistrer et tester les connexions » lit chaque boîte sans rien modifier et vérifie le SMTP sans rien envoyer. La clé Zotero doit avoir le **droit d'écriture** pour déposer les pièces jointes.
+2. **Réglages** :
+   - **Profils** : un profil (`principal`) existe déjà ; « + Ajouter un profil » en crée un autre (identifiant court en minuscules, ex. `dupont`, non modifiable ensuite). Pour chacun : l'adresse du chercheur, son nom, une courte présentation pour les agents, ses **destinataires** (une adresse par ligne), la date de début de l'historique et, si besoin, une collection Zotero existante. Après l'enregistrement, renseigner sa connexion sur la page ⚙ Paramètres ;
+   - **Boîte du mailbot** : les **adresses autorisées** (seuls leurs mails reçoivent un brouillon de réponse) et le **groupe** des mails planifiés (membres visibles de tous, ou en copie cachée) ;
+   - les collections (par défaut « Mailbot – nom du chercheur » pour chaque profil, « Mailbot – échanges du mailbot » pour la boîte du mailbot, créées au besoin) et l'adresse de l'**administrateur** prévenu à chaque nouveau brouillon.
+3. **Synchroniser** (bouton en haut à droite) : la première synchronisation archive l'historique par lots (200 messages par boîte et par exécution par défaut ; relancer jusqu'à ce qu'il n'y ait plus de nouveaux messages). Le journal s'affiche dans l'onglet **Exécution**.
+
+### Valider les brouillons (onglet Brouillons)
+
+Chaque brouillon montre le message reçu, les destinataires, le sujet et le corps proposés (modifiables), puis, dépliables : les **objections** (affirmation visée, objection, numéros des extraits utilisés), les **extraits des archives** retrouvés par le RAG, les **références Zotero** et le **fil** transmis à l'agent. Vérifiez que chaque objection s'appuie bien sur ses sources, puis :
+
+- **Envoyer** : le mail part depuis la boîte du mailbot (réponse rattachée au fil d'origine) et une copie est déposée dans ses envoyés ; il sera archivé à la synchronisation suivante. Une réponse ne peut partir qu'à une adresse autorisée, un mail au groupe qu'aux membres du groupe ;
+- **Enregistrer** : garde vos modifications sans envoyer ;
+- **Nouvelle proposition** : l'agent réécrit le brouillon, avec une précision de votre part (angle, objection à développer, ton) ;
+- **Rejeter** : le brouillon est écarté (motif facultatif).
+
+Le lien de la notification envoyée à l'administrateur ouvre directement cet onglet.
+
+### Planifier (onglet Planification)
+
+Deux échéances, en expressions **cron** (minute heure jour-du-mois mois jour-de-la-semaine, heure du serveur) : la **synchronisation automatique** (ex. `0 * * * *`, toutes les heures) et les **mails au groupe** (ex. `0 9 * * 1`, le lundi à 9 h ; chaque mail planifié commence par une synchronisation). Les boutons « Modèles » proposent des fréquences courantes ; la prochaine échéance est affichée sous chaque champ. Le **serveur de mailbot doit rester démarré** pour que la planification fonctionne (service `mailbot` avec Docker). Activer les mails planifiés sans validation demande une confirmation.
+
+### Archives et exécutions
+
+L'onglet **Archives** résume les messages archivés (par profil et par boîte : historiques ou boîte du mailbot, pièces jointes, état de l'archivage dans Omeka S, Zotero et le RAG) et affiche chaque message, avec le lien vers son item Omeka S et le téléchargement de ses pièces jointes. L'onglet **Exécutions** liste les synchronisations et mails planifiés passés, avec leur rapport (messages archivés, brouillons, consommation de tokens et coût). Les instructions et demandes des deux agents se modifient dans l'onglet **Workflow**.
+
+## 6. Ce qui est enregistré dans Omeka S
 
 ```mermaid
 flowchart TD
@@ -512,7 +559,7 @@ Les deux applications utilisent les mêmes classes : un document, une annotation
 - chaoticumSeminario ajoute les **partitions** (item de configuration avec la partition JSON, son rapport et les copies d'écran des diapos) et les **séances** (item `bibo:Performance` « Participation chaoticumSeminario », relié à la partition, avec le fichier JSON complet de la séance).
 - Chaque **exécution**, de l'une ou l'autre application, crée un item de configuration (« Configuration academic-paper-factory » ou « Configuration explo-zotero-anno ») : configuration (sans les clés d'API), statut, tokens consommés, coût estimé et, en médias, ses documents de fin d'analyse.
 
-## 6. Questions fréquentes
+## 7. Questions fréquentes
 
 **Puis-je modifier le plan de la proposition ?** Oui, dans *Paramètres › Proposition d'article › Plan de la proposition*. Les titres et leur ordre sont respectés par le rédacteur.
 
@@ -537,3 +584,5 @@ Les deux applications utilisent les mêmes classes : un document, une annotation
 **chaoticumSeminario : le public voit-il le lecteur ?** Non : le lecteur reste sur le poste de l'animateur (derrière l'authentification) ; le public contribue uniquement par le formulaire Grist.
 
 **Le rédacteur peut-il inventer des références ?** Il ne reçoit que les clés BibTeX de la collection et doit citer uniquement celles-ci (syntaxe Pandoc `[@clé, p. 12]`) ; la relecture épistémologique vérifie l'usage des références.
+
+**mailbot : un mail peut-il partir sans que je le voie ?** Les réponses, jamais : elles attendent votre validation dans l'onglet Brouillons. Les mails au groupe partent directement si « Soumettre aussi les mails planifiés à validation » est désactivé (Réglages › Mails planifiés). Dans tous les cas, mailbot n'écrit qu'aux adresses autorisées (réponses) et aux membres du groupe (mails planifiés), et jamais depuis la boîte du chercheur.

@@ -2,13 +2,14 @@
 
 Écosystème d'agents IA pour la production d'articles scientifiques (Laboratoire Paragraphe, Université Paris 8). Le projet est écrit en **TypeScript**, exécuté par **tsx** sous **Node.js 22+**, et orchestré par des workflows **Mastra**. Les modèles de langage sont ceux de l'**API Albert** (compatible OpenAI), les sources viennent de **Zotero** et les résultats sont archivés dans **Omeka S**.
 
-Trois applications partagent ce socle, chacune avec son workflow, son lanceur, sa page et son serveur :
+Quatre applications partagent ce socle, chacune avec son workflow, son lanceur, sa page et son serveur :
 
 | Application | Workflow | Lanceur | Page | Serveur | Section |
 |---|---|---|---|---|---|
 | Atelier d'articles | `paperProductionWorkflow` (`src/workflow/paperProductionWorkflow.ts`) | `src/runners/paper.ts` | `paper.html` | `PORT` 7272 | 2 |
 | exploZoteroAnno | `exploWorkflow` (`src/workflow/exploWorkflow.ts`) | `src/runners/explo.ts` | `explo.html` | `EXPLO_PORT` 7273 | 12 |
 | chaoticumSeminario | `chaoticumWorkflow` (`src/workflow/chaoticumWorkflow.ts`) | `src/runners/chaoticum.ts` | `chaoticum.html`, `jouer.html` | `CHAOTICUM_PORT` 7276 | 13 |
+| mailbot | `mailbotWorkflow` (`src/workflow/mailbotWorkflow.ts`) | `src/runners/mailbot.ts` | `mailbot.html` | `MAILBOT_PORT` 7278 | 14 |
 
 Elles partagent (l'Atelier et exploZoteroAnno) l'étape `fetch-literature` (lecture de la collection Zotero et enregistrement dans Omeka S), les bibliothèques de `src/lib/`, le comptage des tokens et l'estimation du coût, l'enregistrement des configurations d'exécution et le serveur `src/ui/server.ts`.
 
@@ -107,12 +108,14 @@ src/
 │   ├── index.ts              configuration de l'Atelier (defaultWorkflowConfig, workflowConfig, outputPath)
 │   ├── explo.ts              configuration d'exploZoteroAnno (defaultExploConfig, exploConfig, exploGrid)
 │   ├── chaoticum.ts          configuration de chaoticumSeminario (defaultChaoticumConfig, chaoticumConfig, SCREEN_TYPES)
+│   ├── mailbot.ts            configuration de mailbot (defaultMailbotConfig, mailbotConfig, fillName)
 │   ├── models.ts             modèles Albert (analytique, rapide)
 │   └── store.ts              fusion avec workflow.config.json / explo.config.json
 ├── lib/                      fonctions et clients utilisés par les outils et les étapes (hors outils Mastra)
 │   ├── chaoticum/            slides (présentations, #numSlide-max, copies d'écran), citations, partition, grist, random
 │   ├── analysis/             cleanGraph, annotationPositions (grille de couleurs), colorTension (tension entre couleurs), codebook (grille kappa)
 │   ├── extraction/           pdfExtract, attachmentExtract, zip, chunkText
+│   ├── mail/                 mailbot : imap (lecture, copie des envois), smtp (envoi), store (index des messages, brouillons), generate (rédaction, envoi, notification), cron
 │   ├── metrics/              usage (tokens), impact (énergie, carbone, argent)
 │   ├── omeka/                omk (client), oaAnnotations, conceptIndex, conceptStore, zoteroCollections, verify
 │   ├── albert/               albert (client de l'API Albert : collections, documents, recherche, complétions)
@@ -128,18 +131,20 @@ src/
 │   │   ├── common/           fetchLiteratureStep (partagée)
 │   │   ├── paper/            analyzeCfp, buildWiki, kappaAnalysis, normalizeOkf, draftPaper, reviewPaper
 │   │   ├── explo/            participation, collaboration, ragIndex, themes
-│   │   └── chaoticum/        material (citations, diapos, copies d'écran), compose (vision, questions, diagrammes)
-│   ├── reports/              paperReport, exploReport, chaoticumReport, annotationGuide
+│   │   ├── chaoticum/        material (citations, diapos, copies d'écran), compose (vision, questions, diagrammes)
+│   │   └── mailbot/          fetchMails, archiveOmeka, zoteroAttachments, mailRagIndex, draftReplies, composeMail
+│   ├── reports/              paperReport, exploReport, chaoticumReport, mailbotReport, annotationGuide
 │   └── runs/                 saveWorkflowConfig (item Omeka), importSynthesis (médias), history (historique local)
-├── runners/                  lanceurs : paper.ts (npm start), explo.ts (npm run explo), chaoticum.ts (npm run chaoticum)
+├── runners/                  lanceurs : paper.ts (npm start), explo.ts (npm run explo), chaoticum.ts (npm run chaoticum), mailbot.ts (npm run mailbot)
 └── ui/
     ├── server.ts             serveur d'une application (npm run ui / ui:explo / ui:chaoticum)
     ├── chaoticumRoutes.ts    routes de chaoticumSeminario (partitions, lecteur, contributions, séances)
+    ├── mailbotRoutes.ts      routes et planification de mailbot (brouillons, archives, exécutions, cron)
     └── public/               paper.html, explo.html, explo-public.html (page publique des analyses), exploResults.js (rendu partagé des résultats explo),
-                              chaoticum.html, jouer.html (lecteur), settings.html (page Paramètres commune)
+                              chaoticum.html, jouer.html (lecteur), mailbot.html, settings.html (page Paramètres commune)
 ```
 
-Hors de `src/` : `docs/` (documentation, `grille_annotation.md`), `scripts/build-docs.ts`, `scripts/captures-docs.ts` (copies d'écran du guide, `docs/img/`), `docker/entrypoint.sh`, `.vscode/launch.json` (configurations de débogage des workflows et des serveurs), `install/` (instance Omeka S préparée, distribuée à part). Les fichiers produits vont dans `resultats/atelier/`, `resultats/explo/` et `resultats/chaoticum/` (réglages `outputDir`), dans le répertoire de données : la racine du projet en local, le volume `data/` avec Docker.
+Hors de `src/` : `docs/` (documentation, `grille_annotation.md`), `scripts/build-docs.ts`, `scripts/captures-docs.ts` (copies d'écran du guide, `docs/img/`), `docker/entrypoint.sh`, `.vscode/launch.json` (configurations de débogage des workflows et des serveurs), `install/` (instance Omeka S préparée, distribuée à part). Les fichiers produits vont dans `resultats/atelier/`, `resultats/explo/`, `resultats/chaoticum/` et `resultats/mailbot/` (réglages `outputDir`), dans le répertoire de données : la racine du projet en local, le volume `data/` avec Docker.
 
 ### Agents (`src/agents/`)
 
@@ -154,6 +159,8 @@ Hors de `src/` : `docs/` (documentation, `grille_annotation.md`), `scripts/build
 | `curatorAgent` | analytique | chaoticumSeminario : requêtes de recherche dans les index RAG à partir du thème ; choix des citations et présentations les plus proches du thème |
 | `seminarioAgent` | analytique | chaoticumSeminario : choix des citations et diapos les plus cohérentes d'une séquence, question courte, intention, diagramme (nœuds et liens) ; nouvelles propositions de l'éditeur d'écran |
 | `editorAgent` | rapide | chaoticumSeminario : raccourcit une question de plus de 15 mots |
+| `contradictorAgent` | analytique (`mailbot.models.analytics`) | mailbot : réponse contradictoire argumentée à un mail reçu par le mailbot d'une adresse autorisée (sujet, corps, objections et extraits), brouillon soumis à l'administrateur |
+| `mailComposerAgent` | analytique (`mailbot.models.analytics`) | mailbot : mail adressé au groupe à l'initiative de mailbot, à partir des archives (échanges du mailbot et historique du chercheur), du RAG et de la collection Zotero |
 
 Les agents de chaoticumSeminario portent les consignes stables (rôle, style, contraintes) ; les étapes ne leur passent que les données et le schéma de sortie. Ils sont appelés par `askAgent` (`src/agents/ask.ts`) : modèle de la configuration passé par le contexte de requête (`requestContext.set("model", …)`, l'agent le lit dans sa fonction `model`), sortie structurée (`structuredOutput: { schema }`, validée par zod) et comptage des tokens (`recordUsage`). Les appels envoyés à Albert sont identiques à un appel direct (consignes en message système, `response_format` JSON, images en `image_url`).
 | `librarianAgent`, `wikiArchitectAgent`, `ontologistAgent` | rapide / analytique | agents outillés disponibles pour un usage conversationnel |
@@ -170,7 +177,7 @@ Les **outils** (`fetchCfp`, `fetchZoteroData`, `buildLLMWiki`, `exportToOpenKnow
 | `attachmentExtract` | extraction par format : PDF, page web enregistrée (zip), HTML, DOCX, ODT, EPUB, texte, image |
 | `pdfExtract` | PDF.js : texte, surlignages (reconstruction par quadPoints), notes, auteur, images (encodage PNG via zlib) |
 | `zip` | lecteur ZIP minimal (répertoire central + zlib) |
-| `zotero` | client de l'API Zotero v3 : bibliothèque personnelle ou de groupe, pagination, notes, annotations, BibTeX |
+| `zotero` | client de l'API Zotero v3 : bibliothèque personnelle ou de groupe, pagination, notes, annotations, BibTeX ; écriture (mailbot) : `createCollection`, `createItems` (`Zotero-Write-Token`), `uploadAttachment` (protocole d'upload : autorisation, dépôt, enregistrement) |
 | `zoteroToOmeka` | correspondance métadonnées Zotero → dcterms / bibo / curation |
 | `zoteroCollections` | items Omeka des collections Zotero (création à la demande, sous-collections) |
 | `omk` | client de l'API REST Omeka S (formatage des valeurs, liens, upload de médias) |
@@ -354,6 +361,16 @@ erDiagram
         curation_data json "modèle, paramètres, extraits, tokens, coût"
         medias reponse "Markdown complet"
     }
+    COURRIEL {
+        classe bibo_Email "mailbot, omeka.emailClass"
+        dcterms_identifier messageId "Message-ID"
+        dcterms_creator expediteur "adresse"
+        bibo_recipient destinataires "repli dcterms:audience"
+        dcterms_description texte "corps du message"
+        curation_data json "en-têtes, sens, brouillon"
+        medias pieces "pièces jointes"
+    }
+    COURRIEL }o--o| COURRIEL : "dcterms:relation (réponse)"
     DOCUMENT }o--|{ COLLECTION : "dcterms:isPartOf"
     REPONSE_RAG }o--o| PROMPT_RAG : "dcterms:source"
     REPONSE_RAG }o--o{ DOCUMENT : "dcterms:references"
@@ -564,16 +581,16 @@ API propre au serveur exploZoteroAnno : `GET` et `POST /api/explo/settings`, `PO
 
 `src/ui/server.ts` sert **une** application, choisie en argument (`tsx src/ui/server.ts explo`) ou par `WORKFLOW_APP` (`paper` par défaut). Chaque serveur a son paramétrage :
 
-| | Atelier d'articles (`paper`) | exploZoteroAnno (`explo`) | chaoticumSeminario (`chaoticum`) |
-|---|---|---|---|
-| Lancement | `npm run ui` | `npm run ui:explo` | `npm run ui:chaoticum` |
-| Port / adresse d'écoute | `PORT` (7272) / `HOST` | `EXPLO_PORT` (7273) / `EXPLO_HOST` (ou `HOST`) | `CHAOTICUM_PORT` (7276) / `CHAOTICUM_HOST` (ou `HOST`) |
-| Connexions | `.env` | `.env` surchargé par `.env.explo` (`EXPLO_ENV_FILE`) | `.env` surchargé par `.env.chaoticum` (`CHAOTICUM_ENV_FILE`) |
-| Configuration | `workflow.config.json` | `explo.config.json` | `chaoticum.config.json` |
-| Workflow lancé | `src/runners/paper.ts` | `src/runners/explo.ts` | `src/runners/chaoticum.ts` |
-| Page | `paper.html` | `explo.html` | `chaoticum.html` (et `/jouer` : `jouer.html`) |
+| | Atelier d'articles (`paper`) | exploZoteroAnno (`explo`) | chaoticumSeminario (`chaoticum`) | mailbot (`mailbot`) |
+|---|---|---|---|---|
+| Lancement | `npm run ui` | `npm run ui:explo` | `npm run ui:chaoticum` | `npm run ui:mailbot` |
+| Port / adresse d'écoute | `PORT` (7272) / `HOST` | `EXPLO_PORT` (7273) / `EXPLO_HOST` (ou `HOST`) | `CHAOTICUM_PORT` (7276) / `CHAOTICUM_HOST` (ou `HOST`) | `MAILBOT_PORT` (7278) / `MAILBOT_HOST` (ou `HOST`) |
+| Connexions | `.env` | `.env` surchargé par `.env.explo` (`EXPLO_ENV_FILE`) | `.env` surchargé par `.env.chaoticum` (`CHAOTICUM_ENV_FILE`) | `.env` surchargé par `.env.mailbot` (`MAILBOT_ENV_FILE`) |
+| Configuration | `workflow.config.json` | `explo.config.json` | `chaoticum.config.json` | `mailbot.config.json` |
+| Workflow lancé | `src/runners/paper.ts` | `src/runners/explo.ts` | `src/runners/chaoticum.ts` | `src/runners/mailbot.ts` (et planification) |
+| Page | `paper.html` | `explo.html` | `chaoticum.html` (et `/jouer` : `jouer.html`) | `mailbot.html` |
 
-Chaque serveur a son propre traitement en cours (les applications peuvent traiter simultanément) et son propre flux de journal. Routes communes : `/api/settings` (connexions et configuration de l'application du serveur ; un secret vide est conservé, une valeur identique à la valeur héritée n'est pas recopiée dans `.env.explo`), `/api/check`, `/api/zotero/collections`, `/api/albert/models`, `/api/run*`, `/docs/`, et `GET /api/apps` (adresses des applications, `PAPER_URL` / `EXPLO_URL` / `CHAOTICUM_URL` ou port local, pour les liens entre elles). Les routes propres aux autres applications répondent 404 ; l'ancienne adresse `/explo` de l'Atelier redirige vers le serveur d'exploZoteroAnno.
+Chaque serveur a son propre traitement en cours (les applications peuvent traiter simultanément) et son propre flux de journal. Routes communes : `/api/settings` (connexions et configuration de l'application du serveur ; un secret vide est conservé, une valeur identique à la valeur héritée n'est pas recopiée dans `.env.explo`), `/api/check`, `/api/zotero/collections`, `/api/albert/models`, `/api/run*`, `/docs/`, et `GET /api/apps` (adresses des applications, `PAPER_URL` / `EXPLO_URL` / `CHAOTICUM_URL` / `MAILBOT_URL` ou port local, pour les liens entre elles). Les routes propres aux autres applications répondent 404 ; l'ancienne adresse `/explo` de l'Atelier redirige vers le serveur d'exploZoteroAnno.
 
 ## 13. Workflow chaoticumSeminario
 
@@ -631,17 +648,94 @@ flowchart TD
 
 Routes propres au serveur chaoticumSeminario (`src/ui/chaoticumRoutes.ts`) : `GET /jouer`, `GET /api/chaoticum/partitions`, `GET /api/chaoticum/partition?run=`, `GET /api/chaoticum/file?run=&name=` (partition, rapport, copies d'écran : archive locale, sinon médias Omeka S), `GET /api/chaoticum/contributions?run=`, `POST /api/chaoticum/contribution` (`{ run, rowId, url }` ou `{ run, rowId, remove: true }`), `POST /api/chaoticum/partition/screen` (`{ run, index, changes }` : type, durée, citation, diapo — reprise de la description et de la copie d'écran de l'index —, question, diagramme, consigne de contributions ; nouveau média `partition.json` dans Omeka S, l'ancien est supprimé, nouvelles copies d'écran déposées), `POST /api/chaoticum/partition/delete` (`{ run, omeka }` : dossier local de la partition et de ses séances ; avec `omeka`, item de configuration — ses médias avec lui — et items des séances dont `curation:data.runId` est la partition), `POST /api/chaoticum/partition/structure` (`{ run, op: insert|duplicate|move|delete, index, type?, to? }`), `POST /api/chaoticum/partition/regenerate` (`{ run, index, what: question|diagramme, hint? }` : nouvelle proposition non enregistrée, avec son coût, `regenerate.ts`), `GET /api/chaoticum/index/search?kind=citation|diapo&q=` (recherche locale dans les index, sans appel à Albert), `GET /api/chaoticum/index/screenshot?path=&diapo=`, `GET /editeur-ecran.js` (module de l'éditeur d'écran, partagé par `chaoticum.html` et `jouer.html` : outils par type, éditeur visuel de diagramme qui lit et écrit le format de `buildMermaid`), `GET /api/chaoticum/slides`, `GET /api/chaoticum/index` (état des index RAG), `GET /api/chaoticum/frameable?url=`, `POST /api/chaoticum/participation`, `GET /api/chaoticum/participations?run=`, `GET /api/chaoticum/participation?run=&id=`.
 
-## 14. Documentation et conteneur
+## 14. Workflow mailbot
+
+Quatrième workflow (`src/workflow/mailbotWorkflow.ts`, étapes dans `src/workflow/steps/mailbot/`, bibliothèques dans `src/lib/mail/`) : il travaille sur deux sortes de boîtes mail :
+
+- les **boîtes « historique »**, une par **profil** (`profiles` : un profil par chercheur), lues sans modification : les échanges du chercheur avec ses **destinataires** (`profiles[].recipients` : mails envoyés et réponses) sont archivés ;
+- la **boîte du mailbot**, propre au bot et commune aux profils (lecture IMAP et envoi SMTP) : ses échanges avec les **adresses autorisées** (`bot.allowed`) et le **groupe** (`bot.group`) sont archivés de la même façon ; les nouveaux mails des adresses autorisées reçoivent des **réponses contradictoires**, envoyées après **validation de l'administrateur**, et le groupe reçoit des mails **à l'initiative** du bot selon une planification.
+
+Les messages vont dans Omeka S, le RAG Albert et (pièces jointes) Zotero, avec leur boîte d'origine (`box` : `history` ou `bot`) et leur profil (`profile`). Chaque profil a sa collection Zotero et sa collection Albert (`zotero.collectionName`, `rag.collectionName`, `{{chercheur}}` = nom du chercheur ; collection Zotero choisie possible : `profiles[].zoteroCollection`), la boîte du mailbot les siennes (`zotero.botCollection` / `botCollectionName`, `rag.botCollectionName`) : les corpus des chercheurs ne sont pas mélangés. Un message de la boîte du mailbot est rattaché au premier profil dont le chercheur ou un destinataire participe à l'échange (`profile` = `null` sinon). Les choix retenus : une **réponse** s'appuie sur l'historique du profil concerné (sa collection Albert et ses notices Zotero) et sur les échanges du mailbot ; le **groupe** et la **planification** sont communs, et un mail au groupe s'appuie sur tous les historiques. Configuration : `defaultMailbotConfig` (`src/config/mailbot.ts`), surcharges dans `mailbot.config.json` ; connexions dans `.env.mailbot`. Dépendances : `imapflow` (IMAP), `mailparser` (analyse des messages), `nodemailer` (composition et envoi).
+
+```mermaid
+flowchart TD
+    IN([compose ?]) --> F[fetch-mails<br/>boîte historique de chaque profil : chercheur ↔ destinataires<br/>boîte du mailbot : adresses autorisées et groupe<br/>pièces jointes → resultats/mailbot/pieces/]
+    F --> PAR
+    subgraph PAR[parallèle]
+        O[archive-omeka<br/>item bibo:Email + médias]
+        Z[zotero-attachments<br/>notice courriel + fichiers]
+        R[mail-rag-index<br/>messages et pièces jointes<br/>→ collection Albert]
+    end
+    PAR --> D[draft-replies<br/>contradictorAgent<br/>→ brouillons en attente]
+    D --> C[compose-mail<br/>tâche « envoi » : mailComposerAgent<br/>→ envoi SMTP ou brouillon]
+    C --> OUT([rapport, brouillons.json → Omeka S])
+    D -. notification .-> ADM[administrateur : onglet Brouillons<br/>vérifie, modifie, envoie ou rejette]
+    ADM -- SMTP + copie IMAP --> MAIL[(boîte du mailbot)]
+    MAIL -. synchronisation suivante .-> F
+```
+
+| Élément | Rôle |
+|---|---|
+| `fetch-mails` (`imap.ts` : `openImap`, `mailFolders`, `listEnvelopes`, `downloadMessages`, `parseMessage`) | boîtes lues l'une après l'autre : la boîte historique de chaque profil (`openImap(env, "history:<profil>")`, connexion `HISTORY_<PROFIL>_IMAP_*`), puis la boîte du mailbot (`"bot"`) ; une boîte injoignable n'empêche pas de lire les autres, l'étape échoue si aucune des boîtes à lire n'est lisible ; une boîte sans adresse à suivre n'est pas lue. Dossiers de la configuration (`profiles[].folders`, `bot.folders`), sinon boîte de réception + dossier des envoyés (attribut `\Sent`, ou nom usuel) ; une recherche IMAP `from` / `to` / `cc` par adresse suivie (`profiles[].recipients`, depuis `profiles[].since` ; `bot.allowed` + `bot.group`) ; seules les enveloppes absentes de l'index sont téléchargées (Message-ID ; un message présent dans les deux boîtes n'est archivé qu'une fois), les plus anciennes d'abord, `mailbox.maxNewMessages` par boîte et par exécution ; sens : `sortant` si l'expéditeur est le propriétaire de la boîte (`profiles[].researcher.email`, ou `MAIL_FROM` / `SMTP_USER` pour le mailbot) ; analyse par `mailparser` (texte, ou HTML converti par `htmlToText`), citations retirées (`stripQuoted`) ; pièces jointes (hors images intégrées) écrites dans `pieces/<id>/` avec leur empreinte SHA-1 ; un message envoyé par mailbot est rattaché à son brouillon (`draftId`) |
+| index local (`store.ts`) | `resultats/mailbot/messages.json` : identifiant stable (`messageKey` : SHA-1 du Message-ID), boîte (`history` / `bot`), profil, en-têtes, sens (`entrant` / `sortant`), texte, pièces jointes, et marqueurs d'archivage (`omekaItemId`, `zoteroKey`, `albertDocumentId`, et par pièce jointe `omekaMediaId`, `zoteroKey`, `albertDocumentId`) ; `writeMessages` fusionne les mises à jour partielles (pièces jointes par empreinte et nom), écriture atomique. Chaque étape traite les messages qui n'ont pas encore **son** marqueur : un service indisponible est repris à l'exécution suivante |
+| `archive-omeka` | un item par message : classe `omeka.emailClass` (`bibo:Email`, si présente), `dcterms:type` `omeka.emailType`, `dcterms:identifier` = Message-ID (recherché avant création), `dcterms:title` sujet, `dcterms:creator` expéditeur, destinataires dans `omeka.recipientTerm` (`bibo:recipient`, repli `dcterms:audience`), `dcterms:date`, `dcterms:description` texte, `dcterms:relation` vers le message auquel il répond, `curation:data` (boîte, profil, en-têtes, sens, dossier, brouillon) ; pièces jointes en médias (`uploadWithFallback`) |
+| `zotero-attachments` | messages regroupés par collection cible : celle du profil (`profiles[].zoteroCollection`, sinon collection nommée `zotero.collectionName`, créée au besoin), ou celle de la boîte du mailbot (`zotero.botCollection`, sinon `botCollectionName`) ; avec `zotero.emailItems`, une notice `email` (sujet, auteur, destinataires, date, texte en résumé, `extra` : Message-ID) et les fichiers en pièces jointes enfants, sinon des pièces jointes isolées ; marqueur `mailbot:<id>` pour l'idempotence ; fichiers de plus de `zotero.maxAttachmentMb` ignorés. La clé API Zotero doit avoir le droit d'écriture |
+| `mail-rag-index` | collection privée Albert du profil (`rag.collectionName`) ou de la boîte du mailbot (`rag.botCollectionName`) ; un document `mail-<id>` par message (`messageMarkdown` : en-têtes et texte) et `pj-<id>-<empreinte>` par pièce jointe dont `extractAttachment` tire un texte ; métadonnées `kind`, `message_id`, `box`, `profile`, `date`, `direction`, `from`, `title` ; documents déjà présents retrouvés par leur préfixe ; vectorisation estimée dans le compteur (`rag.embeddingsModel`) |
+| `draft-replies` (`generate.ts` : `draftReply`) | mails **entrants de la boîte du mailbot** envoyés par une adresse de `bot.allowed`, de moins de `reply.maxAgeDays` jours, sans brouillon (`rep-<id>`) et sans message du mailbot postérieur dans le même fil (`threadOf` : références, `In-Reply-To`, sinon sujet normalisé) ; recherche RAG dans la collection du profil du message et celle du mailbot, notices de leurs collections Zotero ; demande : auteur du mail et chercheur du profil, message, fil (`reply.threadMessages`, les deux boîtes), extraits RAG (recherche sur le sujet et le texte ; RAG indisponible : rédaction sans extraits), notices de la collection (`reply.zoteroItems`, hors courriels) ; réponse structurée (`contradictorSchema` : sujet, corps, objections avec numéros d'extraits) ; `signature` ajoutée ; administrateur prévenu par mail (`admin.email`, `notifyAdmin`) |
+| `compose-mail` (`composeMail`) | seulement pour la tâche `envoi` : un mail adressé à **tout le groupe** (`bot.group` ; en « À » si `bot.groupVisible`, sinon en copie cachée, le message étant alors adressé au mailbot lui-même) ; derniers échanges du mailbot (`compose.archiveMessages`) et des historiques de tous les profils (`compose.historyMessages`, variable `{{historique}}`) ; recherche RAG et notices dans les collections de tous les profils et du mailbot, consigne `compose.instruction`, extraits RAG, notices les moins citées dans les mails déjà envoyés (`compose.zoteroItems`) ; envoi direct (`sendDraft`), ou brouillon si `compose.requireApproval` ; un échec d'envoi fait échouer l'étape |
+| `sendDraft` (`generate.ts`, `smtp.ts`) | garde-fou : une réponse ne part qu'à des adresses de `bot.allowed`, un mail planifié qu'aux membres de `bot.group` ; message composé une fois (`MailComposer` : Message-ID `<mailbot.…@domaine>`, `In-Reply-To` et `References` pour une réponse), envoyé en SMTP, puis copié dans le dossier des envoyés de la boîte du mailbot (`bot.appendSent`, `appendToSent` ; dossier `Sent` créé s'il n'existe pas) : la synchronisation suivante l'archive comme tout autre message |
+| brouillons (`store.ts`) | `resultats/mailbot/brouillons/<id>.json` (`rep-<message>` ou `ini-<empreinte>`) : statut `en attente`, `envoyé`, `rejeté`, `échec`, texte, message d'origine, sources (extraits, notices, fil), objections, historique des actions ; les brouillons de l'exécution sont aussi archivés (`brouillons.json`) et déposés dans l'item de configuration |
+| `src/runners/mailbot.ts` | `npm run mailbot` (synchronisation) ou `npm run mailbot -- envoi` ; item de configuration (sans collection Zotero d'entrée), `rapport_mailbot.md`, archive `resultats/mailbot/executions/<runId>/` (`execution.json` : statut, tâche, totaux, tokens, coût), consommation dans l'historique (`appendUsageHistory("mailbot", …)`) |
+
+**Planification** (`mailbotRoutes.ts`, `cron.ts`) : le serveur de mailbot vérifie toutes les 20 secondes les expressions cron à 5 champs (`*`, listes, intervalles, pas ; jour du mois et jour de la semaine combinés par « ou » quand les deux sont restreints, comme cron) de `schedule.sync` et `schedule.compose` (activées par `schedule.syncEnabled` et `schedule.composeEnabled`, heure locale du serveur). Une échéance atteinte lance une synchronisation ou la tâche `envoi` ; si un traitement est en cours, elle attend sa fin (un mail planifié, qui comprend une synchronisation, l'emporte). Derniers lancements, attente et journal dans `resultats/mailbot/planification.json`. Le serveur doit rester démarré (service `mailbot` de `docker-compose.yml`).
+
+| Clé de configuration | Rôle |
+|---|---|
+| `profiles[]` : `id`, `researcher.email`, `name`, `description`, `recipients`, `folders`, `since`, `zoteroCollection` | un profil par chercheur dont l'historique est archivé : identifiant (minuscules et chiffres, unique, non renommé une fois enregistré : il nomme les clés de connexion), chercheur (présentation transmise aux agents), destinataires suivis, dossiers, début de l'historique, collection Zotero (vide : nommée). Tableau remplacé en bloc ; profils complétés au chargement (`normalizeMailbotConfig`), au moins un (`principal` par défaut) |
+| `bot.allowed`, `group`, `groupVisible`, `folders`, `appendSent` | boîte du mailbot : adresses auxquelles il peut répondre, groupe des mails planifiés (visible ou en copie cachée) |
+| `mailbox.maxNewMessages`, `stripQuoted` | lecture des deux boîtes |
+| `zotero.enabled`, `collectionName`, `botCollection`, `botCollectionName`, `emailItems`, `maxAttachmentMb` | pièces jointes dans Zotero (`{{chercheur}}` dans le nom d'une collection de profil) |
+| `rag.enabled`, `collectionName`, `botCollectionName`, `chunkSize`, `chunkOverlap`, `embeddingsModel`, `limit`, `method` | RAG Albert |
+| `reply.enabled`, `maxAgeDays`, `threadMessages`, `zoteroItems` | brouillons de réponse |
+| `compose.requireApproval`, `instruction`, `archiveMessages`, `historyMessages`, `zoteroItems` | mails planifiés au groupe |
+| `signature` | texte ajouté à chaque mail rédigé par un agent (transparence envers les destinataires) |
+| `admin.email`, `admin.notify` | notification des brouillons en attente |
+| `schedule.syncEnabled`, `sync`, `composeEnabled`, `compose` | planification (cron) |
+| `omeka.emailClass`, `emailType`, `recipientTerm` | messages dans Omeka S |
+| `models.analytics` | modèle des deux agents (modifiable par agent dans l'onglet Workflow) |
+| `outputDir` | `resultats/mailbot` |
+
+Connexions propres (`.env.mailbot`, page Paramètres ; `POST /api/check` teste chaque boîte en IMAP — dossiers lus et nombre de messages avec les adresses suivies — et l'authentification SMTP sans rien envoyer ; erreurs explicites : mot de passe d'application Gmail, port IMAP saisi pour SMTP ou l'inverse, délai de 15 s) : boîte historique de chaque profil `HISTORY_<PROFIL>_IMAP_HOST`, `_PORT` (993), `_SECURE`, `_USER`, `_PASSWORD` (ex. `HISTORY_PRINCIPAL_IMAP_HOST` ; champs générés sur la page Paramètres d'après les profils enregistrés, sans redémarrage : `historyFields`, `envFields`) ; boîte du mailbot `BOT_IMAP_HOST`, `BOT_IMAP_PORT` (993), `BOT_IMAP_SECURE`, `BOT_IMAP_USER` et `BOT_IMAP_PASSWORD` (par défaut ceux du SMTP), `SMTP_HOST`, `SMTP_PORT` (465), `SMTP_SECURE`, `SMTP_USER` et `SMTP_PASSWORD` (par défaut ceux d'IMAP du mailbot), `MAIL_FROM`, `MAIL_FROM_NAME` ; `MAILBOT_URL` (lien de la notification).
+
+Routes propres au serveur mailbot (`src/ui/mailbotRoutes.ts`) :
+
+| Méthode et route | Rôle |
+|---|---|
+| `GET`, `POST /api/mailbot/settings` | configuration (expressions cron, profils — au moins un, identifiants valides et uniques —, adresses des chercheurs, de l'administrateur et listes d'adresses vérifiées) |
+| `GET /api/mailbot/overview` | totaux des messages (par boîte, par profil, sens, pièces jointes, Omeka S, Zotero, RAG), brouillons, planification |
+| `GET /api/mailbot/messages?box=&profile=&q=&limit=`, `GET /api/mailbot/message?id=` | archive locale (extrait de 240 caractères dans la liste, texte complet pour un message) |
+| `GET /api/mailbot/attachment?id=&sha1=` | pièce jointe archivée, toujours en téléchargement (`application/octet-stream`, `nosniff`), chemin contrôlé sous `outputDir` |
+| `GET /api/mailbot/drafts` | brouillons, du plus récent au plus ancien |
+| `POST /api/mailbot/drafts/save` | `{ id, subject, body }` : modification par l'administrateur |
+| `POST /api/mailbot/drafts/send` | `{ id, subject?, body? }` : validation et envoi (`sendDraft`, connexions du serveur) ; 409 si déjà envoyé, 502 si l'envoi échoue (brouillon en `échec`) |
+| `POST /api/mailbot/drafts/reject` | `{ id, note? }` |
+| `POST /api/mailbot/drafts/regenerate` | `{ id, hint? }` : nouvelle rédaction par l'agent avec une précision de l'administrateur ; renvoie le brouillon et les tokens consommés |
+| `GET /api/mailbot/schedule` | échéances, prochaines dates, derniers lancements, attente, fuseau horaire |
+| `GET /api/mailbot/runs`, `GET /api/mailbot/results?run=`, `GET /api/mailbot/file?name=&run=` | exécutions (archive locale et items de configuration `workflowId = mailbot`) ; fichiers `rapport_mailbot.md` et `brouillons.json` (archive locale, sinon médias Omeka S) |
+
+Tâche secondaire (`TASKS.mailbot`) : `POST /api/run?task=envoi`. La page `mailbot.html` a les onglets Brouillons (validation, objections et sources dépliables, nouvelle proposition, rejet ; adresse `#brouillons` utilisée par la notification), Archives, Planification, Réglages, Workflow, Exécution et Exécutions. Les textes des mails reçus sont affichés comme du texte (jamais interprétés en HTML) ; les rapports markdown sont nettoyés par DOMPurify.
+
+## 15. Documentation et conteneur
 
 - `npm run docs` convertit `docs/*.md` en `docs/html/*.html` (script `scripts/build-docs.ts`, bibliothèque **marked** ; les diagrammes **Mermaid** sont rendus dans le navigateur ; une image markdown `![légende](img/x.png)` devient une figure légendée).
 - `npm run docs:captures [nom…]` reprend les copies d'écran du guide utilisateur (`docs/img/*.png`, script `scripts/captures-docs.ts`, **Playwright**, fenêtre 1280×800) sur les trois serveurs locaux, qui doivent être lancés (`PAPER_URL`, `EXPLO_URL`, `CHAOTICUM_URL` pour d'autres adresses) : chaque capture ouvre un onglet, joue ses actions (charger une analyse, ouvrir un agent, parcourir une partition sans enregistrer de séance) ; les identifiants de la page Paramètres sont masqués. Les captures montrent les données de la bibliothèque connectée : les reprendre sur une collection de démonstration avant publication.
-- `Dockerfile` : image `node:22-bookworm-slim`, code dans `/app`, données dans le volume `/data`, Chromium de Playwright (`PLAYWRIGHT_BROWSERS_PATH=/ms-playwright`, avec ses bibliothèques système), commandes `workflow-ui` (serveur de l'application `WORKFLOW_APP`), `workflow`, `workflow-explo` et `workflow-chaoticum` (lignes de commande).
-- `docker-compose.yml` : trois services à partir de la même image, `workflow` (Atelier, 7272), `explo` (exploZoteroAnno, 7273) et `chaoticum` (chaoticumSeminario, 7276), publiés sur `127.0.0.1` et partageant `./data`.
+- `Dockerfile` : image `node:22-bookworm-slim`, code dans `/app`, données dans le volume `/data`, Chromium de Playwright (`PLAYWRIGHT_BROWSERS_PATH=/ms-playwright`, avec ses bibliothèques système), commandes `workflow-ui` (serveur de l'application `WORKFLOW_APP`), `workflow`, `workflow-explo`, `workflow-chaoticum` et `workflow-mailbot` (lignes de commande).
+- `docker-compose.yml` : quatre services à partir de la même image, `workflow` (Atelier, 7272), `explo` (exploZoteroAnno, 7273), `chaoticum` (chaoticumSeminario, 7276) et `mailbot` (7278, qui porte la planification), publiés sur `127.0.0.1` et partageant `./data`.
 - `docker/entrypoint.sh` : le conteneur démarre en root, rétablit si besoin la propriété de `/data` pour l'utilisateur `node` (uid 1000), puis exécute la commande sous `node` avec `setpriv`. Les commandes `workflow`, `workflow-explo` et `workflow-ui` lancées par `docker compose exec` (en root) passent aussi par ce point d'entrée.
 - `docker-compose.yml` (suite) : volume `./data:/data` commun, `host.docker.internal` pour un Omeka S local ; le contrôle de santé interroge le port de l'application du conteneur (`WORKFLOW_APP`).
-- `.vscode/launch.json` : débogage des trois workflows sans interface, des trois serveurs sur 7282, 7283 et 7286 (avec suivi du workflow lancé en processus enfant) et du fichier courant.
+- `.vscode/launch.json` : débogage des quatre workflows sans interface, des quatre serveurs sur 7282, 7283, 7286 et 7288 (avec suivi du workflow lancé en processus enfant) et du fichier courant.
 
-## 15. Limites connues
+## 16. Limites connues
 
 - `tsc --noEmit` signale des erreurs de typage liées à la configuration TypeScript (CommonJS avec `verbatimModuleSyntax`) et aux types Mastra (étapes sans schéma) ; l'exécution par tsx n'est pas affectée.
 - La reconstruction des passages surlignés d'un PDF est une approximation proportionnelle à la largeur des blocs de texte.
@@ -651,3 +745,5 @@ Routes propres au serveur chaoticumSeminario (`src/ui/chaoticumRoutes.ts`) : `GE
 - chaoticumSeminario : les iframes de diapos et de contributions dépendent de la disponibilité des sites ; une URL proposée par le public n'est affichée qu'après vérification de son autorisation d'intégration, et la modération est recommandée en public. Les contributions sont rattachées à l'écran affiché au moment de leur lecture (décalage possible de `pollSeconds`). Le diagramme est produit par Albert (Mermaid) : l'API NotebookLM n'offre pas de génération de diagramme.
 - RAG : seul le texte extrait des documents est indexé (pas les annotations ni les notes) ; un document modifié après son indexation n'est pas redéposé (supprimer le document dans Albert pour forcer un nouveau dépôt) ; renommer une collection Zotero crée une nouvelle collection Albert à la prochaine analyse.
 - exploZoteroAnno : les annotations sans auteur (bibliothèque personnelle, PDF annotés hors Zotero) ne peuvent pas être attribuées et sont regroupées sous `analysis.unassignedLabel`.
+- mailbot : la planification n'existe que tant que le serveur de mailbot tourne (une échéance manquée serveur arrêté n'est pas rattrapée). Un message modifié après son archivage n'est pas réarchivé. Le retrait des citations (`stripQuoted`) repose sur les formules usuelles (« Le … a écrit : », « > ») et peut en manquer d'autres. La qualité des objections dépend des extraits retrouvés : l'administrateur vérifie les sources avant tout envoi de réponse.
+- mailbot, profils : un message présent dans les boîtes de deux profils (échange entre deux chercheurs suivis) n'est archivé qu'une fois, dans le profil lu en premier. Retirer un profil ne supprime pas ses messages archivés. Un message de la boîte du mailbot est rattaché au premier profil concerné, même si plusieurs le sont.

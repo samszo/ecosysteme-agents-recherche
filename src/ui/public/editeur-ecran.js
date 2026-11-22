@@ -44,10 +44,16 @@ function indexForm({ fields, analyze, save, toast, onClose }) {
     try { await fn(); status.textContent = ""; } catch (e) { status.textContent = e.message; toast("Erreur : " + e.message); } finally { buttons.forEach(b => (b.disabled = false)); }
   };
   box.append(el("div", { className: "ed-row" },
-    btn("Nouvelle analyse (modèle de vision)", false, () => busy("Analyse en cours…", async () => { fill(await analyze()); toast("Nouvelle analyse proposée : relire puis enregistrer"); })),
+    btn("Nouvelle analyse (modèle de vision)", false, () => busy("Analyse en cours…", async () => { const r = await analyze(); fill(r); toast(`Nouvelle analyse proposée : relire puis enregistrer${r.cost ? ` · ${costLabel(r)}` : ""}`); })),
     btn("Enregistrer et mettre à jour le RAG", true, () => busy("Mise à jour de l'index et du RAG…", async () => { await save(read()); })),
     btn("Annuler", false, onClose), status));
   return box;
+}
+
+// coût d'un traitement IA renvoyé par le serveur (tokens, énergie, équivalent API) ; « enregistré » s'il est compté pour l'écran
+export function costLabel(r) {
+  const c = r.cost ?? r.impact ?? {};
+  return `${Number(r.tokens ?? c.tokens ?? 0).toLocaleString("fr-FR")} tokens · ${Number(c.energyWh ?? 0).toLocaleString("fr-FR", { maximumFractionDigits: 3 })} Wh · ${Number(c.apiCost ?? 0).toLocaleString("fr-FR", { maximumFractionDigits: 4 })} ${c.currency ?? "€"}${r.recorded ? " (ajouté au coût de l'écran)" : ""}`;
 }
 
 export function buildMermaid(nodes, edges, direction = "TD") {
@@ -95,7 +101,7 @@ let slidesCache = null;
 
 /**
  * Ouvre l'éditeur de l'écran `index` dans `container`.
- * opts : { container, runId, partition, onSaved(partition, index), onClose(), toast(message) }
+ * opts : { container, runId, partition, onSaved(partition, index), onCost(partition, index), onClose(), toast(message) }
  */
 export function openScreenEditor(opts) {
   const { container, runId } = opts;
@@ -103,6 +109,11 @@ export function openScreenEditor(opts) {
   let P = opts.partition, index = opts.index;
   const s = () => P.screens[index];
   let type = s().type, state = {};
+  // coût d'un traitement IA enregistré par le serveur : repris dans la partition affichée (colonne Coût IA, total)
+  const costed = r => {
+    if (r?.recorded && P.screens[index]) { P.screens[index].editCost = r.screenCost; P.editCost = r.partitionCost; opts.onCost?.(P, index); }
+    return r;
+  };
   const field = (label, input, wide = false, help = "") => el("div", { className: `ed-field${wide ? " wide" : ""}` }, el("label", { textContent: label }), input, help ? el("span", { className: "ed-help", textContent: help }) : null);
 
   const save = async changes => {
@@ -175,7 +186,7 @@ export function openScreenEditor(opts) {
                       toast, onClose: show,
                       fields: [{ key: "titre", label: "Titre", value: a.titre }, { key: "motsCles", label: "Mots-clés (séparés par ;)", value: a.motsCles, list: true },
                         { key: "description", label: "Description", value: a.description, rows: 5 }, { key: "texte", label: "Texte visible", value: a.texte, rows: 4 }],
-                      analyze: () => api("/api/chaoticum/index/diigo-image/analyze", { method: "POST", body: { mediaId: a.mediaId } }),
+                      analyze: () => api("/api/chaoticum/index/diigo-image/analyze", { method: "POST", body: { mediaId: a.mediaId, run: runId, index } }).then(costed),
                       save: async v => {
                         const r = await api("/api/chaoticum/index/diigo-image", { method: "POST", body: { mediaId: a.mediaId, ...v } });
                         x.analysis = { ...a, ...r.analysis };
@@ -253,7 +264,7 @@ export function openScreenEditor(opts) {
                 el("button", { type: "button", className: "ed-btn", textContent: "Corriger l'index", onclick: () => box.replaceChildren(body()[0], indexForm({
                   toast, onClose: show,
                   fields: [{ key: "title", label: "Titre", value: x.title }, { key: "keywords", label: "Mots-clés (séparés par ;)", value: x.keywords, list: true }, { key: "description", label: "Description", value: x.description, rows: 6 }],
-                  analyze: () => api("/api/chaoticum/index/slide/analyze", { method: "POST", body: { key: x.key } }),
+                  analyze: () => api("/api/chaoticum/index/slide/analyze", { method: "POST", body: { key: x.key, run: runId, index } }).then(costed),
                   save: async v => {
                     const r = await api("/api/chaoticum/index/slide", { method: "POST", body: { key: x.key, ...v } });
                     Object.assign(x, { title: r.entry.title, keywords: r.entry.keywords, description: r.entry.description, docId: r.entry.docId, indexedAt: r.entry.indexedAt, editedAt: r.entry.editedAt });
@@ -284,7 +295,7 @@ export function openScreenEditor(opts) {
       const info = el("span", { className: "ed-help" });
       const regen = el("button", { type: "button", className: "ed-btn", textContent: "Proposer une autre question (Albert)", onclick: async () => {
         regen.disabled = true; info.textContent = "Proposition en cours…";
-        try { const r = await api("/api/chaoticum/partition/regenerate", { method: "POST", body: { run: runId, index, what: "question", hint: hint.value } }); I.text.value = r.question.text; I.intention.value = r.question.intention; upd(); info.textContent = `Proposition (non enregistrée) · ${r.tokens} tokens · ${Number(r.impact.energyWh).toLocaleString("fr-FR", { maximumFractionDigits: 3 })} Wh`; }
+        try { const r = costed(await api("/api/chaoticum/partition/regenerate", { method: "POST", body: { run: runId, index, what: "question", hint: hint.value } })); I.text.value = r.question.text; I.intention.value = r.question.intention; upd(); info.textContent = `Proposition (non enregistrée) · ${costLabel(r)}`; }
         catch (e) { info.textContent = e.message; } finally { regen.disabled = false; }
       } });
       return [el("div", { className: "ed-field wide" }, el("label", { textContent: "Question" }), I.text, count), field("Intention", I.intention, true),
@@ -340,10 +351,10 @@ export function openScreenEditor(opts) {
       const regen = el("button", { type: "button", className: "ed-btn", textContent: "Proposer un autre diagramme (Albert)", onclick: async () => {
         regen.disabled = true; info.textContent = "Proposition en cours…";
         try {
-          const r = await api("/api/chaoticum/partition/regenerate", { method: "POST", body: { run: runId, index, what: "diagramme", hint: hint.value } });
+          const r = costed(await api("/api/chaoticum/partition/regenerate", { method: "POST", body: { run: runId, index, what: "diagramme", hint: hint.value } }));
           I.title.value = r.diagramme.title; I.code.value = r.diagramme.mermaid;
           const p = parseMermaid(r.diagramme.mermaid); if (p) { state.graph = p; state.mode = "code"; setMode("visuel"); } else setMode("code");
-          info.textContent = `Proposition (non enregistrée) · ${r.tokens} tokens · ${Number(r.impact.energyWh).toLocaleString("fr-FR", { maximumFractionDigits: 3 })} Wh`;
+          info.textContent = `Proposition (non enregistrée) · ${costLabel(r)}`;
         } catch (e) { info.textContent = e.message; } finally { regen.disabled = false; }
       } });
       setTimeout(() => setMode(state.mode));

@@ -15,6 +15,10 @@ import { diigoMediaImages, diigoPageImages } from "../lib/chaoticum/diigoMedia";
 import { analyzeSlide, correctSlide } from "../lib/chaoticum/index/slidesIndex";
 import { analyzeDiigoImage, correctDiigoImage, QuotaError } from "../lib/chaoticum/index/diigoIndex";
 import { regenerate } from "../lib/chaoticum/regenerate";
+import { retime, spreadDuration, type EditCost } from "../lib/chaoticum/partition";
+import { captureUsage, type UsageSummary } from "../lib/metrics/usage";
+import { estimateImpact } from "../lib/metrics/impact";
+import { workflowConfig } from "../config";
 import { createAuth } from "./auth";
 import { createLive } from "./liveRoutes";
 
@@ -69,7 +73,7 @@ export function chaoticumRoutes(ctx: Ctx): Record<string, Handler> {
     return fs.readdirSync(base()).flatMap(id => {
       try {
         const p = JSON.parse(fs.readFileSync(path.join(base(), id, "partition.json"), "utf-8"));
-        return [{ runId: p.runId ?? id, title: p.title, createdAt: p.createdAt, status: p.status, screens: p.screens?.length ?? 0, durationSeconds: p.durationSeconds, seed: p.seed, configItemId: p.configItemId ?? null, tokens: p.tokens ?? null, impact: p.impact ?? null, source: "local" }];
+        return [{ runId: p.runId ?? id, title: p.title, createdAt: p.createdAt, status: p.status, screens: p.screens?.length ?? 0, durationSeconds: p.durationSeconds, seed: p.seed, configItemId: p.configItemId ?? null, tokens: p.tokens ?? null, impact: p.impact ?? null, editCost: p.editCost ?? null, source: "local" }];
       } catch { return []; }
     });
   }
@@ -85,7 +89,7 @@ export function chaoticumRoutes(ctx: Ctx): Record<string, Handler> {
         if (config.workflowId !== ctx.config().workflowId) continue;
         let data: any = null;
         try { data = JSON.parse(val(it, "curation:data") ?? "null"); } catch { /* pas de consommation */ }
-        list.push({ runId: val(it, "dcterms:identifier") ?? `omeka-${it["o:id"]}`, title: config.title, createdAt: val(it, "curation:dateStart") ?? val(it, "dcterms:date"), status: val(it, "curation:status") ?? "inconnu", screens: config.screens, durationSeconds: (config.durationMinutes ?? 0) * 60, seed: config.seed, configItemId: it["o:id"], tokens: data?.tokens ?? null, impact: data?.impact ?? null, source: "omeka" });
+        list.push({ runId: val(it, "dcterms:identifier") ?? `omeka-${it["o:id"]}`, title: config.title, createdAt: val(it, "curation:dateStart") ?? val(it, "dcterms:date"), status: val(it, "curation:status") ?? "inconnu", screens: config.screens, durationSeconds: (config.durationMinutes ?? 0) * 60, seed: config.seed, configItemId: it["o:id"], tokens: data?.tokens ?? null, impact: data?.impact ?? null, editCost: data?.edition ?? null, source: "omeka" });
       }
       return { list };
     } catch (e) {
@@ -178,9 +182,7 @@ export function chaoticumRoutes(ctx: Ctx): Record<string, Handler> {
     }
     if (s.type === "question" && ch.question) { s.question = { text: str(ch.question.text, 600), intention: str(ch.question.intention, 1000) }; changed.push("question"); }
     if (s.type === "diagramme" && ch.diagramme) { s.diagramme = { title: str(ch.diagramme.title, 300), mermaid: str(ch.diagramme.mermaid, 20000) }; changed.push("diagramme"); }
-    let start = 0;
-    for (const x of p.screens) { x.start = start; start += x.duration; }
-    p.durationSeconds = start;
+    p.durationSeconds = retime(p.screens);
     p.modifiedAt = new Date().toISOString();
     (p.edits ??= []).push({ at: p.modifiedAt, index, changed });
     return changed;
@@ -242,11 +244,87 @@ export function chaoticumRoutes(ctx: Ctx): Record<string, Handler> {
       const to = Math.max(0, Math.min(n - 1, Number(opts.to)));
       p.screens.splice(to, 0, ...p.screens.splice(index, 1));
     } else throw new Error(`Opération inconnue : ${op}`);
-    let start = 0;
-    p.screens.forEach((x: any, i: number) => { x.index = i; x.start = start; start += x.duration; });
-    p.durationSeconds = start;
+    p.durationSeconds = retime(p.screens);
     p.modifiedAt = new Date().toISOString();
     (p.edits ??= []).push({ at: p.modifiedAt, op, index });
+  }
+
+  // réglages de la partition : durée totale, formulaire Grist ; recalcul du déroulé (durées et débuts des écrans)
+  // mode « proportionnel » : chaque écran garde sa part de la durée actuelle (modifications manuelles comprises) ;
+  // mode « poids » : durées réparties selon les poids des types d'écran de la configuration, comme à la génération
+  function applySettings(p: any, o: { durationMinutes?: unknown; formUrl?: unknown; responsesUrl?: unknown; recompute?: unknown }) {
+    const changed: string[] = [];
+    const url = (v: unknown, label: string) => {
+      const u = str(v, 1000).trim();
+      if (u && !/^https?:\/\/[^\s]+$/.test(u)) throw new Error(`${label} : adresse http(s) attendue`);
+      return u;
+    };
+    const grist = { ...ctx.config().grist, ...(p.grist ?? {}) };
+    if (o.formUrl !== undefined && url(o.formUrl, "Formulaire Grist") !== grist.formUrl) { grist.formUrl = url(o.formUrl, "Formulaire Grist"); changed.push("formulaire Grist"); }
+    if (o.responsesUrl !== undefined && url(o.responsesUrl, "Table des réponses") !== grist.responsesUrl) { grist.responsesUrl = url(o.responsesUrl, "Table des réponses"); changed.push("table des réponses"); }
+    p.grist = grist;
+    const current = retime(p.screens);
+    let total = current;
+    if (o.durationMinutes !== undefined && o.durationMinutes !== null && o.durationMinutes !== "") {
+      const minutes = Number(o.durationMinutes);
+      if (!Number.isFinite(minutes) || minutes <= 0 || minutes > 24 * 60) throw new Error("Durée totale invalide (minutes, de 0 à 1440)");
+      total = Math.round(minutes * 60);
+    }
+    if (total < 5 * p.screens.length) throw new Error(`Durée trop courte : ${p.screens.length} écran(s) de 5 s au moins`);
+    const mode = o.recompute === "poids" ? "poids" : o.recompute === "proportionnel" || total !== current ? "proportionnel" : null;
+    if (mode) {
+      const weights = mode === "poids"
+        ? p.screens.map((x: any) => Math.max(0.1, Number((ctx.config().weights as Record<string, number>)[x.type]) || 1))
+        : p.screens.map((x: any) => Math.max(1, Number(x.duration) || 1));
+      spreadDuration(weights, total).forEach((d, i) => { p.screens[i].duration = d; });
+      changed.push(`déroulé recalculé (${mode === "poids" ? "poids des types" : "proportionnel"})`);
+    }
+    p.durationSeconds = retime(p.screens);
+    if (!changed.length) return changed;
+    p.modifiedAt = new Date().toISOString();
+    (p.edits ??= []).push({ at: p.modifiedAt, op: "settings", changed });
+    return changed;
+  }
+
+  // ==========================================
+  // Coût des traitements IA de l'éditeur : cumulé par écran et pour la partition (ajouté au coût de la génération)
+  // ==========================================
+
+  const addCost = (a: EditCost | undefined, b: Omit<EditCost, "treatments">): EditCost => ({
+    treatments: (a?.treatments ?? 0) + 1, tokens: (a?.tokens ?? 0) + b.tokens, energyWh: (a?.energyWh ?? 0) + b.energyWh, co2g: (a?.co2g ?? 0) + b.co2g,
+    electricityCost: (a?.electricityCost ?? 0) + b.electricityCost, apiCost: (a?.apiCost ?? 0) + b.apiCost, currency: b.currency,
+  });
+
+  // coût d'un traitement (consommation mesurée par captureUsage), enregistré si la partition et l'écran sont connus :
+  // archive locale, et coût cumulé dans curation:data (« edition ») de l'item de la partition dans Omeka S
+  async function recordEditCost(runId: unknown, index: unknown, what: string, usage: UsageSummary) {
+    const impact = estimateImpact(usage, workflowConfig.costs);
+    const cost = { tokens: usage.totalTokens, energyWh: impact.energyWh, co2g: impact.co2g, electricityCost: impact.electricityCost, apiCost: impact.apiCost, currency: impact.currency };
+    const i = Number(index);
+    if (!validId(typeof runId === "string" ? runId : null) || !Number.isInteger(i) || !usage.calls) return { cost, recorded: false };
+    try {
+      const p = await readPartition(runId as string);
+      const s = p.screens?.[i];
+      if (!s) return { cost, recorded: false };
+      s.editCost = addCost(s.editCost, cost);
+      p.editCost = addCost(p.editCost, cost);
+      (p.editCosts ??= []).push({ at: new Date().toISOString(), index: i, what, ...cost });
+      fs.mkdirSync(partDir(p.runId), { recursive: true });
+      fs.writeFileSync(path.join(partDir(p.runId), "partition.json"), JSON.stringify(p, null, 2));
+      try {
+        const omk = await ctx.serverOmk();
+        const item = p.configItemId ? await omk.request(omk.url(`items/${p.configItemId}`)) : (await omk.searchItemsByProp("dcterms:identifier", p.runId))[0];
+        if (item && omk.getPropByTerm("curation:data")) {
+          let data: any = {};
+          try { data = JSON.parse(val(item, "curation:data") ?? "{}"); } catch { /* données illisibles */ }
+          await omk.updateResource(item["o:id"], { "curation:data": JSON.stringify({ ...data, edition: p.editCost }) }, "items", "PATCH", item);
+        }
+      } catch (e) { console.warn("⚠️ Coût de l'éditeur non enregistré dans Omeka S :", (e as Error).message); }
+      return { cost, recorded: true, screenCost: s.editCost, partitionCost: p.editCost };
+    } catch (e) {
+      console.warn("⚠️ Coût de l'éditeur non enregistré :", (e as Error).message);
+      return { cost, recorded: false };
+    }
   }
 
   async function savePartition(p: any) {
@@ -510,19 +588,40 @@ export function chaoticumRoutes(ctx: Ctx): Record<string, Handler> {
     },
 
     // nouvelle proposition de question ou de diagramme pour un écran (non enregistrée : l'animateur valide)
+    // le coût de la proposition est enregistré pour l'écran (même si l'animateur ne la retient pas)
     "POST /api/chaoticum/partition/regenerate": async (req, res) => {
       const { run: runId, index, what, hint } = await ctx.readBody(req);
       if (!validId(runId) || !["question", "diagramme"].includes(what)) return ctx.sendJson(res, 400, { error: "Demande invalide" });
-      try { ctx.sendJson(res, 200, await regenerate(await readPartition(runId), Number(index), what, ctx.config(), str(hint, 300))); }
+      try {
+        const p = await readPartition(runId);
+        const { result, usage } = await captureUsage(() => regenerate(p, Number(index), what, ctx.config(), str(hint, 300)));
+        const c = await recordEditCost(runId, index, `Nouvelle proposition : ${what}`, usage);
+        ctx.sendJson(res, 200, { ...result, tokens: usage.totalTokens, impact: c.cost, ...c });
+      }
       catch (e) { ctx.sendJson(res, 502, { error: (e as Error).message }); }
+    },
+
+    // réglages de la partition (durée totale, formulaire Grist) et recalcul du déroulé
+    "POST /api/chaoticum/partition/settings": async (req, res) => {
+      const { run: runId, ...o } = await ctx.readBody(req);
+      if (!validId(runId)) return ctx.sendJson(res, 400, { error: "Partition invalide" });
+      try {
+        const p = await readPartition(runId);
+        const changed = applySettings(p, o);
+        ctx.sendJson(res, 200, { partition: p, changed, omeka: changed.length ? await savePartition(p) : null });
+      } catch (e) { ctx.sendJson(res, 400, { error: (e as Error).message }); }
     },
 
     // ---------- correction des index depuis l'éditeur d'écran (diapos, images Diigo) et mise à jour du RAG ----------
     // erreur d'analyse : quota quotidien d'Albert expliqué
     // nouvelle analyse par le modèle de vision : proposition à relire, non enregistrée
     "POST /api/chaoticum/index/slide/analyze": async (req, res) => {
-      const { key } = await ctx.readBody(req);
-      try { ctx.sendJson(res, 200, await analyzeSlide(ctx.config(), String(key ?? ""))); }
+      const { key, run: runId, index } = await ctx.readBody(req);
+      try {
+        const { result, usage } = await captureUsage(() => analyzeSlide(ctx.config(), String(key ?? "")));
+        const c = await recordEditCost(runId, index, "Nouvelle analyse d'une diapo (vision)", usage);
+        ctx.sendJson(res, 200, { ...result, tokens: usage.totalTokens, impact: c.cost, ...c });
+      }
       catch (e) { visionError(res, e); }
     },
     // description corrigée : index local et document Albert remplacés
@@ -535,8 +634,12 @@ export function chaoticumRoutes(ctx: Ctx): Record<string, Handler> {
       } catch (e) { ctx.sendJson(res, 502, { error: (e as Error).message }); }
     },
     "POST /api/chaoticum/index/diigo-image/analyze": async (req, res) => {
-      const { mediaId } = await ctx.readBody(req);
-      try { ctx.sendJson(res, 200, await analyzeDiigoImage(ctx.config(), Number(mediaId))); }
+      const { mediaId, run: runId, index } = await ctx.readBody(req);
+      try {
+        const { result, usage } = await captureUsage(() => analyzeDiigoImage(ctx.config(), Number(mediaId)));
+        const c = await recordEditCost(runId, index, "Nouvelle analyse d'une image (vision)", usage);
+        ctx.sendJson(res, 200, { ...result, tokens: usage.totalTokens, impact: c.cost, ...c });
+      }
       catch (e) { visionError(res, e); }
     },
     // analyse corrigée d'une image : cache des analyses et document de sa page dans Albert

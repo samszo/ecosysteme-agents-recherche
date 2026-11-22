@@ -434,6 +434,17 @@ Une fois la partition créée, chaque écran peut être modifié à la main avec
 
 Une nouvelle proposition d'Albert n'est enregistrée qu'après **Enregistrer l'écran** ; son coût s'affiche. La partition modifiée est enregistrée localement et remplace la précédente dans Omeka S (avec les nouvelles copies d'écran).
 
+**Coût des traitements IA de l'éditeur.** Chaque appel à Albert lancé depuis l'éditeur pour un écran — nouvelle question, nouveau diagramme, nouvelle analyse d'une diapo ou d'une image par le modèle de vision — est compté **dès qu'il a lieu**, que la proposition soit retenue ou non (raccourcissement de la question compris). Son coût (tokens, énergie, équivalent API) s'ajoute à la colonne **Coût IA** de l'écran dans le déroulé, dont la ligne **Total** distingue le coût de la génération, celui de l'éditeur et leur somme. Dans la liste des partitions, les colonnes **Coût génération**, **Coût éditeur IA** et **Coût total** les reprennent ; la colonne **Tokens** donne le total. Le coût de l'éditeur est aussi enregistré dans Omeka S (item de la partition, `curation:data`, clé `edition`).
+
+### Réglages de la partition et recalcul du déroulé
+
+Au-dessus du déroulé d'une partition ouverte (**Partitions et séances › Séances**), **Réglages de la partition** permet de modifier :
+
+- la **durée totale** (minutes) : une nouvelle durée **recalcule le déroulé** (durées et débuts de tous les écrans), après confirmation ;
+- le **lien du formulaire Grist** affiché en QR code sur les écrans de contributions, et la **table des réponses** lue pendant la séance (à changer avec le formulaire s'il écrit ailleurs).
+
+**Recalculer le déroulé** redistribue la durée totale sans la changer, selon le mode choisi : **proportionnel aux durées actuelles** (chaque écran garde sa part, durées modifiées à la main comprises) ou **selon les poids des types d'écran** (poids de l'onglet Partition, comme à la génération). Chaque écran garde au moins 5 s ; l'arrondi est reporté sur le dernier. **Enregistrer les réglages** enregistre la partition localement et dans Omeka S ; les séances suivantes utilisent ces réglages.
+
 ### Jouer la partition (lecteur)
 
 Dans l'onglet **Partitions et séances**, **Jouer** ouvre le lecteur dans un nouvel onglet (à passer en plein écran sur l'écran de projection).

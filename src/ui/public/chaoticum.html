@@ -58,6 +58,7 @@
   table.data th { text-align: left; font-size: 12px; color: var(--muted); font-weight: 600; padding: 6px 8px; border-bottom: 1px solid var(--line); }
   table.data td { padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
   table.data td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  table.data tfoot td { font-weight: 600; border-bottom: none; }
   .table-wrap { overflow-x: auto; }
   .pattern { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
   .pattern select { width: auto; }
@@ -273,7 +274,15 @@
     <section class="card hidden" id="p-detail">
       <h2 id="p-detail-title"></h2>
       <div class="toolbar" id="p-detail-actions"></div>
-      <h2 style="margin-top:8px">Déroulé</h2>
+      <h2 style="margin-top:8px">Réglages de la partition</h2>
+      <div class="grid" id="p-settings">
+        <div class="field"><label for="ps-duration">Durée totale (minutes)</label><input id="ps-duration" type="number" min="1" step="0.5"><span class="help">Une nouvelle durée recalcule le déroulé.</span></div>
+        <div class="field"><label for="ps-mode">Recalcul du déroulé</label><select id="ps-mode"><option value="proportionnel">proportionnel aux durées actuelles</option><option value="poids">selon les poids des types d'écran</option></select><span class="help">Proportionnel : chaque écran garde sa part (modifications comprises). Poids : répartition de l'onglet Partition.</span></div>
+        <div class="field wide"><label for="ps-form">Lien du formulaire Grist</label><input id="ps-form" type="url" placeholder="https://…/forms/…"><span class="help">Affiché en QR code sur les écrans de contributions.</span></div>
+        <div class="field wide"><label for="ps-responses">Table des réponses Grist</label><input id="ps-responses" type="url" placeholder="https://… (table lue pendant la séance)"><span class="help">À changer avec le formulaire s'il écrit dans une autre table.</span></div>
+        <div class="field wide"><div class="toolbar" style="margin:0"><button id="ps-save" class="btn primary">Enregistrer les réglages</button><button id="ps-recompute" class="btn">Recalculer le déroulé</button><span id="ps-info" class="muted" style="font-size:13px"></span></div></div>
+      </div>
+      <h2 style="margin-top:16px">Déroulé</h2>
       <p class="lead">Chaque écran peut être modifié avec des outils adaptés à son type (recherche dans les index, navigation dans les diapos, éditeur de diagramme, nouvelle proposition par Albert), et la partition réorganisée (insérer, dupliquer, déplacer, supprimer) ; elle est enregistrée localement et dans Omeka S.</p>
       <div id="p-steps" class="muted"></div>
       <section class="card hidden" id="step-editor" style="margin-top:12px;border-color:var(--accent)"></section>
@@ -584,6 +593,15 @@ $("#btn-stop").onclick = async () => { if (confirm("Arrêter la génération en 
 // Partitions et séances
 // ==========================================
 let partitionsLoaded = false, partitions = [], omekaAdmin = "";
+// coût (tokens, énergie, équivalent API) : génération, traitements IA de l'éditeur, total
+const costCell = c => c ? `${Number(c.energyWh).toLocaleString("fr-FR", { maximumFractionDigits: 2 })} Wh · ${Number(c.apiCost).toLocaleString("fr-FR", { maximumFractionDigits: 4 })} ${c.currency}` : "—";
+const sumCost = (...list) => {
+  const l = list.filter(Boolean);
+  if (!l.length) return null;
+  const t = k => l.reduce((n, c) => n + (Number(c[k]) || 0), 0);
+  return { energyWh: t("energyWh"), co2g: t("co2g"), apiCost: t("apiCost"), currency: l[0].currency };
+};
+const totalTokens = p => (p.tokens?.total ?? 0) + (p.editCost?.tokens ?? 0);
 async function loadPartitions(force = false) {
   if (partitionsLoaded && !force) return;
   const box = $("#partitions");
@@ -596,15 +614,17 @@ async function loadPartitions(force = false) {
   if (!partitions.length) { box.textContent = "Aucune partition : régler l'onglet Partition puis « Enregistrer et générer »."; return; }
   box.className = "";
   box.replaceChildren(el("div", { className: "table-wrap" }, el("table", { className: "data" },
-    el("thead", {}, el("tr", {}, ["Date", "Titre", "Écrans", "Durée", "Statut", "Tokens", "Coût estimé", "Source", ""].map(h => el("th", { textContent: h })))),
+    el("thead", {}, el("tr", {}, ["Date", "Titre", "Écrans", "Durée", "Statut", "Tokens", "Coût génération", "Coût éditeur IA", "Coût total", "Source", ""].map(h => el("th", { textContent: h })))),
     el("tbody", {}, partitions.map(p => el("tr", {},
       el("td", { textContent: p.createdAt ? new Date(p.createdAt).toLocaleString("fr-FR") : "—" }),
       el("td", { textContent: p.title ?? "—", title: `graine ${p.seed ?? "?"}` }),
       el("td", { className: "num", textContent: p.screens ?? "—" }),
       el("td", { className: "num", textContent: p.durationSeconds ? mmss(p.durationSeconds) : "—" }),
       el("td", {}, el("span", { className: `badge ${p.status === "success" ? "success" : p.status === "running" ? "running" : "failed"}`, textContent: STATUS_TEXT[p.status] ?? p.status })),
-      el("td", { className: "num", textContent: p.tokens?.total?.toLocaleString("fr-FR") ?? "—" }),
-      el("td", { className: "num", textContent: p.impact ? `${Number(p.impact.energyWh).toLocaleString("fr-FR", { maximumFractionDigits: 2 })} Wh · ${Number(p.impact.apiCost).toLocaleString("fr-FR", { maximumFractionDigits: 4 })} ${p.impact.currency}` : "—" }),
+      el("td", { className: "num", textContent: p.tokens || p.editCost ? totalTokens(p).toLocaleString("fr-FR") : "—" }),
+      el("td", { className: "num", textContent: costCell(p.impact) }),
+      el("td", { className: "num", textContent: p.editCost ? costCell(p.editCost) : "—", title: p.editCost ? `${p.editCost.treatments} traitement(s), ${p.editCost.tokens.toLocaleString("fr-FR")} tokens` : "" }),
+      el("td", { className: "num", textContent: costCell(sumCost(p.impact, p.editCost)) }),
       el("td", {}, p.source.includes("local") ? "locale" : "", p.source === "local+omeka" ? " · " : "", p.configItemId && omekaAdmin ? el("a", { href: omekaAdmin + p.configItemId, target: "_blank", textContent: "Omeka S", style: "color:var(--accent)" }) : ""),
       el("td", { style: "min-width:170px" },
         el("a", { className: "btn primary", href: `/jouer?run=${encodeURIComponent(p.runId)}`, target: "_blank", textContent: "Jouer", style: "margin:0 4px 4px 0" }),
@@ -626,7 +646,7 @@ function askDelete(p, tr) {
       loadPartitions(true);
     } catch (e) { toast("Suppression impossible : " + e.message); }
   };
-  tr.after(el("tr", { id: "delete-row" }, el("td", { colSpan: 9 }, el("div", { className: "toolbar", style: "margin:4px 0" },
+  tr.after(el("tr", { id: "delete-row" }, el("td", { colSpan: 11 }, el("div", { className: "toolbar", style: "margin:4px 0" },
     el("span", { textContent: `Supprimer « ${label} » :` }),
     p.source.includes("local") ? el("button", { className: "btn danger", textContent: "de l'archive locale seulement", onclick: () => run(false) }) : null,
     p.source.includes("omeka") || p.configItemId ? el("button", { className: "btn danger", textContent: "localement et dans Omeka S (avec ses séances)", onclick: () => run(true) }) : null,
@@ -661,16 +681,54 @@ function renderSteps() {
   const p = detailPartition;
   $("#p-steps").className = "";
   $("#p-steps").replaceChildren(el("div", { className: "table-wrap" }, el("table", { className: "data" },
-    el("thead", {}, el("tr", {}, ["#", "Début", "Durée", "Type", "Contenu", ""].map(h => el("th", { textContent: h })))),
+    el("thead", {}, el("tr", {}, ["#", "Début", "Durée", "Type", "Contenu", "Coût IA", ""].map(h => el("th", { textContent: h })))),
     el("tbody", {}, p.screens.map(s => el("tr", {},
       el("td", { className: "num", textContent: s.index + 1 }),
       el("td", { className: "num", textContent: mmss(s.start) }),
       el("td", { className: "num", textContent: mmss(s.duration) }),
       el("td", {}, el("i", { className: "sw", style: `background:${typeColor(s.type)};margin-right:6px` }), LABELS[s.type] ?? s.type),
       el("td", { textContent: summaryOf(s) }),
-      el("td", {}, el("button", { className: "btn", textContent: "Modifier", onclick: () => editStep(s.index) }))))))),
+      el("td", { className: "num", textContent: s.editCost ? costCell(s.editCost) : "—", title: s.editCost ? `${s.editCost.treatments} traitement(s) IA, ${s.editCost.tokens.toLocaleString("fr-FR")} tokens` : "" }),
+      el("td", {}, el("button", { className: "btn", textContent: "Modifier", onclick: () => editStep(s.index) }))))),
+    el("tfoot", {}, el("tr", {},
+      el("td", { colSpan: 2, textContent: "Total" }),
+      el("td", { className: "num", textContent: mmss(p.durationSeconds) }),
+      el("td", { colSpan: 2, className: "muted", textContent: `génération ${costCell(p.impact)} · éditeur IA ${p.editCost ? `${costCell(p.editCost)} (${p.editCost.treatments} traitement(s))` : "—"}` }),
+      el("td", { className: "num", textContent: costCell(sumCost(p.impact, p.editCost)), title: `${totalTokens(p).toLocaleString("fr-FR")} tokens au total` }),
+      el("td", {}))))),
     ...(p.modifiedAt ? [el("p", { className: "help", textContent: `Modifiée le ${new Date(p.modifiedAt).toLocaleString("fr-FR")} · durée totale ${mmss(p.durationSeconds)}` })] : []));
+  renderPartitionSettings();
 }
+// réglages de la partition ouverte : durée totale, formulaire Grist, recalcul du déroulé
+function renderPartitionSettings() {
+  const p = detailPartition;
+  // valeur affichée (arrondie) : la durée n'est envoyée que si elle a été modifiée
+  $("#ps-duration").value = $("#ps-duration").dataset.shown = String(Math.round((p.durationSeconds / 60) * 10) / 10);
+  $("#ps-form").value = p.grist?.formUrl ?? "";
+  $("#ps-responses").value = p.grist?.responsesUrl ?? "";
+}
+async function savePartitionSettings(recompute) {
+  const p = detailPartition;
+  if (!p) return;
+  const durationChanged = $("#ps-duration").value !== $("#ps-duration").dataset.shown;
+  const minutes = Number($("#ps-duration").value);
+  if (durationChanged && !(minutes > 0)) return toast("Durée totale invalide");
+  const seconds = durationChanged ? Math.round(minutes * 60) : p.durationSeconds;
+  if ((durationChanged || recompute) && !confirm(`Recalculer le déroulé (${$("#ps-mode").selectedOptions[0].textContent}) pour une durée totale de ${mmss(seconds)} ? Les durées des ${p.screens.length} écrans seront remplacées.`)) return;
+  $("#ps-info").textContent = "Enregistrement…";
+  try {
+    const r = await api("/api/chaoticum/partition/settings", { method: "POST", body: {
+      run: p.runId, durationMinutes: durationChanged ? minutes : undefined, formUrl: $("#ps-form").value.trim(), responsesUrl: $("#ps-responses").value.trim(),
+      recompute: durationChanged || recompute ? $("#ps-mode").value : undefined } });
+    detailPartition = r.partition;
+    renderSteps();
+    $("#ps-info").textContent = r.changed.length ? `Enregistré : ${r.changed.join(", ")}${r.omeka === "ok" ? " (et dans Omeka S)" : r.omeka ? ` — Omeka S : ${r.omeka}` : ""}` : "Aucun changement.";
+    if (r.changed.length) { partitionsLoaded = false; loadPartitions(true); }
+  } catch (e) { $("#ps-info").textContent = ""; toast("Réglages non enregistrés : " + e.message); }
+}
+$("#ps-save").onclick = () => savePartitionSettings(false);
+$("#ps-recompute").onclick = () => savePartitionSettings(true);
+
 // éditeur d'écran (module partagé avec le lecteur) : outils propres à chaque type, structure de la partition
 let editorMod = null, editor = null;
 async function editStep(index) {
@@ -681,6 +739,8 @@ async function editStep(index) {
   editor = editorMod.openScreenEditor({
     container: box, runId: detailRun, partition: detailPartition, index, toast,
     onSaved: (p, i) => { detailPartition = p; renderSteps(); },
+    // coût d'un traitement IA : colonne Coût IA, total, et ligne de la partition dans la liste
+    onCost: p => { detailPartition = p; renderSteps(); const row = partitions.find(x => x.runId === p.runId); if (row) { row.editCost = p.editCost; partitionsLoaded = false; } },
     onClose: () => { box.classList.add("hidden"); editor = null; },
   });
   box.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -710,6 +770,7 @@ async function openPartition(p) {
   detailRun = p.runId;
   $("#step-editor").classList.add("hidden");
   $("#p-steps").textContent = "Chargement…";
+  $("#ps-info").textContent = "";
   api(`/api/chaoticum/partition?run=${encodeURIComponent(p.runId)}`).then(x => { detailPartition = x; renderSteps(); }).catch(e => { $("#p-steps").textContent = `Partition indisponible : ${e.message}`; });
   $("#p-detail").classList.remove("hidden");
   $("#p-detail-title").textContent = `${p.title} · ${new Date(p.createdAt).toLocaleString("fr-FR")}`;

@@ -69,6 +69,30 @@
         "ui:chaoticum"
       ],
       "port": 7277
+    },
+    {
+      "name": "ui-mailbot",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "ui:mailbot"
+      ],
+      "port": 7278
+    },
+    {
+      "name": "ui-mailbot-test",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "MAILBOT_PORT=7279",
+        "MAILBOT_URL=http://127.0.0.1:7279",
+        "PORT=7274",
+        "EXPLO_PORT=7275",
+        "CHAOTICUM_PORT=7277",
+        "npm",
+        "run",
+        "ui:mailbot"
+      ],
+      "port": 7279
     }
   ]
 }

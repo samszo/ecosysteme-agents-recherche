@@ -18,7 +18,7 @@ export function appendUsageHistory(app: string, usage: UsageSummary, task: strin
 }
 
 // rapports d'exécution : application d'après le nom du fichier
-const REPORTS: Record<string, string> = { "rapport_traitement.md": "paper", "rapport_explo.md": "explo", "rapport_chaoticum.md": "chaoticum" };
+const REPORTS: Record<string, string> = { "rapport_traitement.md": "paper", "rapport_explo.md": "explo", "rapport_chaoticum.md": "chaoticum", "rapport_mailbot.md": "mailbot" };
 
 function reportRuns(dir: string, depth = 0): UsageRun[] {
   if (depth > 4 || !fs.existsSync(dir)) return [];

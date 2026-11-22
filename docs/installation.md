@@ -1,6 +1,6 @@
 # Documentation d'installation
 
-Ce guide explique comment installer l'écosystème d'agents et ses trois applications, l'**Atelier d'articles** (réponse à un appel à propositions, port 7272), **exploZoteroAnno** (annotation collective, port 7273) et **chaoticumSeminario** (partition de conférence, port 7276), soit **en local avec Node.js**, soit **dans un conteneur Docker**, puis comment préparer les trois services dont il dépend : l'API **Albert**, **Zotero** et **Omeka S**. Pour débuter rapidement, une **instance Omeka S préparée** (application et base de données) est fournie, et la section 8 décrit l'installation complète sur un **serveur Debian / Apache / Let's Encrypt**.
+Ce guide explique comment installer l'écosystème d'agents et ses quatre applications, l'**Atelier d'articles** (réponse à un appel à propositions, port 7272), **exploZoteroAnno** (annotation collective, port 7273), **chaoticumSeminario** (partition de conférence, port 7276) et **mailbot** (correspondance argumentée avec un chercheur, port 7278), soit **en local avec Node.js**, soit **dans un conteneur Docker**, puis comment préparer les trois services dont il dépend : l'API **Albert**, **Zotero** et **Omeka S**. Pour débuter rapidement, une **instance Omeka S préparée** (application et base de données) est fournie, et la section 8 décrit l'installation complète sur un **serveur Debian / Apache / Let's Encrypt**.
 
 ```mermaid
 flowchart TD
@@ -16,7 +16,7 @@ flowchart TD
     P --> S[Sécuriser : nouveau compte,<br/>nouvelle clé, compte de démo supprimé]
     S --> H
     G --> H[Préparer Zotero<br/>clé API, bibliothèque de groupe]
-    H --> I[Ouvrir les interfaces<br/>Atelier 127.0.0.1:7272<br/>exploZoteroAnno 127.0.0.1:7273<br/>chaoticumSeminario 127.0.0.1:7276]
+    H --> I[Ouvrir les interfaces<br/>Atelier 127.0.0.1:7272<br/>exploZoteroAnno 127.0.0.1:7273<br/>chaoticumSeminario 127.0.0.1:7276<br/>mailbot 127.0.0.1:7278]
     I --> J[Tester les connexions]
     J -- toutes vertes --> K([Prêt : lancer un traitement])
     J -- erreur --> L[Voir la section Dépannage]
@@ -56,8 +56,12 @@ Le fichier `.env` contient les accès aux services. Un modèle est fourni dans `
 | `HOST`, `EXPLO_HOST` | non | Adresse d'écoute de chaque serveur (`127.0.0.1` par défaut) |
 | `PAPER_URL`, `EXPLO_URL` | non | Adresses publiques des deux applications, pour les liens entre elles (derrière un proxy) |
 | `WORKFLOW_APP` | non | Application servie par `src/ui/server.ts` sans argument : `paper` (défaut) ou `explo` (utilisé par Docker) |
-| `EXPLO_ENV_FILE`, `CHAOTICUM_ENV_FILE` | non | Fichiers de connexions propres à exploZoteroAnno (`.env.explo`) et chaoticumSeminario (`.env.chaoticum`) |
-| `WORKFLOW_CONFIG_FILE`, `EXPLO_CONFIG_FILE`, `CHAOTICUM_CONFIG_FILE` | non | Fichiers de configuration de chaque application (`workflow.config.json`, `explo.config.json`, `chaoticum.config.json`) |
+| `MAILBOT_PORT`, `MAILBOT_HOST`, `MAILBOT_URL` | non | Port (7278 par défaut), adresse d'écoute et adresse publique de mailbot (lien de la notification des brouillons) |
+| `HISTORY_<PROFIL>_IMAP_HOST`, `_PORT`, `_SECURE`, `_USER`, `_PASSWORD` | mailbot | Boîte « historique » du chercheur de chaque profil (ex. `HISTORY_PRINCIPAL_IMAP_HOST`), lue sans modification (993 et TLS par défaut ; Gmail : mot de passe d'application obligatoire) |
+| `BOT_IMAP_HOST`, `BOT_IMAP_PORT`, `BOT_IMAP_SECURE`, `BOT_IMAP_USER`, `BOT_IMAP_PASSWORD` | mailbot | Boîte du mailbot (identifiant et mot de passe repris du SMTP s'ils sont vides) |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASSWORD`, `MAIL_FROM`, `MAIL_FROM_NAME` | mailbot | Envoi des mails du mailbot (465 et TLS par défaut, 587 avec STARTTLS ; identifiant et mot de passe repris de la boîte du mailbot s'ils sont vides) |
+| `EXPLO_ENV_FILE`, `CHAOTICUM_ENV_FILE`, `MAILBOT_ENV_FILE` | non | Fichiers de connexions propres à exploZoteroAnno (`.env.explo`), chaoticumSeminario (`.env.chaoticum`) et mailbot (`.env.mailbot`) |
+| `WORKFLOW_CONFIG_FILE`, `EXPLO_CONFIG_FILE`, `CHAOTICUM_CONFIG_FILE`, `MAILBOT_CONFIG_FILE` | non | Fichiers de configuration de chaque application (`workflow.config.json`, `explo.config.json`, `chaoticum.config.json`, `mailbot.config.json`) |
 | `WORKFLOW_HISTORY_FILE` | non | Historique des exécutions de l'Atelier (`workflow.history.json`) |
 
 Chaque application a **son propre serveur**, avec son port, sa configuration et son traitement en cours : les deux peuvent traiter en même temps. exploZoteroAnno lit `.env`, **surchargé par `.env.explo`** (nom modifiable par `EXPLO_ENV_FILE`) : on peut ainsi lui donner d'autres connexions (par exemple une autre bibliothèque de groupe Zotero ou une autre instance Omeka S). Sa page *Paramètres* n'écrit dans `.env.explo` que les valeurs qui diffèrent de `.env` ; les autres restent « héritées ».
@@ -75,6 +79,7 @@ npm run ui              # Atelier d'articles : http://127.0.0.1:7272
 npm run ui:explo        # exploZoteroAnno (autre terminal) : http://127.0.0.1:7273
 npx playwright install chromium   # une fois : navigateur des copies d'écran (chaoticumSeminario)
 npm run ui:chaoticum    # chaoticumSeminario (autre terminal) : http://127.0.0.1:7276
+npm run ui:mailbot      # mailbot (autre terminal) : http://127.0.0.1:7278
 ```
 
 Commandes disponibles :
@@ -86,6 +91,8 @@ Commandes disponibles :
 | `npm run ui:chaoticum` | Serveur de chaoticumSeminario (port `CHAOTICUM_PORT`, 7276) : configuration, génération, lecteur de partition |
 | `npm run chaoticum` | Génère une partition chaoticumSeminario en ligne de commande |
 | `npm run chaoticum:index -- diapos` (ou `bibliotheque`, `tout`) | Indexe les diapos ou la bibliothèque dans les collections RAG Albert de chaoticumSeminario (incrémental) |
+| `npm run ui:mailbot` | Serveur de mailbot (port `MAILBOT_PORT`, 7278) : brouillons, archives, **planification** (doit rester démarré) |
+| `npm run mailbot` (`-- envoi`) | Synchronisation de mailbot en ligne de commande (avec `envoi` : puis mail planifié) |
 | `npm start` | Lance le workflow de l'Atelier d'articles en ligne de commande avec la configuration enregistrée |
 | `npm run explo` | Lance le workflow exploZoteroAnno (annotation collective) en ligne de commande |
 | `npm run docs` | Régénère la documentation HTML (`docs/html/`) à partir des fichiers markdown |
@@ -95,12 +102,12 @@ Les fichiers produits sont écrits dans `resultats/atelier/` (AttenduAPP, PropAP
 
 Fichiers de données de chaque application (répertoire courant en local, `data/` avec Docker) :
 
-| | Atelier d'articles | exploZoteroAnno | chaoticumSeminario |
+| | Atelier d'articles | exploZoteroAnno | chaoticumSeminario | mailbot |
 |---|---|---|---|
-| Connexions | `.env` | `.env`, surchargé par `.env.explo` | `.env`, surchargé par `.env.chaoticum` |
-| Configuration | `workflow.config.json` | `explo.config.json` | `chaoticum.config.json` |
-| Historique | `workflow.history.json` | `resultats/explo/analyses/` et configurations dans Omeka S | partitions et séances dans `resultats/chaoticum/partitions/` et Omeka S |
-| Résultats | `resultats/atelier/` | `resultats/explo/` | `resultats/chaoticum/partitions/<partition>/` |
+| Connexions | `.env` | `.env`, surchargé par `.env.explo` | `.env`, surchargé par `.env.chaoticum` | `.env`, surchargé par `.env.mailbot` |
+| Configuration | `workflow.config.json` | `explo.config.json` | `chaoticum.config.json` | `mailbot.config.json` |
+| Historique | `workflow.history.json` | `resultats/explo/analyses/` et configurations dans Omeka S | partitions et séances dans `resultats/chaoticum/partitions/` et Omeka S | `resultats/mailbot/executions/`, `messages.json`, `brouillons/`, `planification.json` et Omeka S |
+| Résultats | `resultats/atelier/` | `resultats/explo/` | `resultats/chaoticum/partitions/<partition>/` | `resultats/mailbot/` (pièces jointes dans `pieces/`) |
 | Appels importés | `aap/` | — | — |
 
 ### Déboguer avec Visual Studio Code
@@ -114,6 +121,7 @@ Le fichier `.vscode/launch.json` fournit des configurations de débogage (*Exéc
 | *Interface : Atelier d'articles (7282)* | serveur de l'Atelier **et** workflow lancé depuis l'interface (processus enfant suivi par `autoAttachChildProcesses`) |
 | *Interface : exploZoteroAnno (7283)* | idem pour exploZoteroAnno |
 | *Workflow : chaoticumSeminario*, *Interface : chaoticumSeminario (7286)* | idem pour chaoticumSeminario |
+| *Workflow : mailbot*, *Interface : mailbot (7288)* | idem pour mailbot |
 | *Interfaces : les trois applications* | les trois serveurs en même temps, liens entre eux fonctionnels |
 | *Fichier courant (tsx)* | le fichier `.ts` ouvert dans l'éditeur |
 
@@ -121,13 +129,14 @@ Les interfaces de débogage écoutent sur 7282, 7283 et 7286 pour ne pas entrer 
 
 ## 4. Installation Docker
 
-L'image contient le code dans `/app` ; les **données** (`.env`, `.env.explo`, `.env.chaoticum`, fichiers de configuration, historique, résultats, partitions, fichiers d'appels importés) sont dans le volume `/data`, monté depuis le dossier `data/` du projet. L'image contient aussi Chromium (Playwright, dans `/ms-playwright`) pour les copies d'écran de chaoticumSeminario. `docker-compose.yml` démarre **trois services** à partir de la même image, un par application (variable `WORKFLOW_APP`) :
+L'image contient le code dans `/app` ; les **données** (`.env`, `.env.explo`, `.env.chaoticum`, `.env.mailbot`, fichiers de configuration, historique, résultats, partitions, fichiers d'appels importés) sont dans le volume `/data`, monté depuis le dossier `data/` du projet. L'image contient aussi Chromium (Playwright, dans `/ms-playwright`) pour les copies d'écran de chaoticumSeminario. `docker-compose.yml` démarre **quatre services** à partir de la même image, un par application (variable `WORKFLOW_APP`) :
 
 | Service | Conteneur | Application | Adresse |
 |---|---|---|---|
 | `workflow` | `ecosysteme-agents-recherche` | Atelier d'articles (`WORKFLOW_APP=paper`) | http://127.0.0.1:7272 |
 | `explo` | `ecosysteme-agents-recherche-explo` | exploZoteroAnno (`WORKFLOW_APP=explo`) | http://127.0.0.1:7273 |
 | `chaoticum` | `ecosysteme-agents-recherche-chaoticum` | chaoticumSeminario (`WORKFLOW_APP=chaoticum`) | http://127.0.0.1:7276 |
+| `mailbot` | `ecosysteme-agents-recherche-mailbot` | mailbot (`WORKFLOW_APP=mailbot`), avec sa planification | http://127.0.0.1:7278 |
 
 ```mermaid
 flowchart LR
@@ -158,11 +167,11 @@ flowchart LR
 ```bash
 mkdir -p data
 cp .env.example data/.env      # puis renseigner les valeurs
-docker compose up -d --build   # construit l'image et démarre les trois interfaces
+docker compose up -d --build   # construit l'image et démarre les quatre interfaces
 docker compose logs -f         # suivre le démarrage
 ```
 
-L'Atelier d'articles est disponible sur http://127.0.0.1:7272, exploZoteroAnno sur http://127.0.0.1:7273 et chaoticumSeminario sur http://127.0.0.1:7276 (les ports ne sont publiés que sur la machine hôte). Pour ne démarrer qu'une application : `docker compose up -d workflow` (ou `explo`, `chaoticum`).
+L'Atelier d'articles est disponible sur http://127.0.0.1:7272, exploZoteroAnno sur http://127.0.0.1:7273 chaoticumSeminario sur http://127.0.0.1:7276 et mailbot sur http://127.0.0.1:7278 (les ports ne sont publiés que sur la machine hôte). Pour ne démarrer qu'une application : `docker compose up -d workflow` (ou `explo`, `chaoticum`, `mailbot`).
 
 Le conteneur démarre en root le temps de vérifier le volume : si le dossier `data/` ou ses fichiers n'appartiennent pas à l'utilisateur `node` du conteneur (uid 1000), c'est le cas quand ils ont été créés par root sur un serveur Linux, leur propriétaire est rétabli (`🔧 Droits du volume /data attribués à l'utilisateur node` dans le journal). L'interface et le workflow s'exécutent ensuite sans les droits root. Sur l'hôte, `data/` appartient donc à l'uid 1000 : l'éditer avec `sudo` ou avec l'utilisateur d'uid 1000.
 
@@ -172,7 +181,8 @@ Autres commandes utiles :
 docker compose exec workflow workflow        # workflow de l'Atelier en ligne de commande dans le conteneur
 docker compose exec explo workflow-explo     # workflow exploZoteroAnno en ligne de commande
 docker compose exec chaoticum workflow-chaoticum  # génération d'une partition en ligne de commande
-docker compose restart                       # redémarrer les trois services (après une modification du .env)
+docker compose exec mailbot workflow-mailbot      # synchronisation mailbot en ligne de commande (envoi : puis mail planifié)
+docker compose restart                       # redémarrer les quatre services (après une modification du .env)
 docker compose restart explo                 # redémarrer un seul service
 docker compose down                          # arrêter
 docker compose build --no-cache              # reconstruire après une mise à jour du code

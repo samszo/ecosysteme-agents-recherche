@@ -11,14 +11,15 @@ npm ci                    # Node.js 22+ ; Playwright (chaoticum) : npx playwrigh
 npm run ui                # Atelier d'articles  http://127.0.0.1:7272
 npm run ui:explo          # exploZoteroAnno     http://127.0.0.1:7273
 npm run ui:chaoticum      # chaoticumSeminario  http://127.0.0.1:7276
-npm start | npm run explo | npm run chaoticum   # workflows en ligne de commande (configuration enregistrée)
+npm run ui:mailbot        # mailbot             http://127.0.0.1:7278
+npm start | npm run explo | npm run chaoticum | npm run mailbot   # workflows en ligne de commande (configuration enregistrée)
 npm run docs              # docs/*.md → docs/html/*.html (servi sur /docs/)
 npm run docs:captures     # copies d'écran du guide (docs/img/*.png), serveurs lancés
 docker compose up -d --build   # un service par application, volume ./data
 ```
 
 - Exécution par **tsx**, pas de build. Il n'y a **pas de suite de tests** (`npm test` échoue volontairement).
-- `tsc --noEmit` signale des erreurs connues (CommonJS + `verbatimModuleSyntax`, types Mastra) : ne pas chercher à les corriger toutes, ne pas s'en servir comme critère de validation. Vérifier plutôt en lançant le serveur (`.claude/launch.json` : configurations `ui`, `ui-explo`, `ui-chaoticum` et variantes `-test` sur d'autres ports) et en exerçant les routes.
+- `tsc --noEmit` signale des erreurs connues (CommonJS + `verbatimModuleSyntax`, types Mastra) : ne pas chercher à les corriger toutes, ne pas s'en servir comme critère de validation. Vérifier plutôt en lançant le serveur (`.claude/launch.json` : configurations `ui`, `ui-explo`, `ui-chaoticum`, `ui-mailbot` et variantes `-test` sur d'autres ports) et en exerçant les routes.
 - Secrets dans `.env` (+ `.env.<app>` qui le surcharge). Ne jamais les committer ni les afficher. Les fichiers `*.config.json`, `agents.config.json`, `resultats/`, `data/` sont des données locales ignorées par git.
 
 ## Applications existantes
@@ -28,8 +29,9 @@ docker compose up -d --build   # un service par application, volume ./data
 | `paper` | `academic-paper-factory` | `src/workflow/paperProductionWorkflow.ts` | `src/runners/paper.ts` | `src/config/index.ts` → `workflow.config.json` | `paper.html` | `PORT` 7272 |
 | `explo` | `explo-zotero-anno` | `src/workflow/exploWorkflow.ts` | `src/runners/explo.ts` | `src/config/explo.ts` → `explo.config.json` | `explo.html` | `EXPLO_PORT` 7273 |
 | `chaoticum` | `chaoticum-seminario` | `src/workflow/chaoticumWorkflow.ts` | `src/runners/chaoticum.ts` | `src/config/chaoticum.ts` → `chaoticum.config.json` | `chaoticum.html`, `jouer.html` | `CHAOTICUM_PORT` 7276 |
+| `mailbot` | `mailbot` | `src/workflow/mailbotWorkflow.ts` | `src/runners/mailbot.ts` | `src/config/mailbot.ts` → `mailbot.config.json` | `mailbot.html` | `MAILBOT_PORT` 7278 |
 
-Prochain port libre : **7278** (7274/7275/7277 servent aux variantes de test, 728x au débogage VS Code).
+Prochain port libre : **7280** (7274/7275/7277/7279 servent aux variantes de test, 728x au débogage VS Code).
 
 ## Architecture (à respecter)
 

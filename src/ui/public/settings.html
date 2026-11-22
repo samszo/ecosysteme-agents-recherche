@@ -12,6 +12,7 @@
   }
   :root[data-app="explo"] { --accent: #6a4c93; }
   :root[data-app="chaoticum"] { --accent: #a23b62; }
+  :root[data-app="mailbot"] { --accent: #1f7a6d; }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
       --bg: #15171b; --panel: #1d2026; --ink: #e8e9ec; --muted: #9aa0aa; --line: #2e323a;
@@ -19,6 +20,7 @@
     }
     :root[data-app="explo"]:not([data-theme="light"]) { --accent: #b39ddb; --accent-ink: #1a1326; }
     :root[data-app="chaoticum"]:not([data-theme="light"]) { --accent: #e48bad; --accent-ink: #2a0f1a; }
+    :root[data-app="mailbot"]:not([data-theme="light"]) { --accent: #6fcdbd; --accent-ink: #0d2420; }
   }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
@@ -171,8 +173,8 @@ $("#btn-check").onclick = async () => {
   try {
     await save(true);
     const r = await api("/api/check", { method: "POST" });
-    const names = { albert: "Albert", zotero: "Zotero", omeka: "Omeka S" };
-    box.replaceChildren(...Object.entries(r).map(([k, v]) => el("div", {}, el("span", { className: v.ok ? "ok" : "ko", textContent: v.ok ? "✓ " : "✗ " }), el("strong", { textContent: names[k] + " : " }), v.message)));
+    const names = { albert: "Albert", zotero: "Zotero", omeka: "Omeka S", imapBot: "Boîte du mailbot (IMAP)", smtp: "Boîte du mailbot (SMTP)" };
+    box.replaceChildren(...Object.entries(r).map(([k, v]) => el("div", {}, el("span", { className: v.ok ? "ok" : "ko", textContent: v.ok ? "✓ " : "✗ " }), el("strong", { textContent: (v.label ?? names[k] ?? k) + " : " }), v.message)));
   } catch (e) { box.textContent = "Erreur : " + e.message; }
 };
 

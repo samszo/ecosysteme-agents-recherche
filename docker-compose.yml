@@ -1,5 +1,6 @@
-# Trois applications, trois serveurs (même image) :
+# Quatre applications, quatre serveurs (même image) :
 #   Atelier d'articles : http://127.0.0.1:7272   exploZoteroAnno : http://127.0.0.1:7273   chaoticumSeminario : http://127.0.0.1:7276
+#   mailbot : http://127.0.0.1:7278
 # Lancement : docker compose up -d
 x-common: &common
   build: .
@@ -43,3 +44,14 @@ services:
       CHAOTICUM_PORT: 7276
     ports:
       - "127.0.0.1:7276:7276"
+
+  # mailbot : le serveur porte la planification (synchronisation, mails planifiés) ; il doit rester démarré
+  mailbot:
+    <<: *common
+    container_name: ecosysteme-agents-recherche-mailbot
+    environment:
+      WORKFLOW_APP: mailbot
+      HOST: 0.0.0.0
+      MAILBOT_PORT: 7278
+    ports:
+      - "127.0.0.1:7278:7278"

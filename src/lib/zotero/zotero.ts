@@ -1,4 +1,5 @@
 // Client minimal pour l'API web de Zotero (v3)
+import crypto from "crypto";
 import type { PdfAnnotation } from "../extraction/pdfExtract";
 import { htmlToText } from "../extraction/attachmentExtract";
 import { workflowConfig } from "../../config";
@@ -119,6 +120,64 @@ export class Zotero {
   async file(key: string): Promise<Buffer> {
     const res = await this.get(`${this.prefix}/items/${key}/file`);
     return Buffer.from(await res.arrayBuffer());
+  }
+
+  // ==========================================
+  // Écriture (clé API avec droit d'écriture) : collections, notices, fichiers joints
+  // ==========================================
+
+  private async write(endpoint: string, body: unknown): Promise<any> {
+    const res = await fetch(`${this.prefix}${endpoint}`, {
+      method: "POST",
+      headers: { ...this.headers, "Content-Type": "application/json", "Zotero-Write-Token": crypto.randomBytes(16).toString("hex") },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) throw new Error(`Zotero ${res.status} sur ${endpoint} : ${(await res.text()).slice(0, 300)}`);
+    const data: any = await res.json();
+    const failed = Object.values(data.failed ?? {}) as any[];
+    if (failed.length) throw new Error(`Zotero a refusé l'écriture : ${failed.map(f => f.message).join(" ; ")}`);
+    return data;
+  }
+
+  // crée une collection et renvoie sa clé
+  async createCollection(name: string, parentCollection?: string): Promise<string> {
+    const data = await this.write("/collections", [{ name, ...(parentCollection ? { parentCollection } : {}) }]);
+    return data.successful["0"].key;
+  }
+
+  // crée des notices (50 au plus par requête) et renvoie leurs clés dans l'ordre
+  async createItems(items: any[]): Promise<string[]> {
+    const keys: string[] = [];
+    for (let i = 0; i < items.length; i += 50) {
+      const data = await this.write("/items", items.slice(i, i + 50));
+      const ok = data.successful ?? {};
+      keys.push(...items.slice(i, i + 50).map((_, j) => ok[String(j)]?.key ?? ""));
+    }
+    return keys;
+  }
+
+  // pièce jointe (fichier importé) : notice « attachment » puis dépôt du fichier (protocole d'upload de l'API v3)
+  async uploadAttachment(o: { buffer: Buffer; fileName: string; contentType: string; parentItem?: string; collection?: string; tags?: string[]; title?: string }): Promise<string> {
+    const [key] = await this.createItems([{
+      itemType: "attachment", linkMode: "imported_file", title: o.title ?? o.fileName, contentType: o.contentType, filename: o.fileName, charset: "",
+      tags: (o.tags ?? []).map(tag => ({ tag })),
+      ...(o.parentItem ? { parentItem: o.parentItem } : o.collection ? { collections: [o.collection] } : {}),
+    }]);
+    if (!key) throw new Error(`Zotero : notice de la pièce jointe ${o.fileName} non créée`);
+    const form = { ...this.headers, "Content-Type": "application/x-www-form-urlencoded", "If-None-Match": "*" };
+    const md5 = crypto.createHash("md5").update(o.buffer).digest("hex");
+    const auth = await fetch(`${this.prefix}/items/${key}/file`, {
+      method: "POST", headers: form,
+      body: new URLSearchParams({ md5, filename: o.fileName, filesize: String(o.buffer.length), mtime: String(Date.now()) }),
+    });
+    if (!auth.ok) throw new Error(`Zotero ${auth.status} (autorisation du dépôt de ${o.fileName}) : ${(await auth.text()).slice(0, 300)}`);
+    const a: any = await auth.json();
+    if (a.exists) return key;
+    const up = await fetch(a.url, { method: "POST", headers: { "Content-Type": a.contentType }, body: Buffer.concat([Buffer.from(a.prefix), o.buffer, Buffer.from(a.suffix)]) });
+    if (!up.ok) throw new Error(`Zotero : dépôt du fichier ${o.fileName} refusé (${up.status})`);
+    const reg = await fetch(`${this.prefix}/items/${key}/file`, { method: "POST", headers: form, body: new URLSearchParams({ upload: a.uploadKey }) });
+    if (!reg.ok) throw new Error(`Zotero ${reg.status} (enregistrement du fichier ${o.fileName}) : ${(await reg.text()).slice(0, 300)}`);
+    return key;
   }
 
   // notes enfants d'un item Zotero, converties en annotations (type "Note")

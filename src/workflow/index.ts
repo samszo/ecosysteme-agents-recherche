@@ -2,3 +2,4 @@
 export { paperProductionWorkflow } from "./paperProductionWorkflow";
 export { exploWorkflow } from "./exploWorkflow";
 export { chaoticumWorkflow } from "./chaoticumWorkflow";
+export { mailbotWorkflow } from "./mailbotWorkflow";

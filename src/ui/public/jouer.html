@@ -57,6 +57,8 @@
   .qr { background: #fff; padding: 10px; border-radius: 10px; width: 100%; max-width: 280px; aspect-ratio: 1; }
   .qr svg { width: 100%; height: 100%; display: block; }
   .form-link { font-size: 12px; color: var(--muted); word-break: break-all; }
+  a.form-link { display: block; color: var(--accent); text-decoration: none; }
+  a.form-link:hover { text-decoration: underline; }
   .contribs { overflow: auto; flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 6px; }
   .contribs .c { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; font-size: 13px; }
   .contribs .c.on { border-color: var(--t-contribution); }
@@ -85,6 +87,9 @@
   .qr-corner { position: absolute; right: 14px; bottom: 14px; z-index: 5; background: #fff; color: #111; border-radius: 10px; padding: 6px 6px 4px; width: 128px; text-align: center; font-size: 11px; font-weight: 600; box-shadow: 0 4px 16px rgba(0,0,0,.35); cursor: pointer; }
   .qr-corner svg { width: 100%; height: auto; display: block; }
   .qr-corner.small { width: 64px; font-size: 0; padding: 4px; }
+  .qr-corner .follow-link { display: block; margin-top: 3px; color: #1a4fd6; font-size: 9px; font-weight: 500; word-break: break-all; text-decoration: none; }
+  .qr-corner .follow-link:hover { text-decoration: underline; }
+  .qr-corner.small .follow-link { display: none; }
   .zoom-wrap { position: relative; overflow: hidden; cursor: grab; touch-action: none; height: 68cqh; user-select: none; -webkit-user-select: none; }
   .zoom-wrap.dragging { cursor: grabbing; }
   .zoom-inner { transform-origin: 0 0; display: inline-block; }
@@ -142,7 +147,7 @@
   .person .live-dot.off { background: var(--warn); }
   .person details { margin-top: 6px; }
   .person summary { cursor: pointer; font-size: 13px; color: var(--muted); }
-  .share-box { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin: 6px 0 12px; font-size: 13px; }
+  .share-box { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; flex-wrap: wrap; margin: 6px 0 12px; font-size: 13px; }
   .share-box .qr-mini { background: #fff; border-radius: 8px; padding: 6px; width: 120px; }
   .share-box a { color: var(--accent); word-break: break-all; }
   .hidden { display: none !important; }
@@ -540,7 +545,7 @@ function contributionLayout() {
     el("div", { className: "contrib-side" },
       // rejeu : la séance est terminée, on ne peut plus participer
       REPLAY ? el("div", { className: "form-link", style: "font-size:14px", textContent: "Séance terminée : rejeu en lecture seule des contributions reçues pendant la séance." }) : el("div", { className: "qr", innerHTML: qrSvg(P.grist.formUrl) }),
-      REPLAY ? null : el("div", { className: "form-link", textContent: P.grist.formUrl }),
+      REPLAY ? null : el("a", { className: "form-link", href: P.grist.formUrl, target: "_blank", rel: "noopener", textContent: P.grist.formUrl }),
       P.screens[current].contribution?.instruction ? el("div", { className: "instruction", textContent: P.screens[current].contribution.instruction }) : null,
       el("div", { className: "contribs", id: "contribs" })),
     el("div", { className: "contrib-main", id: "contrib-main" }));
@@ -1286,10 +1291,15 @@ function renderAnnotationsPanel() {
     list.length ? el("div", { className: "panel-list" }, list.map(a => annRow(a))) : null].filter(Boolean));
 }
 
+// adresse publique de suivi de la séance : CHAOTICUM_URL configurée, sauf si elle est locale
+function followUrl() {
+  const base = publicBase && !/\/\/(127\.|localhost|\[::1\])/.test(publicBase) ? publicBase : location.origin;
+  return `${base.replace(/\/$/, "")}/public/suivre?run=${encodeURIComponent(runId)}`;
+}
+
 // personnes connectées (présentateur) : compte, écran consulté, suivi du direct, annotations
 function renderPeoplePanel() {
-  const base = publicBase && !/\/\/(127\.|localhost|\[::1\])/.test(publicBase) ? publicBase : location.origin;
-  const url = `${base.replace(/\/$/, "")}/public/suivre?run=${encodeURIComponent(runId)}`;
+  const url = followUrl();
   const PROVIDERS = { cas: "CAS", google: "Google", github: "GitHub", local: "compte local" };
   const all = annotationList();
   $("#drawer").replaceChildren(...[
@@ -1419,7 +1429,8 @@ async function load() {
   document.title = `${P.title} – lecteur`;
   $("#title").textContent = P.title;
   if (!REPLAY) {
-    $("#qr-corner").replaceChildren(el("div", { innerHTML: qrSvg(P.grist?.formUrl) }), el("div", { textContent: "Participer" }));
+    $("#qr-corner").replaceChildren(el("div", { innerHTML: qrSvg(P.grist?.formUrl) }), el("div", { textContent: "Participer" }),
+      el("a", { className: "follow-link", href: P.grist?.formUrl ?? "#", target: "_blank", rel: "noopener", textContent: (P.grist?.formUrl ?? "").replace(/^https?:\/\//, ""), title: "Formulaire de participation", onclick: e => e.stopPropagation() }));
     $("#qr-corner").onclick = () => $("#qr-corner").classList.toggle("small");
   } else $("#qr-corner")?.remove();
   $("#progress").replaceChildren(...P.screens.map((s, i) => el("span", { style: `background:var(--t-${s.type});flex:${s.duration}`, title: `${i + 1}. ${LABELS[s.type]} (${mmss(s.duration)})`, onclick: () => go(i) })));
@@ -1446,6 +1457,9 @@ async function load() {
   }
   sttCfg = { ...sttCfg, ...(await api("/api/chaoticum/transcription").catch(() => ({}))) };
   ({ grid = [], publicBase = "" } = await api("/api/chaoticum/live/info").catch(() => ({})));
+  // coin « Participer » : lien vers l'adresse publique de la séance, sous le QR code du formulaire
+  const follow = followUrl();
+  $("#qr-corner")?.append(el("div", { className: "follow-link", style: "color:#111;margin-top:5px", textContent: "Suivre la séance" }), el("a", { className: "follow-link", href: follow, target: "_blank", rel: "noopener", textContent: follow.replace(/^https?:\/\//, ""), title: "Suivre la séance sur un autre appareil (connexion requise)", onclick: e => e.stopPropagation() }));
   $("#b-ink").classList.toggle("on", inkShown());
   presenterEvents();
   $("#b-cc").classList.toggle("on", captionsOn());

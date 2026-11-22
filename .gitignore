@@ -3,6 +3,7 @@ node_modules
 .env
 .env.explo
 .env.chaoticum
+.env.mailbot
 # données et résultats (volume Docker, lancements locaux)
 data/
 aap/
@@ -10,6 +11,7 @@ resultats/
 workflow.config.json
 explo.config.json
 chaoticum.config.json
+mailbot.config.json
 agents.config.json
 workflow.history.json
 # système

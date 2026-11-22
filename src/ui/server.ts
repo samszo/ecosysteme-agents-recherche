@@ -2,6 +2,8 @@
 // Un serveur par application, chacun avec son port, ses connexions, sa configuration et son traitement en cours :
 //   npm run ui          → Atelier d'articles (academic-paper-factory), http://127.0.0.1:PORT (7272)
 //   npm run ui:explo    → exploZoteroAnno, http://127.0.0.1:EXPLO_PORT (7273)
+//   npm run ui:chaoticum → chaoticumSeminario, http://127.0.0.1:CHAOTICUM_PORT (7276)
+//   npm run ui:mailbot  → mailbot, http://127.0.0.1:MAILBOT_PORT (7278)
 import http from "http";
 import fs from "fs";
 import path from "path";
@@ -11,6 +13,10 @@ import { defaultWorkflowConfig } from "../config";
 import { defaultExploConfig, EXPLO_CONFIG_FILE, RUNS_DIR } from "../config/explo";
 import { defaultChaoticumConfig, CHAOTICUM_CONFIG_FILE } from "../config/chaoticum";
 import { chaoticumRoutes } from "./chaoticumRoutes";
+import { addressList, defaultMailbotConfig, historyEnvPrefix, normalizeMailbotConfig, MAILBOT_CONFIG_FILE } from "../config/mailbot";
+import { mailbotRoutes } from "./mailbotRoutes";
+import { checkImap, historyBox } from "../lib/mail/imap";
+import { checkSmtp } from "../lib/mail/smtp";
 import { buildGuide } from "../workflow/reports/annotationGuide";
 import { tensionMatrix } from "../lib/analysis/colorTension";
 import { AGENTS, DIAGRAMS, type AgentInfo } from "../workflow/diagrams";
@@ -36,6 +42,7 @@ const TSX = path.join(APP_DIR, "node_modules", ".bin", "tsx");
 // ==========================================
 const EXPLO_ENV_FILE = process.env.EXPLO_ENV_FILE || ".env.explo";
 const CHAOTICUM_ENV_FILE = process.env.CHAOTICUM_ENV_FILE || ".env.chaoticum";
+const MAILBOT_ENV_FILE = process.env.MAILBOT_ENV_FILE || ".env.mailbot";
 const APPS = {
   paper: {
     label: "Atelier d'articles (academic-paper-factory)",
@@ -64,6 +71,15 @@ const APPS = {
     envFiles: [".env", CHAOTICUM_ENV_FILE],
     portKey: "CHAOTICUM_PORT", hostKey: "CHAOTICUM_HOST", defaultPort: 7276,
     urlKey: "CHAOTICUM_URL",
+  },
+  mailbot: {
+    label: "mailbot",
+    script: path.join(APP_DIR, "src", "runners", "mailbot.ts"),
+    page: "mailbot.html",
+    // .env.mailbot surcharge .env (boîte mail IMAP/SMTP, autres connexions propres)
+    envFiles: [".env", MAILBOT_ENV_FILE],
+    portKey: "MAILBOT_PORT", hostKey: "MAILBOT_HOST", defaultPort: 7278,
+    urlKey: "MAILBOT_URL",
   },
 } as const;
 type AppName = keyof typeof APPS;
@@ -100,9 +116,41 @@ const ENV_FIELDS = [
     { key: "CAS_LABEL", label: "Nom affiché du CAS", group: "Suivi de la présentation", help: "Texte du bouton « Se connecter avec … » (par défaut : Université Paris 8)." },
     { key: "AUTH_ALLOWED", label: "Comptes autorisés", group: "Suivi de la présentation", help: "Facultatif : adresses, domaines (@univ-paris8.fr) ou comptes GitHub (github:identifiant), séparés par des virgules. Vide : tout compte Google ou GitHub. Les comptes locaux sont toujours autorisés." },
   ] : []),
+  ...(APP === "mailbot" ? [
+    // boîte du mailbot : lecture (IMAP) et envoi (SMTP) avec le même compte
+    { key: "BOT_IMAP_HOST", label: "Serveur IMAP", group: "Boîte du mailbot", help: "Boîte propre au mailbot (ex. mail.infomaniak.com) : réponses des chercheurs et copies des envois." },
+    { key: "BOT_IMAP_PORT", label: "Port IMAP", group: "Boîte du mailbot", help: "993 par défaut (TLS) ; 143 avec STARTTLS." },
+    { key: "BOT_IMAP_SECURE", label: "IMAP chiffré (TLS)", group: "Boîte du mailbot", help: "Vide : TLS sur 993, STARTTLS sur 143." },
+    { key: "BOT_IMAP_USER", label: "Identifiant IMAP", group: "Boîte du mailbot", help: "Vide : identifiant SMTP." },
+    { key: "BOT_IMAP_PASSWORD", label: "Mot de passe IMAP", secret: true, group: "Boîte du mailbot", help: "Vide : mot de passe SMTP." },
+    { key: "SMTP_HOST", label: "Serveur SMTP", group: "Boîte du mailbot", help: "Envoi des réponses validées et des mails au groupe (ex. mail.infomaniak.com)." },
+    { key: "SMTP_PORT", label: "Port SMTP", group: "Boîte du mailbot", help: "465 par défaut (TLS) ; 587 avec STARTTLS. Ne pas reprendre le port IMAP (993)." },
+    { key: "SMTP_SECURE", label: "SMTP chiffré (TLS)", group: "Boîte du mailbot", help: "Vide : TLS sur le port 465, STARTTLS sinon." },
+    { key: "SMTP_USER", label: "Identifiant SMTP", group: "Boîte du mailbot", help: "Vide : identifiant IMAP du mailbot." },
+    { key: "SMTP_PASSWORD", label: "Mot de passe SMTP", secret: true, group: "Boîte du mailbot", help: "Vide : mot de passe IMAP du mailbot." },
+    { key: "MAIL_FROM", label: "Adresse d'expédition", group: "Boîte du mailbot", help: "Vide : identifiant SMTP." },
+    { key: "MAIL_FROM_NAME", label: "Nom de l'expéditeur", group: "Boîte du mailbot" },
+    { key: "MAILBOT_URL", label: "Adresse publique de mailbot", group: "Boîte du mailbot", help: "Lien vers l'onglet Brouillons dans la notification de l'administrateur (vide : adresse locale)." },
+  ] : []),
   { key: APP_DEF.portKey, label: "Port de cette interface", group: "Interface", help: `Pris en compte au prochain lancement du serveur (${APP_DEF.defaultPort} par défaut).` },
 ];
-const SECRET_KEYS = new Set(ENV_FIELDS.filter(f => f.secret).map(f => f.key));
+// mailbot : connexion de la boîte historique de chaque profil (HISTORY_<PROFIL>_IMAP_*), selon la configuration en vigueur
+// (un profil ajouté dans Réglages apparaît sur la page Paramètres sans redémarrer le serveur)
+function historyFields() {
+  return currentMailbotConfig().profiles.flatMap(p => {
+    const k = historyEnvPrefix(p.id);
+    const group = `Boîte historique « ${p.id} »${p.researcher.email ? ` (${p.researcher.email})` : ""}`;
+    return [
+      { key: `${k}HOST`, label: "Serveur IMAP", group, help: "Boîte du chercheur, lue sans modification (ex. imap.gmail.com, imap.univ-paris8.fr)." },
+      { key: `${k}PORT`, label: "Port IMAP", group, help: "993 par défaut (TLS) ; 143 avec STARTTLS." },
+      { key: `${k}SECURE`, label: "IMAP chiffré (TLS)", group, help: "Vide : TLS sur 993, STARTTLS sur 143." },
+      { key: `${k}USER`, label: "Identifiant", group, help: "Adresse complète." },
+      { key: `${k}PASSWORD`, label: "Mot de passe", secret: true, group, help: "Gmail : mot de passe d'application obligatoire (compte Google › Sécurité › Validation en deux étapes › Mots de passe des applications)." },
+    ];
+  });
+}
+// champs de connexion de ce serveur (ceux de mailbot dépendent des profils)
+const envFields = (): typeof ENV_FIELDS => (APP === "mailbot" ? [...historyFields(), ...ENV_FIELDS] : ENV_FIELDS);
 
 // ==========================================
 // .env et configuration
@@ -151,15 +199,17 @@ const currentExploConfig = () => mergeConfig(defaultExploConfig, readConfigOverr
 
 // configuration propre à l'application de ce serveur
 const currentChaoticumConfig = () => mergeConfig(defaultChaoticumConfig, readConfigOverride(CHAOTICUM_CONFIG_FILE));
+const currentMailbotConfig = () => normalizeMailbotConfig(mergeConfig(defaultMailbotConfig, readConfigOverride(MAILBOT_CONFIG_FILE)));
 const APP_CONFIG = ({
   paper: { current: currentConfig, defaults: defaultWorkflowConfig as any, file: CONFIG_FILE },
   explo: { current: currentExploConfig, defaults: defaultExploConfig as any, file: EXPLO_CONFIG_FILE },
   chaoticum: { current: currentChaoticumConfig, defaults: defaultChaoticumConfig as any, file: CHAOTICUM_CONFIG_FILE },
+  mailbot: { current: currentMailbotConfig, defaults: defaultMailbotConfig as any, file: MAILBOT_CONFIG_FILE },
 } as Record<AppName, { current: () => any; defaults: any; file: string }>)[APP];
 
 // adresses des applications (liens entre elles) : adresse publique si définie, sinon port local
 function appUrls() {
-  const env = Object.assign({}, ...[".env", EXPLO_ENV_FILE, CHAOTICUM_ENV_FILE].map(f => parseEnv(path.join(ROOT, f))));
+  const env = Object.assign({}, ...[".env", EXPLO_ENV_FILE, CHAOTICUM_ENV_FILE, MAILBOT_ENV_FILE].map(f => parseEnv(path.join(ROOT, f))));
   return Object.fromEntries((Object.keys(APPS) as AppName[]).map(a => {
     const d = APPS[a];
     return [a, { label: d.label, url: env[d.urlKey] || process.env[d.urlKey] || `http://127.0.0.1:${env[d.portKey] || d.defaultPort}` }];
@@ -176,6 +226,10 @@ const TASKS: Partial<Record<AppName, Record<string, { label: string; args: strin
     "index-diapos": { label: "Indexation des diapos", args: [path.join(APP_DIR, "src", "runners", "chaoticumIndex.ts"), "diapos"] },
     "index-bibliotheque": { label: "Indexation de la bibliothèque", args: [path.join(APP_DIR, "src", "runners", "chaoticumIndex.ts"), "bibliotheque"] },
     "index-diigo": { label: "Indexation des annotations Diigo", args: [path.join(APP_DIR, "src", "runners", "chaoticumIndex.ts"), "diigo"] },
+  },
+  // mail rédigé à l'initiative de mailbot (précédé d'une synchronisation) ; aussi lancé par la planification
+  mailbot: {
+    envoi: { label: "Synchronisation et mail planifié", args: [path.join(APP_DIR, "src", "runners", "mailbot.ts"), "envoi"] },
   },
 };
 
@@ -248,7 +302,7 @@ function startRun(app: AppName = APP, task?: string): Run {
 
 async function checkConnections() {
   const env = readEnv();
-  const result: Record<string, { ok: boolean; message: string }> = {};
+  const result: Record<string, { ok: boolean; message: string; label?: string }> = {};
 
   try {
     const res = await fetch(`${currentConfig().models.provider}/models`, { headers: { Authorization: `Bearer ${env.ALBERT_API_KEY}` } });
@@ -297,6 +351,20 @@ async function checkConnections() {
     };
   } catch (e) {
     result.omeka = { ok: false, message: (e as Error).message };
+  }
+
+  // mailbot : lecture des deux boîtes (messages avec les adresses suivies) et authentification SMTP, sans envoi
+  if (APP === "mailbot") {
+    const mc = currentMailbotConfig();
+    for (const p of mc.profiles) {
+      const label = `Boîte historique « ${p.id} » (IMAP)`;
+      try { result[`imapHistory-${p.id}`] = { ok: true, label, message: await checkImap(env, historyBox(p.id), addressList(p.recipients), p.folders) }; }
+      catch (e) { result[`imapHistory-${p.id}`] = { ok: false, label, message: (e as Error).message }; }
+    }
+    try { result.imapBot = { ok: true, message: await checkImap(env, "bot", addressList([...mc.bot.allowed, ...mc.bot.group]), mc.bot.folders) }; }
+    catch (e) { result.imapBot = { ok: false, message: (e as Error).message }; }
+    try { result.smtp = { ok: true, message: await checkSmtp(env) }; }
+    catch (e) { result.smtp = { ok: false, message: (e as Error).message }; }
   }
   return result;
 }
@@ -776,7 +844,8 @@ const routes: Record<string, (req: http.IncomingMessage, res: http.ServerRespons
     const overrides = readAgentOverrides();
     const wf = currentConfig();
     const chao = APP === "chaoticum" ? currentChaoticumConfig() : null;
-    const allModels = { analytique: chao?.models.analytics ?? wf.models.analytics, rapide: wf.models.fast, vision: chao?.models.vision ?? wf.models.fast };
+    const mail = APP === "mailbot" ? currentMailbotConfig() : null;
+    const allModels = { analytique: chao?.models.analytics ?? mail?.models.analytics ?? wf.models.analytics, rapide: wf.models.fast, vision: chao?.models.vision ?? wf.models.fast };
     // modèles utilisés par les agents et les étapes de ce workflow
     const roles = new Set([...ids.map(id => AGENTS[id]!.model), ...[...diagram.stages.flat(), ...diagram.outside].flatMap(s => (s.model ? [s.model] : []))]);
     const models = Object.fromEntries(Object.entries(allModels).filter(([role]) => roles.has(role as keyof typeof allModels)));
@@ -813,7 +882,8 @@ const routes: Record<string, (req: http.IncomingMessage, res: http.ServerRespons
     const a = agentDefaults(id);
     const chao = APP === "chaoticum" ? currentChaoticumConfig() : null;
     const wf = currentConfig();
-    const roleModel = { analytique: chao?.models.analytics ?? wf.models.analytics, rapide: wf.models.fast, vision: chao?.models.vision ?? wf.models.fast }[a.model];
+    const mail = APP === "mailbot" ? currentMailbotConfig() : null;
+    const roleModel = { analytique: chao?.models.analytics ?? mail?.models.analytics ?? wf.models.analytics, rapide: wf.models.fast, vision: chao?.models.vision ?? wf.models.fast }[a.model];
     const defModel = (id === "image-describer-agent" && chao?.diigo.visionModel) || roleModel;
     const kept = writeAgentOverride(id, reset ? {} : { instructions, prompt, model: String(model ?? "").trim() || undefined }, { instructions: a.instructions, prompt: a.prompt, model: defModel });
     sendJson(res, 200, { ok: true, modified: Object.keys(kept).length > 0 });
@@ -836,7 +906,7 @@ const routes: Record<string, (req: http.IncomingMessage, res: http.ServerRespons
     const own = parseEnv(ENV_FILE);
     sendJson(res, 200, {
       // inherited : valeur reprise du fichier commun (.env) et non définie dans le fichier de ce serveur
-      env: ENV_FIELDS.map(f => ({ ...f, value: f.secret ? "" : env[f.key] ?? "", isSet: !!env[f.key], inherited: ENV_PATHS.length > 1 && !(f.key in own) && !!env[f.key] })),
+      env: envFields().map(f => ({ ...f, value: f.secret ? "" : env[f.key] ?? "", isSet: !!env[f.key], inherited: ENV_PATHS.length > 1 && !(f.key in own) && !!env[f.key] })),
       envFile: path.relative(ROOT, ENV_FILE),
       config: APP_CONFIG.current(),
       defaults: APP_CONFIG.defaults,
@@ -848,10 +918,10 @@ const routes: Record<string, (req: http.IncomingMessage, res: http.ServerRespons
     const { env = {}, config } = await readBody(req);
     // un secret laissé vide n'est pas modifié ; clear:true l'efface
     const values: Record<string, string> = {};
-    for (const f of ENV_FIELDS) {
+    for (const f of envFields()) {
       const v = env[f.key];
       if (v === undefined) continue;
-      if (SECRET_KEYS.has(f.key) && v.value === "" && !v.clear) continue;
+      if (f.secret && v.value === "" && !v.clear) continue;
       values[f.key] = String(v.value ?? "").trim();
     }
     writeEnv(values);
@@ -1226,9 +1296,19 @@ const CHAOTICUM_ROUTES = chaoticumRoutes({
 });
 Object.assign(routes, CHAOTICUM_ROUTES);
 
+// mailbot : routes et planification dans un module dédié
+const MAILBOT = mailbotRoutes({
+  root: ROOT, readEnv, config: currentMailbotConfig, serverOmk, sendJson, readBody,
+  isRunning: () => run?.status === "running",
+  startRun: task => { startRun("mailbot", task); },
+});
+Object.assign(routes, MAILBOT.routes);
+if (APP === "mailbot") MAILBOT.startScheduler();
+
 // routes propres à une application (les autres sont communes à tous les serveurs)
 const APP_ONLY: Record<string, AppName> = {
   ...Object.fromEntries(Object.keys(CHAOTICUM_ROUTES).map(k => [k, "chaoticum" as AppName])),
+  ...Object.fromEntries(Object.keys(MAILBOT.routes).map(k => [k, "mailbot" as AppName])),
   "POST /api/cfp-file": "paper", "GET /api/results": "paper", "GET /api/history": "paper", "POST /api/history/delete": "paper", "GET /api/file": "paper",
   "GET /api/explo/settings": "explo", "POST /api/explo/settings": "explo", "POST /api/explo/guide": "explo",
   "POST /api/explo/tension": "explo", "GET /api/chaoticum/explo-grid": "chaoticum",

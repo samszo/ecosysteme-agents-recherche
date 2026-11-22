@@ -13,7 +13,9 @@
     "ui:explo": "tsx src/ui/server.ts explo",
     "chaoticum": "tsx src/runners/chaoticum.ts",
     "ui:chaoticum": "tsx src/ui/server.ts chaoticum",
-    "chaoticum:index": "tsx src/runners/chaoticumIndex.ts"
+    "chaoticum:index": "tsx src/runners/chaoticumIndex.ts",
+    "mailbot": "tsx src/runners/mailbot.ts",
+    "ui:mailbot": "tsx src/ui/server.ts mailbot"
   },
   "repository": {
     "type": "git",
@@ -32,13 +34,18 @@
     "@mastra/core": "^1.71.0",
     "ai": "^7.0.114",
     "dotenv": "^18.0.4",
+    "imapflow": "^2.12.2",
+    "mailparser": "^3.15.0",
+    "nodemailer": "^10.6.1",
     "pdf-parse": "^2.4.5",
     "pdfjs-dist": "^5.4.296",
     "playwright": "^1.63.0",
     "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@types/mailparser": "^3.9.0",
     "@types/node": "^26.6.3",
+    "@types/nodemailer": "^8.0.2",
     "@types/pdf-parse": "^1.1.5",
     "marked": "^15.0.12",
     "tsx": "^4.23.15",

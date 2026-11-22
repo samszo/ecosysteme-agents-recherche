@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>mailbot</title>
+<style>
+  :root {
+    --bg: #f5f6f4; --panel: #ffffff; --ink: #1d1f24; --muted: #6b6f78; --line: #e0e3df;
+    --accent: #1f7a6d; --accent-ink: #ffffff; --ok: #2e7d4f; --warn: #b26a00; --err: #b3261e;
+    --code-bg: #eef0ed; --shadow: 0 1px 2px rgba(0,0,0,.05), 0 4px 16px rgba(0,0,0,.04);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #141716; --panel: #1c201f; --ink: #e7eae8; --muted: #9aa3a0; --line: #2d3331;
+      --accent: #6fcdbd; --accent-ink: #0d2420; --ok: #6cc28f; --warn: #e0a64a; --err: #f08a80;
+      --code-bg: #101312; --shadow: none;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { position: sticky; top: 0; z-index: 5; background: var(--panel); border-bottom: 1px solid var(--line); }
+  .bar { max-width: 1180px; margin: 0 auto; padding: 12px 16px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  h1 { font-size: 17px; margin: 0; font-weight: 650; }
+  h1 small { color: var(--muted); font-weight: 400; margin-left: 6px; }
+  .spacer { flex: 1; }
+  header a { color: var(--accent); font-size: 14px; }
+  nav { max-width: 1180px; margin: 0 auto; padding: 0 16px; display: flex; gap: 4px; overflow-x: auto; }
+  nav button { background: none; border: 0; border-bottom: 2px solid transparent; padding: 8px 12px; color: var(--muted); font: inherit; cursor: pointer; white-space: nowrap; }
+  nav button.active { color: var(--ink); border-color: var(--accent); }
+  nav .count { display: inline-block; min-width: 18px; padding: 0 5px; margin-left: 4px; border-radius: 999px; background: var(--accent); color: var(--accent-ink); font-size: 11.5px; text-align: center; }
+  main { max-width: 1180px; margin: 0 auto; padding: 20px 16px 80px; }
+  section.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; margin-bottom: 16px; box-shadow: var(--shadow); }
+  section.card > h2 { font-size: 15px; margin: 0 0 4px; }
+  p.lead { color: var(--muted); margin: 0 0 12px; font-size: 13.5px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px 16px; }
+  .field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .field.wide { grid-column: 1 / -1; }
+  .field.check { flex-direction: row; align-items: center; gap: 8px; }
+  .field.check input { width: auto; }
+  label { font-size: 13px; font-weight: 600; }
+  .help { font-size: 12px; color: var(--muted); }
+  input, select, textarea { font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 7px 9px; width: 100%; min-width: 0; }
+  textarea { resize: vertical; }
+  textarea.mail { min-height: 260px; font: 14px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; }
+  button.btn { font: inherit; border: 1px solid var(--line); background: var(--panel); color: var(--ink); border-radius: 6px; padding: 7px 14px; cursor: pointer; }
+  button.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+  button.btn.danger { color: var(--err); }
+  button.btn:disabled { opacity: .5; cursor: default; }
+  .toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+  .badge { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
+  .badge.running, .badge.attente { color: var(--warn); border-color: currentColor; }
+  .badge.success, .badge.envoye { color: var(--ok); border-color: currentColor; }
+  .badge.failed, .badge.stopped, .badge.echec { color: var(--err); border-color: currentColor; }
+  .ok { color: var(--ok); } .ko { color: var(--err); } .muted { color: var(--muted); }
+  table.data { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  table.data th { text-align: left; font-size: 12px; color: var(--muted); font-weight: 600; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+  table.data td { padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  table.data td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  table.data tr.clickable { cursor: pointer; }
+  table.data tr.clickable:hover td, table.data tr.selected td { background: var(--bg); }
+  .table-wrap { overflow-x: auto; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin-bottom: 16px; }
+  .tile { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+  .tile .v { font-size: 24px; font-weight: 650; font-variant-numeric: tabular-nums; }
+  .tile .l { font-size: 12.5px; color: var(--muted); }
+  .mailtext { white-space: pre-wrap; word-break: break-word; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; font-size: 14px; max-height: 50vh; overflow: auto; margin: 6px 0; }
+  .meta { font-size: 13px; color: var(--muted); }
+  details { margin: 8px 0; }
+  details summary { cursor: pointer; font-size: 13.5px; color: var(--accent); }
+  .src { font-size: 13px; border-left: 3px solid var(--line); padding: 2px 10px; margin: 6px 0; }
+  .chip { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; margin: 2px 4px 2px 0; color: var(--ink); text-decoration: none; }
+  #log { background: var(--code-bg); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; height: 60vh; overflow: auto; font: 12.5px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; word-break: break-word; margin: 0; }
+  .md table { border-collapse: collapse; font-size: 13.5px; margin: 8px 0 16px; display: block; overflow-x: auto; }
+  .md th, .md td { border: 1px solid var(--line); padding: 4px 8px; text-align: left; vertical-align: top; }
+  .md blockquote { margin: 10px 0; padding: 4px 12px; border-left: 3px solid var(--accent); background: var(--bg); }
+  .md code { background: var(--code-bg); padding: 1px 4px; border-radius: 4px; }
+  .split { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+  .empty { color: var(--muted); padding: 24px; text-align: center; border: 1px dashed var(--line); border-radius: 10px; }
+  .toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 8px 16px; border-radius: 8px; font-size: 14px; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 10; }
+  .toast.show { opacity: 1; }
+  .hidden { display: none !important; }
+  @media (max-width: 800px) { .split { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<header>
+  <div class="bar">
+    <h1>mailbot <small id="subtitle">correspondance argumentée avec des chercheurs</small></h1>
+    <div class="spacer"></div>
+    <a id="link-paper" href="#">Atelier d'articles</a>
+    <a id="link-explo" href="#">exploZoteroAnno</a>
+    <a id="link-chaoticum" href="#">chaoticumSeminario</a>
+    <a href="/parametres" title="Connexions Albert, Zotero, Omeka S, boîte mail">⚙ Paramètres</a>
+    <a href="/docs/" target="_blank">Documentation</a>
+    <span id="status" class="badge">aucun traitement</span>
+    <button id="btn-run" class="btn primary">Synchroniser</button>
+    <button id="btn-stop" class="btn danger hidden">Arrêter</button>
+  </div>
+  <nav>
+    <button data-tab="drafts" class="active">Brouillons<span id="count-pending" class="count hidden"></span></button>
+    <button data-tab="archive">Archives</button>
+    <button data-tab="schedule">Planification</button>
+    <button data-tab="settings">Réglages</button>
+    <button data-tab="workflow">Workflow</button>
+    <button data-tab="run">Exécution</button>
+    <button data-tab="runs">Exécutions</button>
+  </nav>
+</header>
+
+<main>
+  <!-- ======================= BROUILLONS ======================= -->
+  <div id="tab-drafts">
+    <section class="card">
+      <h2>Brouillons à valider</h2>
+      <p class="lead">Chaque nouveau mail reçu par le mailbot d'une adresse autorisée reçoit un brouillon d'argumentation contradictoire, appuyé sur les archives (RAG) et la collection Zotero. Vérifiez les objections et leurs sources, modifiez le texte si besoin, puis envoyez-le : rien n'est envoyé sans votre validation (sauf les mails planifiés si « validation des mails planifiés » est désactivée).</p>
+      <div class="toolbar">
+        <label for="draft-filter" style="font-weight:400">Afficher</label>
+        <select id="draft-filter" style="width:auto">
+          <option value="en attente">en attente</option>
+          <option value="échec">en échec</option>
+          <option value="envoyé">envoyés</option>
+          <option value="rejeté">rejetés</option>
+          <option value="">tous</option>
+        </select>
+        <button id="drafts-refresh" class="btn">Actualiser</button>
+      </div>
+    </section>
+    <div id="drafts"></div>
+  </div>
+
+  <!-- ======================= ARCHIVES ======================= -->
+  <div id="tab-archive" class="hidden">
+    <div id="overview" class="tiles"></div>
+    <div class="split">
+      <section class="card">
+        <h2>Messages archivés</h2>
+        <div class="toolbar">
+          <select id="msg-profile" style="width:auto"></select>
+          <select id="msg-box" style="width:auto"><option value="">les deux boîtes</option><option value="history">historiques</option><option value="bot">boîte du mailbot</option></select>
+          <input id="msg-q" type="search" placeholder="Rechercher (sujet, adresses, texte)" style="flex:1">
+        </div>
+        <div class="table-wrap"><table class="data"><thead><tr><th>Date</th><th>Boîte</th><th>De → à</th><th>Sujet</th><th title="Pièces jointes">PJ</th><th title="Omeka S · Zotero · RAG">Archivage</th></tr></thead><tbody id="messages"></tbody></table></div>
+      </section>
+      <section class="card" id="message-detail"><p class="muted">Choisir un message pour l'afficher.</p></section>
+    </div>
+  </div>
+
+  <!-- ======================= PLANIFICATION ======================= -->
+  <div id="tab-schedule" class="hidden">
+    <section class="card">
+      <h2>Planification</h2>
+      <p class="lead">Le serveur de mailbot lance lui-même les traitements aux échéances indiquées (expressions cron à 5 champs : minute heure jour-du-mois mois jour-de-la-semaine, heure du serveur <span id="tz"></span>). Le serveur doit rester démarré ; un traitement en cours repousse l'échéance à sa fin.</p>
+      <div class="grid">
+        <div class="field">
+          <div class="field check"><input type="checkbox" id="s-syncEnabled"><label for="s-syncEnabled">Synchronisation automatique</label></div>
+          <label for="s-sync">Échéances de la synchronisation</label><input id="s-sync"><span class="help">Archivage Omeka S, pièces jointes Zotero, indexation RAG et brouillons de réponse. Ex. « 0 * * * * » : toutes les heures.</span><span id="s-sync-next" class="help"></span>
+        </div>
+        <div class="field">
+          <div class="field check"><input type="checkbox" id="s-composeEnabled"><label for="s-composeEnabled">Mails planifiés</label></div>
+          <label for="s-compose">Échéances des mails planifiés</label><input id="s-compose"><span class="help">Synchronisation puis mail rédigé à partir des archives, du RAG et de la collection. Ex. « 0 9 * * 1 » : le lundi à 9 h.</span><span id="s-compose-next" class="help"></span>
+        </div>
+      </div>
+      <div class="toolbar" style="margin-top:12px">
+        <span class="help">Modèles :</span>
+        <button class="btn" data-preset="0 * * * *|0 9 * * 1">horaire / hebdomadaire</button>
+        <button class="btn" data-preset="*/15 * * * *|0 9 * * 1,4">15 min / lundi et jeudi</button>
+        <button class="btn" data-preset="0 8-19 * * 1-5|0 10 1,15 * *">heures ouvrées / 1er et 15 du mois</button>
+        <div class="spacer"></div>
+        <button id="schedule-save" class="btn primary">Enregistrer la planification</button>
+      </div>
+    </section>
+    <section class="card">
+      <h2>Lancements récents</h2>
+      <div id="schedule-log" class="table-wrap"></div>
+    </section>
+  </div>
+
+  <!-- ======================= RÉGLAGES ======================= -->
+  <div id="tab-settings" class="hidden">
+    <div id="settings-form"></div>
+    <div class="toolbar"><div class="spacer"></div><button id="settings-save" class="btn primary">Enregistrer les réglages</button></div>
+  </div>
+
+  <!-- ======================= WORKFLOW ======================= -->
+  <div id="tab-workflow" class="hidden"><div id="workflow" class="empty">Chargement…</div></div>
+
+  <!-- ======================= EXÉCUTION ======================= -->
+  <div id="tab-run" class="hidden">
+    <section class="card">
+      <div class="toolbar">
+        <button id="btn-sync" class="btn primary">Synchroniser maintenant</button>
+        <button id="btn-compose" class="btn">Synchroniser et écrire au groupe</button>
+        <span id="run-info" class="muted"></span>
+      </div>
+      <pre id="log"></pre>
+    </section>
+  </div>
+
+  <!-- ======================= EXÉCUTIONS ======================= -->
+  <div id="tab-runs" class="hidden">
+    <section class="card">
+      <h2>Exécutions</h2>
+      <p class="lead">Archive locale (<code>resultats/mailbot/executions/</code>) et items de configuration d'Omeka S.</p>
+      <div id="runs" class="table-wrap"></div>
+    </section>
+    <section class="card"><div id="report" class="md muted">Choisir une exécution pour afficher son rapport.</div></section>
+  </div>
+</main>
+<div id="toast" class="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+<script type="module">
+// ==========================================
+// Utilitaires
+// ==========================================
+const $ = s => document.querySelector(s);
+const el = (tag, props = {}, ...children) => { const e = Object.assign(document.createElement(tag), props); e.append(...children.filter(c => c !== null && c !== undefined && c !== false)); return e; };
+const api = async (url, opts = {}) => {
+  const res = await fetch(url, { headers: { "Content-Type": "application/json" }, ...opts, body: opts.body && JSON.stringify(opts.body) });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+  return data;
+};
+function toast(msg) { const t = $("#toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove("show"), 3000); }
+// markdown nettoyé (sujets et extraits viennent des mails reçus)
+const md = text => window.marked && window.DOMPurify ? window.DOMPurify.sanitize(window.marked.parse(text)) : "";
+const fmtDate = d => (d ? new Date(d).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" }) : "—");
+const cls = status => ({ "en attente": "attente", "envoyé": "envoye", "échec": "echec" })[status] ?? "";
+
+// ==========================================
+// Onglets (l'onglet est gardé dans l'adresse : #brouillons, lien de la notification)
+// ==========================================
+const TABS = ["drafts", "archive", "schedule", "settings", "workflow", "run", "runs"];
+const HASH = { brouillons: "drafts", archives: "archive", planification: "schedule", reglages: "settings" };
+document.querySelectorAll("nav button").forEach(b => b.onclick = () => showTab(b.dataset.tab));
+function showTab(tab) {
+  document.querySelectorAll("nav button").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
+  for (const t of TABS) $(`#tab-${t}`).classList.toggle("hidden", t !== tab);
+  if (tab === "drafts") loadDrafts();
+  if (tab === "archive") loadArchive();
+  if (tab === "schedule") loadSchedule();
+  if (tab === "settings") renderSettings();
+  if (tab === "workflow") loadWorkflow();
+  if (tab === "runs") loadRuns();
+}
+
+let workflowLoaded = false;
+async function loadWorkflow() {
+  if (workflowLoaded) return;
+  workflowLoaded = true;
+  const { workflowDiagram } = await import("/workflowDiagram.js");
+  $("#workflow").className = "";
+  workflowDiagram($("#workflow"), { toast });
+}
+
+// ==========================================
+// Réglages
+// ==========================================
+let config = null, defaults = null, collections = [];
+const getPath = (o, p) => p.split(".").reduce((x, k) => x?.[k], o);
+const setPath = (o, p, v) => { const ks = p.split("."); const last = ks.pop(); ks.reduce((x, k) => (x[k] ??= {}), o)[last] = v; };
+
+// champs des réglages : [chemin, libellé, type, aide]
+const SECTIONS = [
+  ["Boîte du mailbot", "Boîte propre au mailbot, commune aux profils (connexion sur la page ⚙ Paramètres) : les échanges avec ces adresses y sont archivés comme les historiques.", [
+    ["bot.allowed", "Adresses autorisées (réponses)", "emails", "Une adresse par ligne : seuls leurs mails reçoivent un brouillon de réponse, validé avant envoi."],
+    ["bot.group", "Groupe (mails planifiés)", "emails", "Une adresse par ligne : chaque mail planifié est adressé à tout le groupe."],
+    ["bot.groupVisible", "Membres du groupe visibles de tous (sinon en copie cachée)", "bool"],
+    ["bot.folders", "Dossiers parcourus", "list", "Séparés par des virgules ; vide = boîte de réception + dossier des envoyés."],
+    ["bot.appendSent", "Copier les mails envoyés dans le dossier des envoyés du mailbot", "bool", "À désactiver si le serveur d'envoi le fait déjà (Gmail)."],
+  ]],
+  ["Lecture des boîtes", "", [
+    ["mailbox.maxNewMessages", "Nouveaux messages par boîte et par exécution", "number", "Les plus anciens d'abord ; la suite à l'exécution suivante."],
+    ["mailbox.stripQuoted", "Retirer les citations du message précédent", "bool"],
+  ]],
+  ["Zotero", "Les pièces jointes sont déposées dans une collection par profil et une pour la boîte du mailbot (clé API Zotero avec droit d'écriture).", [
+    ["zotero.enabled", "Déposer les pièces jointes dans Zotero", "bool"],
+    ["zotero.collectionName", "Nom de la collection d'un profil", "text", "{{chercheur}} = nom ou adresse du chercheur ; créée au besoin (sauf collection choisie dans le profil)."],
+    ["zotero.botCollection", "Collection de la boîte du mailbot", "collection", "Vide : collection nommée ci-dessous, créée au besoin."],
+    ["zotero.botCollectionName", "Nom de la collection de la boîte du mailbot", "text"],
+    ["zotero.emailItems", "Une notice « courriel » par message (pièces jointes en enfants)", "bool"],
+    ["zotero.maxAttachmentMb", "Taille maximale d'une pièce jointe (Mo)", "number"],
+  ]],
+  ["RAG Albert", "Messages et texte des pièces jointes dans une collection privée Albert par profil et une pour la boîte du mailbot. Une réponse s'appuie sur l'historique du chercheur concerné ; un mail au groupe sur tous les historiques.", [
+    ["rag.enabled", "Indexer dans Albert", "bool"],
+    ["rag.collectionName", "Nom de la collection Albert d'un profil", "text", "{{chercheur}} = nom ou adresse du chercheur."],
+    ["rag.botCollectionName", "Nom de la collection Albert de la boîte du mailbot", "text"],
+    ["rag.chunkSize", "Taille des extraits (caractères)", "number"],
+    ["rag.chunkOverlap", "Chevauchement (caractères)", "number"],
+    ["rag.limit", "Extraits retrouvés pour rédiger", "number"],
+    ["rag.method", "Méthode de recherche", ["hybrid", "semantic", "lexical"]],
+  ]],
+  ["Réponses contradictoires", "Brouillons pour les nouveaux mails reçus par le mailbot d'une adresse autorisée, envoyés après votre validation.", [
+    ["reply.enabled", "Rédiger les brouillons de réponse", "bool"],
+    ["reply.maxAgeDays", "Mails reçus depuis moins de (jours)", "number"],
+    ["reply.threadMessages", "Messages du fil transmis", "number"],
+    ["reply.zoteroItems", "Notices Zotero transmises", "number"],
+  ]],
+  ["Mails planifiés", "Mails écrits au groupe à l'initiative de mailbot (onglet Planification).", [
+    ["compose.requireApproval", "Soumettre aussi les mails planifiés à validation", "bool", "Désactivé : envoi direct à l'échéance."],
+    ["compose.instruction", "Consigne de rédaction", "textarea", "Thème, intention ; vide = relancer la discussion à partir des derniers échanges."],
+    ["compose.archiveMessages", "Derniers échanges du mailbot transmis", "number"],
+    ["compose.historyMessages", "Derniers échanges de l'historique transmis", "number"],
+    ["compose.zoteroItems", "Notices Zotero transmises", "number"],
+  ]],
+  ["Signature et administrateur", "", [
+    ["signature", "Signature ajoutée à chaque mail rédigé par un agent", "textarea"],
+    ["admin.email", "Adresse de l'administrateur", "email", "Prévenue à chaque nouveau brouillon (vide : pas de notification)."],
+    ["admin.notify", "Notifier l'administrateur", "bool"],
+    ["models.analytics", "Modèle Albert des agents", "text", "Modifiable aussi par agent dans l'onglet Workflow."],
+  ]],
+];
+
+// champ d'un réglage : root = configuration, ou un profil ; key = préfixe d'identifiant (profils)
+function fieldEl(root, p, label, type, help, key = "") {
+  const id = `f-${key}${p.replace(/\./g, "-")}`;
+  const v = getPath(root, p);
+  let input;
+  if (type === "bool") {
+    input = el("input", { type: "checkbox", id, checked: !!v, onchange: e => setPath(root, p, e.target.checked) });
+    return el("div", { className: "field check wide" }, input, el("label", { htmlFor: id, textContent: label }), help ? el("span", { className: "help", textContent: help }) : null);
+  }
+  if (type === "textarea") input = el("textarea", { id, rows: 3, value: v ?? "", oninput: e => setPath(root, p, e.target.value) });
+  else if (Array.isArray(type)) input = el("select", { id, onchange: e => setPath(root, p, e.target.value) }, ...type.map(o => el("option", { value: o, textContent: o, selected: o === v })));
+  else if (type === "collection") input = el("select", { id, onchange: e => setPath(root, p, e.target.value) },
+    el("option", { value: "", textContent: "(collection nommée, créée au besoin)" }),
+    ...collections.map(c => el("option", { value: c.key, textContent: c.path ?? c.name, selected: c.key === v })),
+    ...(v && !collections.some(c => c.key === v) ? [el("option", { value: v, textContent: v, selected: true })] : []));
+  else if (type === "emails") input = el("textarea", { id, rows: 4, value: (v ?? []).join("\n"), oninput: e => setPath(root, p, e.target.value.split(/[\s,;]+/).map(s => s.trim()).filter(Boolean)) });
+  else if (type === "list") input = el("input", { id, value: (v ?? []).join(", "), oninput: e => setPath(root, p, e.target.value.split(",").map(s => s.trim()).filter(Boolean)) });
+  else if (type === "number") input = el("input", { id, type: "number", value: v ?? 0, oninput: e => setPath(root, p, Number(e.target.value)) });
+  else input = el("input", { id, type, value: v ?? "", oninput: e => setPath(root, p, e.target.value) });
+  return el("div", { className: `field${type === "textarea" || type === "emails" ? " wide" : ""}` }, el("label", { htmlFor: id, textContent: label }), input, help ? el("span", { className: "help", textContent: help }) : null);
+}
+
+// champs d'un profil (chercheur dont l'historique est archivé)
+const PROFILE_FIELDS = [
+  ["researcher.email", "Adresse du chercheur", "email", "Propriétaire de la boîte historique (sens des messages)."],
+  ["researcher.name", "Nom", "text"],
+  ["researcher.description", "Présentation pour les agents", "textarea", "Discipline, positions connues, ton des échanges."],
+  ["recipients", "Destinataires (chercheurs)", "emails", "Une adresse par ligne : seuls les échanges du chercheur avec eux sont archivés ; le reste de sa boîte n'est pas lu."],
+  ["folders", "Dossiers parcourus", "list", "Séparés par des virgules ; vide = boîte de réception + dossier des envoyés."],
+  ["since", "Début de l'historique", "date", "Vide : tout l'historique."],
+  ["zoteroCollection", "Collection Zotero", "collection", "Vide : collection « Mailbot – nom du chercheur » (Réglages › Zotero)."],
+];
+const emptyProfile = id => ({ id, researcher: { email: "", name: "", description: "" }, recipients: [], folders: [], since: "", zoteroCollection: "" });
+// identifiants des profils déjà enregistrés : ils nomment les clés de connexion, on ne les renomme pas
+let savedProfileIds = new Set();
+
+function renderProfiles() {
+  const cards = config.profiles.map((pr, i) => el("div", { className: "card", style: "border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0" },
+    el("div", { className: "toolbar" },
+      el("strong", { textContent: `Profil « ${pr.id} »` }),
+      el("span", { className: "meta", textContent: `connexion : HISTORY_${pr.id.toUpperCase()}_IMAP_* (⚙ Paramètres, après enregistrement)` }),
+      el("div", { className: "spacer" }),
+      config.profiles.length > 1 ? el("button", { className: "btn danger", textContent: "Retirer", onclick: () => {
+        if (!confirm(`Retirer le profil « ${pr.id} » ? Ses messages déjà archivés restent dans l'archive, Omeka S, Zotero et Albert ; sa boîte ne sera plus lue.`)) return;
+        config.profiles.splice(i, 1); renderSettings();
+      } }) : null),
+    el("div", { className: "grid" },
+      savedProfileIds.has(pr.id) ? null : el("div", { className: "field" }, el("label", { textContent: "Identifiant" }),
+        el("input", { value: pr.id, oninput: e => { pr.id = e.target.value.trim().toLowerCase(); } }),
+        el("span", { className: "help", textContent: "Minuscules et chiffres (ex. dupont) ; non modifiable après enregistrement." })),
+      ...PROFILE_FIELDS.map(([p, label, type, help]) => fieldEl(pr, p, label, type, help, `${i}-`)))));
+  return el("section", { className: "card" },
+    el("h2", { textContent: "Profils (chercheurs dont l'historique est archivé)" }),
+    el("p", { className: "lead", textContent: "Un profil par chercheur : sa boîte mail (connexion sur la page ⚙ Paramètres), ses destinataires et ses collections. La boîte du mailbot, les adresses autorisées, le groupe et la planification sont communs." }),
+    ...cards,
+    el("button", { className: "btn", textContent: "+ Ajouter un profil", onclick: () => {
+      const id = prompt("Identifiant du nouveau profil (minuscules et chiffres, ex. dupont) :", "");
+      if (!id) return;
+      const clean = id.trim().toLowerCase();
+      if (!/^[a-z0-9]{1,20}$/.test(clean)) return toast("Identifiant invalide : minuscules et chiffres, 20 caractères au plus");
+      if (config.profiles.some(p => p.id === clean)) return toast("Ce profil existe déjà");
+      config.profiles.push(emptyProfile(clean)); renderSettings();
+    } }));
+}
+
+function renderSettings() {
+  if (!config) return;
+  $("#settings-form").replaceChildren(renderProfiles(), ...SECTIONS.map(([title, lead, fields]) => el("section", { className: "card" },
+    el("h2", { textContent: title }), lead ? el("p", { className: "lead", textContent: lead }) : null,
+    el("div", { className: "grid" }, ...fields.map(([p, label, type, help]) => fieldEl(config, p, label, type, help))))));
+}
+
+async function loadSettings() {
+  ({ config, defaults } = await api("/api/mailbot/settings"));
+  savedProfileIds = new Set(config.profiles.map(p => p.id));
+  const names = config.profiles.map(p => p.researcher.name || p.researcher.email).filter(Boolean);
+  $("#subtitle").textContent = names.length ? `historique de ${names.join(", ")} et échanges du mailbot` : "correspondance argumentée avec des chercheurs";
+  // filtre des archives par profil
+  $("#msg-profile").replaceChildren(el("option", { value: "", textContent: "tous les profils" }), ...config.profiles.map(p => el("option", { value: p.id, textContent: `profil ${p.id}` })));
+  api("/api/zotero/collections").then(r => { collections = r.collections ?? r ?? []; if (!$("#tab-settings").classList.contains("hidden")) renderSettings(); }).catch(() => {});
+}
+async function saveSettings(silent = false) {
+  const r = await api("/api/mailbot/settings", { method: "POST", body: { config } });
+  config = r.config;
+  if (!silent) toast("Réglages enregistrés");
+  return r;
+}
+$("#settings-save").onclick = () => saveSettings().then(() => loadSettings()).then(() => { renderSettings(); toast("Réglages enregistrés ; connexion des nouveaux profils sur la page ⚙ Paramètres"); }).catch(e => toast("Erreur : " + e.message));
+
+// ==========================================
+// Brouillons
+// ==========================================
+$("#draft-filter").onchange = () => loadDrafts();
+$("#drafts-refresh").onclick = () => loadDrafts();
+
+async function loadDrafts() {
+  const box = $("#drafts");
+  let drafts;
+  try { ({ drafts } = await api("/api/mailbot/drafts")); }
+  catch (e) { box.replaceChildren(el("div", { className: "empty", textContent: "Brouillons indisponibles : " + e.message })); return; }
+  const pending = drafts.filter(d => d.status === "en attente").length;
+  $("#count-pending").textContent = pending;
+  $("#count-pending").classList.toggle("hidden", !pending);
+  const filter = $("#draft-filter").value;
+  const shown = drafts.filter(d => !filter || d.status === filter);
+  box.replaceChildren(...(shown.length ? shown.map(draftCard) : [el("div", { className: "empty", textContent: filter === "en attente" ? "Aucun brouillon en attente. Les nouveaux mails des adresses autorisées en recevront un à la prochaine synchronisation." : "Aucun brouillon." })]));
+}
+
+const recipients = d => [...(d.to ?? []), ...(d.bcc ?? []).map(a => `${a} (cci)`)].join(", ");
+
+function draftCard(d) {
+  const editable = d.status !== "envoyé";
+  const subject = el("input", { value: d.subject, disabled: !editable });
+  const body = el("textarea", { className: "mail", value: d.body, disabled: !editable });
+  const action = (label, fn, opts = {}) => el("button", { className: `btn ${opts.cls ?? ""}`, textContent: label, onclick: async e => {
+    const b = e.target; b.disabled = true;
+    try { await fn(); } catch (err) { toast("Erreur : " + err.message); } finally { b.disabled = false; }
+  } });
+  const edits = () => ({ id: d.id, subject: subject.value, body: body.value });
+  const src = d.sources ?? {};
+  return el("section", { className: "card" },
+    el("div", { className: "toolbar" },
+      el("span", { className: `badge ${cls(d.status)}`, textContent: d.status }),
+      el("strong", { textContent: d.kind === "reponse" ? "Réponse contradictoire" : "Mail au groupe" }),
+      el("span", { className: "meta", textContent: `à ${recipients(d)} · créé ${fmtDate(d.createdAt)}${d.sentAt ? ` · envoyé ${fmtDate(d.sentAt)}` : ""}${d.tokens ? ` · ${d.tokens.toLocaleString("fr-FR")} tokens` : ""}` })),
+    d.error ? el("p", { className: "ko", textContent: "Erreur : " + d.error }) : null,
+    d.replyTo ? el("details", { open: d.status === "en attente" },
+      el("summary", { textContent: `Message de ${d.replyTo.from} : « ${d.replyTo.subject} » (${fmtDate(d.replyTo.date)})` }),
+      el("div", { className: "mailtext", textContent: d.replyTo.excerpt })) : null,
+    el("div", { className: "field" }, el("label", { textContent: "Sujet" }), subject),
+    el("div", { className: "field", style: "margin-top:8px" }, el("label", { textContent: "Corps" }), body),
+    d.arguments?.length ? el("details", {}, el("summary", { textContent: `Objections (${d.arguments.length})` }),
+      ...d.arguments.map(a => el("div", { className: "src" }, el("div", {}, el("strong", { textContent: "Affirmation : " }), a.claim), el("div", {}, el("strong", { textContent: "Objection : " }), a.counter), a.sources?.length ? el("div", { className: "meta", textContent: `Extraits : ${a.sources.map(n => `[${n}]`).join(" ")}` }) : null))) : null,
+    src.rag?.length ? el("details", {}, el("summary", { textContent: `Extraits des archives (${src.rag.length})` }),
+      ...src.rag.map(x => el("div", { className: "src" }, el("strong", { textContent: `[${x.n}] ${x.title}` }), el("span", { className: "meta", textContent: ` · score ${Number(x.score).toFixed(2)}` }), el("div", { textContent: x.excerpt })))) : null,
+    src.zotero?.length ? el("details", {}, el("summary", { textContent: `Références Zotero (${src.zotero.length})` }),
+      ...src.zotero.map(z => el("div", { className: "src", textContent: z.citation || z.title }))) : null,
+    src.thread?.length ? el("details", {}, el("summary", { textContent: `Fil transmis (${src.thread.length})` }), ...src.thread.map(t => el("div", { className: "src", textContent: t }))) : null,
+    d.history?.length ? el("details", {}, el("summary", { textContent: "Historique" }), ...d.history.map(h => el("div", { className: "meta", textContent: `${fmtDate(h.at)} · ${h.action}${h.note ? ` — ${h.note}` : ""}` }))) : null,
+    editable ? el("div", { className: "toolbar", style: "margin-top:12px" },
+      action("Envoyer", async () => {
+        if (!confirm(`Envoyer ce mail à ${recipients(d)} ?`)) return;
+        await api("/api/mailbot/drafts/send", { method: "POST", body: edits() });
+        toast("Mail envoyé"); loadDrafts();
+      }, { cls: "primary" }),
+      action("Enregistrer", async () => { await api("/api/mailbot/drafts/save", { method: "POST", body: edits() }); toast("Brouillon enregistré"); }),
+      action("Nouvelle proposition", async () => {
+        const hint = prompt("Précision pour l'agent (facultatif) : angle, objection à développer, ton…", "");
+        if (hint === null) return;
+        toast("Rédaction en cours…");
+        const r = await api("/api/mailbot/drafts/regenerate", { method: "POST", body: { id: d.id, hint } });
+        toast(`Nouvelle proposition (${r.tokens.toLocaleString("fr-FR")} tokens)`); loadDrafts();
+      }),
+      d.status !== "rejeté" ? action("Rejeter", async () => {
+        const note = prompt("Motif du rejet (facultatif) :", "");
+        if (note === null) return;
+        await api("/api/mailbot/drafts/reject", { method: "POST", body: { id: d.id, note } }); toast("Brouillon rejeté"); loadDrafts();
+      }, { cls: "danger" }) : null) : null);
+}
+
+// ==========================================
+// Archives
+// ==========================================
+let omekaAdmin = "", selected = null;
+async function loadArchive() {
+  try {
+    const o = await api("/api/mailbot/overview");
+    omekaAdmin = o.omekaAdmin;
+    $("#count-pending").textContent = o.drafts.pending;
+    $("#count-pending").classList.toggle("hidden", !o.drafts.pending);
+    const m = o.messages;
+    const tile = (v, l) => el("div", { className: "tile" }, el("div", { className: "v", textContent: v }), el("div", { className: "l", textContent: l }));
+    $("#overview").replaceChildren(
+      tile(m.total, `message(s)${m.first ? ` du ${new Date(m.first).toLocaleDateString("fr-FR")} au ${new Date(m.last).toLocaleDateString("fr-FR")}` : ""}`),
+      tile(m.history, "dans les historiques"), ...o.profiles.map(p => tile(p.messages, `profil ${p.id}${p.researcher.email ? ` (${p.researcher.email})` : ""}`)), tile(m.bot, "dans la boîte du mailbot"), tile(m.attachments, "pièce(s) jointe(s)"),
+      tile(`${m.omeka} · ${m.zotero} · ${m.rag}`, "Omeka S · Zotero · RAG"), tile(o.drafts.pending, "brouillon(s) en attente"));
+  } catch (e) { toast("Vue d'ensemble indisponible : " + e.message); }
+  await loadMessages();
+}
+let qTimer = null;
+$("#msg-q").oninput = () => { clearTimeout(qTimer); qTimer = setTimeout(loadMessages, 300); };
+$("#msg-box").onchange = () => loadMessages();
+$("#msg-profile").onchange = () => loadMessages();
+async function loadMessages() {
+  const { messages } = await api(`/api/mailbot/messages?box=${$("#msg-box").value}&profile=${encodeURIComponent($("#msg-profile").value)}&q=${encodeURIComponent($("#msg-q").value)}`).catch(e => { toast(e.message); return { messages: [] }; });
+  const mark = (ok, label) => el("span", { className: ok ? "ok" : "muted", title: label, textContent: ok ? "●" : "○" });
+  $("#messages").replaceChildren(...(messages.length ? messages.map(m => {
+    const tr = el("tr", { className: `clickable${selected === m.id ? " selected" : ""}`, onclick: () => showMessage(m.id) },
+      el("td", { textContent: fmtDate(m.date) }), el("td", { textContent: m.box === "bot" ? `mailbot${m.profile ? ` · ${m.profile}` : ""}` : `historique · ${m.profile}` }),
+      el("td", { className: "meta", textContent: `${m.from.address} → ${[...m.to, ...m.cc].map(t => t.address).join(", ")}` }),
+      el("td", {}, el("div", { textContent: m.subject || "(sans sujet)" }), el("div", { className: "meta", textContent: m.excerpt })),
+      el("td", { className: "num", textContent: m.attachments.length || "" }),
+      el("td", {}, mark(m.omekaItemId, "Omeka S"), " ", mark(m.zoteroKey || !m.attachments.length, "Zotero"), " ", mark(m.albertDocumentId, "RAG")));
+    return tr;
+  }) : [el("tr", {}, el("td", { colSpan: 6, className: "muted", textContent: "Aucun message archivé : lancer une synchronisation." }))]));
+}
+async function showMessage(id) {
+  selected = id;
+  document.querySelectorAll("#messages tr").forEach(tr => tr.classList.remove("selected"));
+  const m = await api(`/api/mailbot/message?id=${id}`).catch(e => { toast(e.message); return null; });
+  if (!m) return;
+  const who = p => (p.name ? `${p.name} <${p.address}>` : p.address);
+  $("#message-detail").replaceChildren(
+    el("h2", { textContent: m.subject || "(sans sujet)" }),
+    el("div", { className: "meta", textContent: `${fmtDate(m.date)} · de ${who(m.from)} · à ${m.to.map(who).join(", ")}${m.cc.length ? ` · copie ${m.cc.map(who).join(", ")}` : ""}` }),
+    el("div", { className: "toolbar", style: "margin:8px 0" },
+      m.omekaItemId && omekaAdmin ? el("a", { className: "chip", href: omekaAdmin + m.omekaItemId, target: "_blank", rel: "noopener", textContent: `Omeka S ${m.omekaItemId}` }) : null,
+      m.zoteroKey ? el("span", { className: "chip", textContent: `Zotero ${m.zoteroKey}` }) : null,
+      m.albertDocumentId ? el("span", { className: "chip", textContent: `Albert ${m.albertDocumentId}` }) : null,
+      m.draftId ? el("span", { className: "chip", textContent: `envoyé par mailbot (${m.draftId})` }) : null),
+    el("div", { className: "mailtext", textContent: m.text || "(message sans texte)" }),
+    m.attachments.length ? el("div", {}, el("strong", { textContent: "Pièces jointes : " }),
+      ...m.attachments.map(a => el("a", { className: "chip", href: `/api/mailbot/attachment?id=${m.id}&sha1=${a.sha1}`, textContent: `${a.fileName} (${Math.ceil(a.size / 1024)} Ko)` }))) : null);
+}
+
+// ==========================================
+// Planification
+// ==========================================
+async function loadSchedule() {
+  if (!config) await loadSettings();
+  const s = await api("/api/mailbot/schedule").catch(e => { toast(e.message); return null; });
+  for (const k of ["syncEnabled", "composeEnabled"]) $(`#s-${k}`).checked = !!config.schedule[k];
+  for (const k of ["sync", "compose"]) $(`#s-${k}`).value = config.schedule[k];
+  if (!s) return;
+  $("#tz").textContent = `(${s.timezone})`;
+  const info = x => (x.error ? `⚠️ ${x.error}` : x.enabled ? `Prochaine échéance : ${fmtDate(x.next)}${x.last ? ` · dernier lancement : ${fmtDate(x.last)}` : ""}` : `Désactivé${x.last ? ` · dernier lancement : ${fmtDate(x.last)}` : ""}`);
+  $("#s-sync-next").textContent = info(s.sync);
+  $("#s-compose-next").textContent = info(s.compose);
+  $("#schedule-log").replaceChildren(s.log.length
+    ? el("table", { className: "data" }, el("thead", {}, el("tr", {}, el("th", { textContent: "Date" }), el("th", { textContent: "Tâche" }), el("th", { textContent: "État" }))),
+        el("tbody", {}, ...s.log.map(l => el("tr", {}, el("td", { textContent: fmtDate(l.at) }), el("td", { textContent: l.task === "envoi" ? "mail planifié" : "synchronisation" }), el("td", { textContent: l.started ? "lancé" : l.note ?? "en attente" })))))
+    : el("p", { className: "muted", textContent: s.pending ? `En attente : ${s.pending}` : "Aucun lancement planifié pour l'instant." }));
+}
+document.querySelectorAll("[data-preset]").forEach(b => b.onclick = () => { const [a, c] = b.dataset.preset.split("|"); $("#s-sync").value = a; $("#s-compose").value = c; });
+$("#schedule-save").onclick = async () => {
+  config.schedule = { syncEnabled: $("#s-syncEnabled").checked, sync: $("#s-sync").value.trim(), composeEnabled: $("#s-composeEnabled").checked, compose: $("#s-compose").value.trim() };
+  if (config.schedule.composeEnabled && !config.compose.requireApproval && !confirm("Les mails planifiés seront envoyés au groupe sans validation préalable (Réglages › Mails planifiés). Continuer ?")) return;
+  try { await saveSettings(); await loadSchedule(); } catch (e) { toast("Erreur : " + e.message); }
+};
+
+// ==========================================
+// Exécution : lancement, journal (SSE)
+// ==========================================
+const STATUS_TEXT = { running: "en cours", success: "terminé", failed: "échec", stopped: "arrêté" };
+let lastState = null, timer = null;
+function renderStatus(s) {
+  lastState = s;
+  const b = $("#status");
+  b.className = `badge ${s?.status ?? ""}`;
+  const sec = s ? Math.round(((s.endedAt ?? Date.now()) - s.startedAt) / 1000) : 0;
+  b.textContent = s ? `${s.label} · ${STATUS_TEXT[s.status]} · ${sec >= 60 ? `${Math.floor(sec / 60)} min ${sec % 60} s` : `${sec} s`}` : "aucun traitement";
+  const running = s?.status === "running";
+  for (const id of ["#btn-run", "#btn-sync", "#btn-compose"]) $(id).disabled = running;
+  $("#btn-stop").classList.toggle("hidden", !running);
+  $("#run-info").textContent = s ? `Traitement n°${s.id} (${s.label}) lancé le ${new Date(s.startedAt).toLocaleString("fr-FR")} — ${STATUS_TEXT[s.status]}` : "Aucun traitement lancé.";
+  clearInterval(timer);
+  if (running) timer = setInterval(() => renderStatus(lastState), 1000);
+}
+const log = $("#log");
+const es = new EventSource("/api/run/events");
+let first = true;
+es.addEventListener("status", e => {
+  const s = JSON.parse(e.data);
+  if (!first && s?.status === "running" && s.id !== lastState?.id) log.textContent = "";
+  first = false;
+  renderStatus(s);
+  if (s && s.status !== "running" && s.endedAt && Date.now() - s.endedAt < 3000) { toast(`Traitement ${STATUS_TEXT[s.status]}`); loadDrafts(); runsLoaded = false; }
+});
+es.addEventListener("log", e => { log.append(JSON.parse(e.data) + "\n"); log.scrollTop = log.scrollHeight; });
+async function launch(task) {
+  try { log.textContent = ""; await api(`/api/run${task ? `?task=${task}` : ""}`, { method: "POST" }); showTab("run"); }
+  catch (e) { toast("Erreur : " + e.message); }
+}
+$("#btn-run").onclick = () => launch();
+$("#btn-sync").onclick = () => launch();
+$("#btn-compose").onclick = () => {
+  if (config && !config.compose.requireApproval && !confirm("Le mail rédigé sera envoyé au groupe sans validation (Réglages › Mails planifiés). Continuer ?")) return;
+  launch("envoi");
+};
+$("#btn-stop").onclick = async () => { if (confirm("Arrêter le traitement en cours ?")) await api("/api/run/stop", { method: "POST" }); };
+
+// ==========================================
+// Exécutions passées
+// ==========================================
+let runsLoaded = false;
+async function loadRuns() {
+  if (runsLoaded) return;
+  runsLoaded = true;
+  const box = $("#runs");
+  try {
+    const { runs, omekaAdmin: admin, omekaError } = await api("/api/mailbot/runs");
+    box.replaceChildren(
+      omekaError ? el("p", { className: "muted", textContent: `Omeka S : ${omekaError}` }) : null,
+      runs.length ? el("table", { className: "data" },
+        el("thead", {}, el("tr", {}, ...["Date", "Tâche", "Statut", "Nouveaux", "Brouillons", "Tokens", "Omeka S"].map(t => el("th", { textContent: t })))),
+        el("tbody", {}, ...runs.map(r => el("tr", { className: "clickable", onclick: () => showReport(r.runId) },
+          el("td", { textContent: fmtDate(r.startedAt) }), el("td", { textContent: r.task === "envoi" ? "synchronisation et mail" : "synchronisation" }),
+          el("td", {}, el("span", { className: `badge ${r.status}`, textContent: STATUS_TEXT[r.status] ?? r.status })),
+          el("td", { className: "num", textContent: r.totals?.newMessages ?? "—" }), el("td", { className: "num", textContent: r.totals?.drafts ?? "—" }),
+          el("td", { className: "num", textContent: r.tokens?.total?.toLocaleString("fr-FR") ?? "—" }),
+          el("td", {}, r.configItemId && admin ? el("a", { href: admin + r.configItemId, target: "_blank", rel: "noopener", textContent: r.configItemId, onclick: e => e.stopPropagation() }) : "—")))))
+      : el("p", { className: "muted", textContent: "Aucune exécution." }));
+  } catch (e) { box.textContent = "Exécutions indisponibles : " + e.message; }
+}
+async function showReport(runId) {
+  const box = $("#report");
+  const res = await fetch(`/api/mailbot/file?name=rapport_mailbot.md&run=${encodeURIComponent(runId)}`);
+  if (!res.ok) { box.className = "md muted"; box.textContent = "Rapport indisponible pour cette exécution."; return; }
+  box.className = "md";
+  box.innerHTML = md(await res.text());
+}
+
+// ==========================================
+// Démarrage
+// ==========================================
+api("/api/apps").then(a => { for (const k of ["paper", "explo", "chaoticum"]) if (a.apps[k]) $(`#link-${k}`).href = a.apps[k].url; }).catch(() => {});
+await loadSettings().catch(e => toast("Réglages indisponibles : " + e.message));
+showTab(HASH[location.hash.slice(1)] ?? "drafts");
+</script>
+</body>
+</html>

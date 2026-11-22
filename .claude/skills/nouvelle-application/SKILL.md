@@ -64,7 +64,7 @@ Faire **tous** les points ; un oubli donne une route 404, un onglet Workflow vid
 - [ ] `.env.example` : nouvelles clés (vides).
 
 **Documentation** (obligatoire)
-- [ ] `docs/technique.md` : tableau des applications (en-tête), arborescence (section 3), agents, nouvelle section « Workflow <app> » (diagramme mermaid, tableau des éléments, clés de config, routes), modèle de données si nouvelles classes, section 14 (docker).
+- [ ] `docs/technique.md` : tableau des applications (en-tête), arborescence (section 3), agents, nouvelle section « Workflow <app> » (diagramme mermaid, tableau des éléments, clés de config, routes), modèle de données si nouvelles classes, section « Documentation et conteneur » (docker).
 - [ ] `docs/utilisateur.md`, `docs/installation.md`, `README.md` (schéma mermaid + démarrage rapide), puis `npm run docs`.
 
 ## 2. Vérifier

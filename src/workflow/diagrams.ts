@@ -11,6 +11,8 @@ import { SEMINARIO_INSTRUCTIONS } from "../agents/seminarioAgent";
 import { SLIDE_DESCRIBER_INSTRUCTIONS } from "../agents/slideDescriberAgent";
 import { EDITOR_INSTRUCTIONS } from "../agents/editorAgent";
 import { IMAGE_DESCRIBER_INSTRUCTIONS } from "../agents/imageDescriberAgent";
+import { CONTRADICTOR_INSTRUCTIONS, CONTRADICTOR_PROMPT } from "../agents/contradictorAgent";
+import { MAIL_COMPOSER_INSTRUCTIONS, MAIL_COMPOSER_PROMPT } from "../agents/mailComposerAgent";
 
 export type ModelRole = "analytique" | "rapide" | "vision";
 
@@ -51,9 +53,13 @@ export const AGENTS: Record<string, AgentInfo> = {
   "image-describer-agent": { id: "image-describer-agent", usageTag: "(imageDescriberAgent)", estimate: { inputTokens: 1500, outputTokens: 400, callsPerRun: 3200 }, name: "Descripteur d'images", role: "analyse les images des pages annotées avec Diigo (index RAG)", model: "vision", instructions: IMAGE_DESCRIBER_INSTRUCTIONS, note: "La demande contient l'image (vignette Omeka S) et le titre de la page ; la réponse suit un schéma (titre, mots-clés, description, texte visible)." },
   "slide-describer-agent": { id: "slide-describer-agent", usageTag: "(slideDescriberAgent)", legacyUsage: ["Description des diapos (vision)"], estimate: { inputTokens: 1500, outputTokens: 300, callsPerRun: 6 }, name: "Descripteur de diapositives", role: "décrit les diapos à partir de leur copie d'écran", model: "vision", instructions: SLIDE_DESCRIBER_INSTRUCTIONS, note: "La demande contient la copie d'écran et le texte de la diapo ; la réponse suit un schéma (titre, mots-clés, description)." },
   "editor-agent": { id: "editor-agent", usageTag: "(editorAgent)", legacyUsage: ["Raccourcissement des questions"], estimate: { inputTokens: 80, outputTokens: 25, callsPerRun: 6 }, name: "Correcteur d'écran", role: "raccourcit les questions trop longues pour l'écran", model: "vision", instructions: EDITOR_INSTRUCTIONS, note: "La demande est la question à raccourcir." },
+  "contradictor-agent": { id: "contradictor-agent", usageTag: "(contradictorAgent)", estimate: { inputTokens: 4000, outputTokens: 900, callsPerRun: 1 }, name: "Contradicteur", role: "rédige une réponse contradictoire argumentée aux mails reçus par le mailbot d'une adresse autorisée (brouillon validé par l'administrateur)", model: "analytique", instructions: CONTRADICTOR_INSTRUCTIONS, prompt: CONTRADICTOR_PROMPT,
+    promptHelp: "Variables : {{correspondant}} (auteur du mail et chercheur dont l'historique est archivé), {{message}} (mail à contredire), {{fil}} (messages précédents du fil), {{extraits}} (RAG, numérotés), {{references}} (notices de la collection Zotero). La réponse suit un schéma (sujet, corps, objections et extraits utilisés)." },
+  "mail-composer-agent": { id: "mail-composer-agent", usageTag: "(mailComposerAgent)", estimate: { inputTokens: 4500, outputTokens: 600, callsPerRun: 1 }, name: "Rédacteur de courriels", role: "écrit au groupe de chercheurs à l'initiative de mailbot, selon la planification", model: "analytique", instructions: MAIL_COMPOSER_INSTRUCTIONS, prompt: MAIL_COMPOSER_PROMPT,
+    promptHelp: "Variables : {{correspondant}} (groupe et chercheur), {{consigne}} (Réglages › Mails planifiés), {{archives}} (derniers échanges du mailbot), {{historique}} (derniers échanges de l'historique du chercheur), {{extraits}} (RAG, numérotés), {{references}} (notices de la collection Zotero, les moins citées d'abord). La réponse suit un schéma (sujet, corps)." },
 };
 
-export const DIAGRAMS: Record<"paper" | "explo" | "chaoticum", WorkflowDiagram> = {
+export const DIAGRAMS: Record<"paper" | "explo" | "chaoticum" | "mailbot", WorkflowDiagram> = {
   paper: {
     workflowId: "academic-paper-factory",
     title: "Atelier d'articles",
@@ -97,6 +103,23 @@ export const DIAGRAMS: Record<"paper" | "explo" | "chaoticum", WorkflowDiagram> 
       { id: "index", label: "Indexation des diapos", description: "Bouton « Indexer les diapos » : description des diapos pour l'index RAG", agents: ["slide-describer-agent"] },
       { id: "index-diigo", label: "Indexation des annotations Diigo", description: "Bouton « Indexer les annotations Diigo » : pages, passages surlignés, texte des médias et analyse des images", agents: ["image-describer-agent"] },
       { id: "regenerate", label: "Éditeur d'écran", description: "Nouvelle question ou nouveau diagramme pour un écran de la partition", agents: ["seminario-agent", "editor-agent"] },
+    ],
+  },
+  mailbot: {
+    workflowId: "mailbot",
+    title: "mailbot",
+    stages: [
+      [{ id: "fetch-mails", label: "Boîtes mail", description: "Historique du chercheur avec ses destinataires, puis échanges du mailbot avec les chercheurs (IMAP) ; pièces jointes enregistrées localement" }],
+      [
+        { id: "archive-omeka", label: "Archivage Omeka S", description: "Un item par message (identifiant = Message-ID), pièces jointes en médias" },
+        { id: "zotero-attachments", label: "Pièces jointes Zotero", description: "Notice « courriel » et fichiers joints dans la collection Zotero" },
+        { id: "mail-rag-index", label: "Indexation RAG", description: "Messages et texte des pièces jointes dans la collection privée Albert" },
+      ],
+      [{ id: "draft-replies", label: "Brouillons de réponse", description: "Argumentation contradictoire pour chaque nouveau mail reçu par le mailbot d'une adresse autorisée, soumise à l'administrateur", agents: ["contradictor-agent"] }],
+      [{ id: "compose-mail", label: "Mail planifié", description: "Tâche « envoi » : mail au groupe rédigé à partir des archives, du RAG et de la collection, envoyé ou soumis à validation", agents: ["mail-composer-agent"] }],
+    ],
+    outside: [
+      { id: "regenerate", label: "Nouvelle proposition", description: "Onglet Brouillons : nouvelle rédaction d'un brouillon avec une précision de l'administrateur", agents: ["contradictor-agent", "mail-composer-agent"] },
     ],
   },
 };

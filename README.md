@@ -2,13 +2,14 @@
 
 Écosystème d'agents IA pour la production d'articles scientifiques (Laboratoire Paragraphe, Université Paris 8).
 
-Trois applications, chacune avec son workflow d'agents et son serveur, partagent les mêmes sources (**Zotero**), les mêmes modèles (**API Albert**) et la même archive (**Omeka S**) :
+Quatre applications, chacune avec son workflow d'agents et son serveur, partagent les mêmes sources (**Zotero**), les mêmes modèles (**API Albert**) et la même archive (**Omeka S**) :
 
 | Application | Workflow | Adresse | Pour |
 |---|---|---|---|
 | **Atelier d'articles** | `paperProductionWorkflow` | http://127.0.0.1:7272 | répondre à un appel à propositions à partir d'une collection annotée |
 | **exploZoteroAnno** | `exploWorkflow` | http://127.0.0.1:7273 | animer l'annotation collective d'une collection |
 | **chaoticumSeminario** | `chaoticumWorkflow` | http://127.0.0.1:7276 | générer et jouer la partition d'une conférence participative |
+| **mailbot** | `mailbotWorkflow` | http://127.0.0.1:7278 | entretenir une correspondance argumentée avec des chercheurs |
 
 À partir d'une **collection Zotero annotée** et d'un **appel à propositions**, l'**Atelier d'articles** :
 
@@ -29,6 +30,8 @@ Trois applications, chacune avec son workflow d'agents et son serveur, partagent
 
 **chaoticumSeminario** génère la **partition d'une conférence** : une suite d'écrans calculée pour un nombre d'écrans et une durée donnés, à partir de **citations** tirées de Zotero, de **diapos** tirées au hasard du site [ConfErrance](https://samszo.github.io/ConfErrance/), de **questions** et de **diagrammes** produits par Albert (vision et analyse), et des **URL proposées par le public** via un formulaire Grist (QR code). Un lecteur plein écran déroule la partition avec un **chronomètre** (vert, orange, rouge) et une navigation complète ; chaque **séance** est enregistrée dans Omeka S et peut être **rejouée**.
 
+**mailbot** entretient une **correspondance scientifique** avec des chercheurs à partir de deux boîtes mail : l'**historique** de chaque chercheur suivi (un profil par chercheur : sa boîte, ses destinataires, ses collections) et les échanges du **mailbot** (sa propre boîte) sont lus en IMAP, archivés dans **Omeka S**, indexé dans le **RAG d'Albert** (messages et pièces jointes) et les pièces jointes sont déposées dans une **collection Zotero** ; chaque nouveau mail reçu par le mailbot d'une adresse autorisée reçoit un brouillon de **réponse contradictoire** argumentée, envoyé **après validation de l'administrateur** ; selon une **planification** (cron), mailbot écrit aussi de lui-même à un **groupe de chercheurs** à partir des archives, du RAG et de la collection.
+
 ```mermaid
 flowchart LR
     Z[(Zotero<br/>collection annotée)] --> W1{{Atelier d'articles<br/>paperProductionWorkflow}}
@@ -40,7 +43,11 @@ flowchart LR
     Z --> W3{{chaoticumSeminario<br/>chaoticumWorkflow}}
     CE[Diapos ConfErrance] --> W3
     W3 --> R3[Partition, séances<br/>contributions Grist]
-    R1 & R2 & R3 --> O[(Omeka S)]
+    MB[(Boîtes historiques<br/>un profil par chercheur<br/>chercheur ↔ destinataires)] --> W4{{mailbot<br/>mailbotWorkflow}}
+    MBB[(Boîte du mailbot<br/>réponses, groupe)] <--> W4
+    W4 --> R4[Archives, RAG, pièces jointes Zotero<br/>réponses contradictoires validées]
+    W4 -.-> Z
+    R1 & R2 & R3 & R4 --> O[(Omeka S)]
 ```
 
 ## Démarrage rapide
@@ -60,11 +67,12 @@ cp .env.example .env                         # renseigner les clés
 npm run ui          # Atelier d'articles : http://127.0.0.1:7272
 npm run ui:explo    # exploZoteroAnno : http://127.0.0.1:7273
 npm run ui:chaoticum  # chaoticumSeminario : http://127.0.0.1:7276 (après npx playwright install chromium)
+npm run ui:mailbot    # mailbot : http://127.0.0.1:7278 (boîte mail IMAP/SMTP dans ⚙ Paramètres)
 ```
 
 Les connexions (Albert, Zotero, Omeka S) se règlent sur la page **⚙ Paramètres** de chaque application (`/parametres`). Puis ouvrir l'Atelier d'articles (http://127.0.0.1:7272 : tester les connexions, choisir la collection Zotero et l'appel à propositions, lancer le traitement) ou exploZoteroAnno (http://127.0.0.1:7273 : choisir la collection, ajuster la grille, partager le guide, analyser). Les deux applications peuvent traiter en même temps.
 
-En ligne de commande, avec la configuration enregistrée : `npm start` (Atelier d'articles) et `npm run explo` (exploZoteroAnno).
+En ligne de commande, avec la configuration enregistrée : `npm start` (Atelier d'articles), `npm run explo` (exploZoteroAnno), `npm run chaoticum` (chaoticumSeminario) et `npm run mailbot` (mailbot ; `npm run mailbot -- envoi` pour un mail planifié).
 
 ## Documentation
 

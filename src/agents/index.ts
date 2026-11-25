@@ -13,3 +13,4 @@ export { editorAgent } from "./editorAgent";
 export { imageDescriberAgent } from "./imageDescriberAgent";
 export { contradictorAgent } from "./contradictorAgent";
 export { mailComposerAgent } from "./mailComposerAgent";
+export { frameAgent } from "./frameAgent";

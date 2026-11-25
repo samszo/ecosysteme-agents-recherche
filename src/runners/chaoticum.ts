@@ -32,7 +32,7 @@ async function main() {
   if (runResult.status === "failed") console.error("❌ Le workflow a échoué :", runResult.error);
 
   const steps = runResult.steps ?? {};
-  const screens = steps["compose"]?.output?.screens ?? steps["material"]?.output?.screens ?? [];
+  const screens = steps["frame"]?.output?.screens ?? steps["compose"]?.output?.screens ?? steps["material"]?.output?.screens ?? [];
   const theme = steps["material"]?.output?.theme;
   const dir = path.resolve(process.cwd(), c.outputDir, PARTITIONS_DIR, run.runId);
   await fs.mkdir(dir, { recursive: true });

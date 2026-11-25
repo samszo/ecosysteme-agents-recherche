@@ -10,6 +10,9 @@ export const CHAOTICUM_CONFIG_FILE = path.resolve(process.cwd(), process.env.CHA
 // types d'écran de la partition
 export const SCREEN_TYPES = ["citation", "diapo", "question", "contribution", "diagramme"] as const;
 export type ScreenType = (typeof SCREEN_TYPES)[number];
+// écrans de cadre de toute séance, hors du cycle : introduction, argumentaire général, remerciements et conclusion
+export const FRAME_TYPES = ["introduction", "argumentaire", "conclusion"] as const;
+export type FrameType = (typeof FRAME_TYPES)[number];
 
 export const defaultChaoticumConfig = {
   workflowId: "chaoticum-seminario",
@@ -57,6 +60,20 @@ export const defaultChaoticumConfig = {
   // le diagramme qui en sont tirés, et un appel à contributions)
   pattern: ["citation", "diapo", "question", "contribution", "diagramme"] as ScreenType[],
   weights: { citation: 1, diapo: 1, question: 1.5, contribution: 2, diagramme: 1.5 } as Record<ScreenType, number>,
+  // écrans de cadre ajoutés à chaque partition (texte rédigé par l'agent « Rédacteur du cadre » à partir de toute la
+  // partition) ; leur durée est prise sur la durée totale
+  frame: {
+    enabled: true,
+    // intervenant et institution affichés sur l'écran d'introduction (facultatifs)
+    presenter: "",
+    affiliation: "",
+    // durée de chaque écran de cadre (secondes)
+    durations: { introduction: 60, argumentaire: 90, conclusion: 60 } as Record<FrameType, number>,
+    // place de l'argumentaire général : "debut" (après l'introduction, comme un plan) ou "fin" (avant la conclusion, comme une synthèse)
+    argumentPosition: "fin" as "debut" | "fin",
+    // remerciements affichés en grand sur l'écran de conclusion
+    thanks: "Merci pour votre attention et vos contributions !",
+  },
   // graine du tirage aléatoire (vide = nouvelle graine à chaque partition ; enregistrée pour pouvoir la refaire)
   seed: "",
 

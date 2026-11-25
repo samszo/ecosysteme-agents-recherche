@@ -16,6 +16,8 @@ import { analyzeSlide, correctSlide } from "../lib/chaoticum/index/slidesIndex";
 import { analyzeDiigoImage, correctDiigoImage, QuotaError } from "../lib/chaoticum/index/diigoIndex";
 import { regenerate } from "../lib/chaoticum/regenerate";
 import { retime, spreadDuration, type EditCost } from "../lib/chaoticum/partition";
+import { applyFrame, composeFrame, frameDefaults, insertFrames, isFrame } from "../lib/chaoticum/frame";
+import { renderPdf, sessionHtml } from "../lib/chaoticum/pdfExport";
 import { captureUsage, type UsageSummary } from "../lib/metrics/usage";
 import { estimateImpact } from "../lib/metrics/impact";
 import { workflowConfig } from "../config";
@@ -40,7 +42,7 @@ interface Ctx {
 const validId = (id: string | null): id is string => !!id && /^[\w-]{1,80}$/.test(id);
 // copies d'écran : diapo_NN.png (génération) ou diapo_<identifiant>.png (éditeur d'écran)
 const FILE_NAME = /^(partition\.json|rapport_chaoticum\.md|diapo_[\w-]{1,40}\.png)$/;
-const SCREEN_TYPES = ["citation", "diapo", "question", "contribution", "diagramme"];
+const SCREEN_TYPES = ["citation", "diapo", "question", "contribution", "diagramme", "introduction", "argumentaire", "conclusion"];
 const TYPES: Record<string, string> = { ".json": "application/json", ".md": "text/markdown", ".png": "image/png" };
 const val = (it: any, t: string) => it?.[t]?.[0]?.["@value"] ?? null;
 
@@ -148,9 +150,19 @@ export function chaoticumRoutes(ctx: Ctx): Record<string, Handler> {
     if (ch.type && ch.type !== s.type) {
       if (!SCREEN_TYPES.includes(ch.type)) throw new Error(`Type d'écran inconnu : ${ch.type}`);
       // le contenu de l'ancien type est retiré
-      for (const k of ["citation", "diapo", "question", "diagramme", "contribution"]) delete s[k];
+      for (const k of ["citation", "diapo", "question", "diagramme", "contribution", "cadre"]) delete s[k];
       s.type = ch.type;
+      // écran de cadre : hors des cycles, titres et remerciements par défaut
+      if (isFrame(s.type)) { s.cycle = -1; s.cadre = frameDefaults(s.type, ctx.config(), p.title); }
+      else if (s.cycle < 0) s.cycle = Math.max(0, ...p.screens.map((x: any) => x.cycle));
       changed.push("type");
+    }
+    if (isFrame(s.type) && ch.cadre) {
+      const f = ch.cadre;
+      s.cadre = { title: str(f.title, 200), subtitle: str(f.subtitle, 300), text: str(f.text, 1500),
+        points: (Array.isArray(f.points) ? f.points : []).map((x: unknown) => str(x, 200).trim()).filter(Boolean).slice(0, 8),
+        ...(str(f.credits, 300).trim() ? { credits: str(f.credits, 300).trim() } : {}), ...(str(f.thanks, 300).trim() ? { thanks: str(f.thanks, 300).trim() } : {}) };
+      changed.push("texte");
     }
     if (ch.duration !== undefined) { s.duration = Math.max(5, Math.round(Number(ch.duration) || s.duration)); changed.push("durée"); }
     if (s.type === "contribution" && ch.contribution) { s.contribution = { instruction: str(ch.contribution.instruction, 300) }; changed.push("consigne"); }
@@ -239,7 +251,8 @@ export function chaoticumRoutes(ctx: Ctx): Record<string, Handler> {
     else if (op === "duplicate") p.screens.splice(index + 1, 0, JSON.parse(JSON.stringify(s)));
     else if (op === "insert") {
       const type = SCREEN_TYPES.includes(opts.type) ? opts.type : "contribution";
-      p.screens.splice(index + 1, 0, { type, cycle: s.cycle, duration: Math.max(5, Math.round(Number(opts.duration) || 60)) });
+      p.screens.splice(index + 1, 0, { type, cycle: isFrame(type) ? -1 : Math.max(0, s.cycle), duration: Math.max(5, Math.round(Number(opts.duration) || 60)),
+        ...(isFrame(type) ? { cadre: frameDefaults(type, ctx.config(), p.title) } : {}) });
     } else if (op === "move") {
       const to = Math.max(0, Math.min(n - 1, Number(opts.to)));
       p.screens.splice(to, 0, ...p.screens.splice(index, 1));
@@ -272,11 +285,18 @@ export function chaoticumRoutes(ctx: Ctx): Record<string, Handler> {
     }
     if (total < 5 * p.screens.length) throw new Error(`Durée trop courte : ${p.screens.length} écran(s) de 5 s au moins`);
     const mode = o.recompute === "poids" ? "poids" : o.recompute === "proportionnel" || total !== current ? "proportionnel" : null;
+    if (mode === "poids") {
+      // écrans de cadre : durée de la configuration, le reste réparti selon les poids des types
+      const frameDurations = ctx.config().frame.durations as Record<string, number>;
+      const frames = p.screens.filter((x: any) => isFrame(x.type)), body = p.screens.filter((x: any) => !isFrame(x.type));
+      for (const x of frames) x.duration = Math.max(5, Math.round(Number(frameDurations[x.type]) || x.duration));
+      const rest = total - frames.reduce((n: number, x: any) => n + x.duration, 0);
+      if (body.length && rest < 5 * body.length) throw new Error("Durée trop courte pour les écrans de cadre et les autres écrans");
+      if (body.length) spreadDuration(body.map((x: any) => Math.max(0.1, Number((ctx.config().weights as Record<string, number>)[x.type]) || 1)), rest).forEach((d, i) => { body[i].duration = d; });
+    } else if (mode) {
+      spreadDuration(p.screens.map((x: any) => Math.max(1, Number(x.duration) || 1)), total).forEach((d, i) => { p.screens[i].duration = d; });
+    }
     if (mode) {
-      const weights = mode === "poids"
-        ? p.screens.map((x: any) => Math.max(0.1, Number((ctx.config().weights as Record<string, number>)[x.type]) || 1))
-        : p.screens.map((x: any) => Math.max(1, Number(x.duration) || 1));
-      spreadDuration(weights, total).forEach((d, i) => { p.screens[i].duration = d; });
       changed.push(`déroulé recalculé (${mode === "poids" ? "poids des types" : "proportionnel"})`);
     }
     p.durationSeconds = retime(p.screens);
@@ -295,18 +315,19 @@ export function chaoticumRoutes(ctx: Ctx): Record<string, Handler> {
     electricityCost: (a?.electricityCost ?? 0) + b.electricityCost, apiCost: (a?.apiCost ?? 0) + b.apiCost, currency: b.currency,
   });
 
-  // coût d'un traitement (consommation mesurée par captureUsage), enregistré si la partition et l'écran sont connus :
+  // coût d'un traitement (consommation mesurée par captureUsage), enregistré si la partition (et l'écran, sauf index
+  // null : coût de la partition seulement) sont connus :
   // archive locale, et coût cumulé dans curation:data (« edition ») de l'item de la partition dans Omeka S
   async function recordEditCost(runId: unknown, index: unknown, what: string, usage: UsageSummary) {
     const impact = estimateImpact(usage, workflowConfig.costs);
     const cost = { tokens: usage.totalTokens, energyWh: impact.energyWh, co2g: impact.co2g, electricityCost: impact.electricityCost, apiCost: impact.apiCost, currency: impact.currency };
-    const i = Number(index);
+    const i = index === null ? -1 : Number(index);
     if (!validId(typeof runId === "string" ? runId : null) || !Number.isInteger(i) || !usage.calls) return { cost, recorded: false };
     try {
       const p = await readPartition(runId as string);
-      const s = p.screens?.[i];
-      if (!s) return { cost, recorded: false };
-      s.editCost = addCost(s.editCost, cost);
+      const s = i < 0 ? null : p.screens?.[i];
+      if (i >= 0 && !s) return { cost, recorded: false };
+      if (s) s.editCost = addCost(s.editCost, cost);
       p.editCost = addCost(p.editCost, cost);
       (p.editCosts ??= []).push({ at: new Date().toISOString(), index: i, what, ...cost });
       fs.mkdirSync(partDir(p.runId), { recursive: true });
@@ -320,7 +341,7 @@ export function chaoticumRoutes(ctx: Ctx): Record<string, Handler> {
           await omk.updateResource(item["o:id"], { "curation:data": JSON.stringify({ ...data, edition: p.editCost }) }, "items", "PATCH", item);
         }
       } catch (e) { console.warn("⚠️ Coût de l'éditeur non enregistré dans Omeka S :", (e as Error).message); }
-      return { cost, recorded: true, screenCost: s.editCost, partitionCost: p.editCost };
+      return { cost, recorded: true, screenCost: s?.editCost ?? null, partitionCost: p.editCost };
     } catch (e) {
       console.warn("⚠️ Coût de l'éditeur non enregistré :", (e as Error).message);
       return { cost, recorded: false };
@@ -591,14 +612,43 @@ export function chaoticumRoutes(ctx: Ctx): Record<string, Handler> {
     // le coût de la proposition est enregistré pour l'écran (même si l'animateur ne la retient pas)
     "POST /api/chaoticum/partition/regenerate": async (req, res) => {
       const { run: runId, index, what, hint } = await ctx.readBody(req);
-      if (!validId(runId) || !["question", "diagramme"].includes(what)) return ctx.sendJson(res, 400, { error: "Demande invalide" });
+      if (!validId(runId) || !["question", "diagramme", "cadre"].includes(what)) return ctx.sendJson(res, 400, { error: "Demande invalide" });
       try {
         const p = await readPartition(runId);
-        const { result, usage } = await captureUsage(() => regenerate(p, Number(index), what, ctx.config(), str(hint, 300)));
+        const s = p.screens?.[Number(index)];
+        if (what === "cadre" && !(s && isFrame(s.type))) throw new Error("Cet écran n'est pas un écran de cadre");
+        // écran de cadre : nouveau texte à partir de toute la partition (titre, sous-titre, texte, points)
+        const { result, usage } = await captureUsage(async () => what === "cadre"
+          ? { cadre: { ...s.cadre, ...(await composeFrame(p, ctx.config(), [s.type], { hint: str(hint, 300), current: { [s.type]: s.cadre }, source: "Éditeur : cadre (frameAgent)" }))[s.type as "introduction"] } }
+          : regenerate(p, Number(index), what, ctx.config(), str(hint, 300)));
         const c = await recordEditCost(runId, index, `Nouvelle proposition : ${what}`, usage);
         ctx.sendJson(res, 200, { ...result, tokens: usage.totalTokens, impact: c.cost, ...c });
       }
       catch (e) { ctx.sendJson(res, 502, { error: (e as Error).message }); }
+    },
+
+    // écrans de cadre absents d'une partition (générée avant leur introduction) : insérés à leur place, durée totale
+    // conservée (les autres écrans sont réduits en proportion), textes rédigés par le Rédacteur du cadre
+    "POST /api/chaoticum/partition/frame": async (req, res) => {
+      const { run: runId } = await ctx.readBody(req);
+      if (!validId(runId)) return ctx.sendJson(res, 400, { error: "Partition invalide" });
+      try {
+        const p = await readPartition(runId);
+        const c = ctx.config();
+        const added = insertFrames(p.screens, c, p.title, true);
+        if (!added.length) return ctx.sendJson(res, 200, { partition: p, added, omeka: null });
+        let error: string | null = null;
+        const { usage } = await captureUsage(async () => {
+          try { applyFrame(p.screens, await composeFrame(p, c, added, { source: "Éditeur : écrans de cadre (frameAgent)" })); }
+          catch (e) { error = (e as Error).message; }
+        });
+        p.durationSeconds = retime(p.screens);
+        p.modifiedAt = new Date().toISOString();
+        (p.edits ??= []).push({ at: p.modifiedAt, op: "frame", added });
+        const omeka = await savePartition(p);
+        const cost = await recordEditCost(runId, null, "Écrans de cadre", usage);
+        ctx.sendJson(res, 200, { partition: cost.recorded ? await readPartition(runId) : p, added, omeka, error, ...cost });
+      } catch (e) { ctx.sendJson(res, 400, { error: (e as Error).message }); }
     },
 
     // réglages de la partition (durée totale, formulaire Grist) et recalcul du déroulé
@@ -819,6 +869,26 @@ export function chaoticumRoutes(ctx: Ctx): Record<string, Handler> {
       const runId = url.searchParams.get("run");
       if (!validId(runId)) return ctx.sendJson(res, 400, { error: "Partition invalide" });
       ctx.sendJson(res, 200, await listParticipations(runId));
+    },
+
+    // export PDF d'une séance (id) ou de la partition seule (sans id) : téléchargement, rien n'est enregistré
+    "GET /api/chaoticum/pdf": async (_req, res, url) => {
+      const runId = url.searchParams.get("run"), id = url.searchParams.get("id");
+      if (!validId(runId) || (id !== null && !validId(id))) return ctx.sendJson(res, 400, { error: "Séance invalide" });
+      try {
+        const partition = await readPartition(runId);
+        const participation = id ? await readParticipation(runId, id) : undefined;
+        // copies d'écran des diapos incluses dans le PDF (archive locale, sinon médias Omeka S)
+        const images = new Map<string, string>();
+        for (const name of new Set<string>(partition.screens.flatMap((x: any) => (x.diapo?.screenshot ? [x.diapo.screenshot] : [])))) {
+          try { images.set(name, `data:image/png;base64,${(await readFile(runId, name)).toString("base64")}`); } catch { /* copie d'écran absente */ }
+        }
+        const when = (participation?.startedAt ?? partition.createdAt ?? "").slice(0, 10);
+        const pdf = await renderPdf(sessionHtml({ partition, participation, images }), `${partition.title} — ${participation ? `séance du ${new Date(participation.startedAt).toLocaleString("fr-FR")}` : "partition"}`);
+        const file = `${participation ? "seance" : "partition"}_${String(partition.title ?? "chaoticum").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\w-]+/g, "_").slice(0, 60)}_${when}.pdf`;
+        res.writeHead(200, { "Content-Type": "application/pdf", "Content-Disposition": `attachment; filename="${file}"`, "Content-Length": pdf.length });
+        res.end(pdf);
+      } catch (e) { ctx.sendJson(res, 502, { error: `PDF impossible : ${(e as Error).message}` }); }
     },
 
     "GET /api/chaoticum/participation": async (_req, res, url) => {

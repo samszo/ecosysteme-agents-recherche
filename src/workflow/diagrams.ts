@@ -10,6 +10,7 @@ import { CURATOR_INSTRUCTIONS } from "../agents/curatorAgent";
 import { SEMINARIO_INSTRUCTIONS } from "../agents/seminarioAgent";
 import { SLIDE_DESCRIBER_INSTRUCTIONS } from "../agents/slideDescriberAgent";
 import { EDITOR_INSTRUCTIONS } from "../agents/editorAgent";
+import { FRAME_INSTRUCTIONS } from "../agents/frameAgent";
 import { IMAGE_DESCRIBER_INSTRUCTIONS } from "../agents/imageDescriberAgent";
 import { CONTRADICTOR_INSTRUCTIONS, CONTRADICTOR_PROMPT } from "../agents/contradictorAgent";
 import { MAIL_COMPOSER_INSTRUCTIONS, MAIL_COMPOSER_PROMPT } from "../agents/mailComposerAgent";
@@ -49,6 +50,7 @@ export const AGENTS: Record<string, AgentInfo> = {
   "rag-assistant": { id: "rag-assistant", usageTag: "Réponse RAG", estimate: { inputTokens: 3000, outputTokens: 600, callsPerRun: 1 }, name: "Assistant RAG Albert", role: "répond aux questions posées sur la collection (onglet RAG)", model: "analytique", instructions: "",
     note: "La demande est le modèle de prompt choisi dans l'onglet RAG (enregistré dans Omeka S, modifiable avec « Modifier »)." },
   "curator-agent": { id: "curator-agent", usageTag: "(curatorAgent)", legacyUsage: ["Requêtes RAG (thème)", "Choix des présentations (thème)", "Choix des citations (thème)"], estimate: { inputTokens: 300, outputTokens: 110, callsPerRun: 2 }, name: "Curateur de conférence", role: "formule les requêtes RAG et choisit citations et diapos selon le thème", model: "analytique", instructions: CURATOR_INSTRUCTIONS, note: "La demande contient le thème de la conférence et les candidats numérotés." },
+  "frame-agent": { id: "frame-agent", usageTag: "(frameAgent)", estimate: { inputTokens: 1800, outputTokens: 450, callsPerRun: 1 }, name: "Rédacteur du cadre", role: "rédige l'introduction, l'argumentaire général et la conclusion de la séance", model: "analytique", instructions: FRAME_INSTRUCTIONS, note: "La demande contient le thème de la conférence, l'intervenant et le résumé de chaque séquence (citations, diapos, question, diagramme) ; la réponse suit un schéma (titre, sous-titre, texte, points)." },
   "seminario-agent": { id: "seminario-agent", usageTag: "(seminarioAgent)", legacyUsage: ["Cohérence, questions et diagrammes (RAG)", "Questions et diagrammes"], estimate: { inputTokens: 1150, outputTokens: 580, callsPerRun: 6 }, name: "Compositeur de séquences", role: "choisit les matériaux cohérents, la question et le diagramme de chaque séquence", model: "analytique", instructions: SEMINARIO_INSTRUCTIONS, note: "La réponse suit un schéma (question, intention, nœuds et liens du diagramme)." },
   "image-describer-agent": { id: "image-describer-agent", usageTag: "(imageDescriberAgent)", estimate: { inputTokens: 1500, outputTokens: 400, callsPerRun: 3200 }, name: "Descripteur d'images", role: "analyse les images des pages annotées avec Diigo (index RAG)", model: "vision", instructions: IMAGE_DESCRIBER_INSTRUCTIONS, note: "La demande contient l'image (vignette Omeka S) et le titre de la page ; la réponse suit un schéma (titre, mots-clés, description, texte visible)." },
   "slide-describer-agent": { id: "slide-describer-agent", usageTag: "(slideDescriberAgent)", legacyUsage: ["Description des diapos (vision)"], estimate: { inputTokens: 1500, outputTokens: 300, callsPerRun: 6 }, name: "Descripteur de diapositives", role: "décrit les diapos à partir de leur copie d'écran", model: "vision", instructions: SLIDE_DESCRIBER_INSTRUCTIONS, note: "La demande contient la copie d'écran et le texte de la diapo ; la réponse suit un schéma (titre, mots-clés, description)." },
@@ -98,11 +100,12 @@ export const DIAGRAMS: Record<"paper" | "explo" | "chaoticum" | "mailbot", Workf
     stages: [
       [{ id: "material", label: "Matière de la partition", description: "Écrans prévus ; citations et diapos choisies selon le thème (index RAG ou tirage au hasard)", agents: ["curator-agent", "seminario-agent", "editor-agent"] }],
       [{ id: "compose", label: "Composition", description: "Description des diapos, question et diagramme de chaque séquence, questions raccourcies pour l'écran", agents: ["slide-describer-agent", "seminario-agent", "editor-agent"] }],
+      [{ id: "frame", label: "Cadre de la séance", description: "Écrans d'introduction, d'argumentaire général et de conclusion (remerciements), rédigés à partir de toute la partition", agents: ["frame-agent"] }],
     ],
     outside: [
       { id: "index", label: "Indexation des diapos", description: "Bouton « Indexer les diapos » : description des diapos pour l'index RAG", agents: ["slide-describer-agent"] },
       { id: "index-diigo", label: "Indexation des annotations Diigo", description: "Bouton « Indexer les annotations Diigo » : pages, passages surlignés, texte des médias et analyse des images", agents: ["image-describer-agent"] },
-      { id: "regenerate", label: "Éditeur d'écran", description: "Nouvelle question ou nouveau diagramme pour un écran de la partition", agents: ["seminario-agent", "editor-agent"] },
+      { id: "regenerate", label: "Éditeur d'écran", description: "Nouvelle question, nouveau diagramme ou nouveau texte de cadre pour un écran ; ajout des écrans de cadre à une partition existante", agents: ["seminario-agent", "editor-agent", "frame-agent"] },
     ],
   },
   mailbot: {

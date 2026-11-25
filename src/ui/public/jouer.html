@@ -9,6 +9,7 @@
     --bg: #111317; --panel: #1b1e24; --ink: #f1f2f4; --muted: #9aa0aa; --line: #2e323a; --accent: #e48bad;
     --ok: #3fb56f; --warn: #f0a33a; --err: #f0574a;
     --t-citation: #4a8fd6; --t-diapo: #3aa36f; --t-question: #d65b93; --t-contribution: #e0913a; --t-diagramme: #9373d1;
+    --t-introduction: #4fb3b0; --t-argumentaire: #b38f3f; --t-conclusion: #c9655a;
   }
   * { box-sizing: border-box; }
   html, body { height: 100%; }
@@ -47,6 +48,15 @@
   .ref { margin-top: 3cqh; font-size: clamp(15px, 1.5cqw, 22px); color: var(--muted); }
   .comment { margin-top: 2cqh; font-size: clamp(14px, 1.3cqw, 19px); border-left: 3px solid var(--t-citation); padding-left: 12px; color: var(--ink); opacity: .85; }
   .question { font-size: clamp(26px, 4cqw, 58px); line-height: 1.25; font-weight: 650; }
+  /* écrans de cadre : introduction, argumentaire général, conclusion */
+  .cadre h1 { font-size: clamp(30px, 5cqw, 72px); line-height: 1.15; margin: 0; font-weight: 700; }
+  .cadre .subtitle { margin-top: 2cqh; font-size: clamp(18px, 2.4cqw, 34px); color: var(--muted); }
+  .cadre .credits { margin-top: 3cqh; font-size: clamp(15px, 1.6cqw, 22px); color: var(--accent); }
+  .cadre .text { margin-top: 3cqh; font-size: clamp(17px, 2cqw, 28px); line-height: 1.45; }
+  .cadre ol, .cadre ul { margin: 3cqh 0 0; padding-left: 1.4em; font-size: clamp(16px, 1.9cqw, 26px); line-height: 1.45; }
+  .cadre li { margin: .4em 0; }
+  .cadre.argumentaire li::marker { color: var(--t-argumentaire); font-weight: 700; }
+  .cadre .thanks { margin-top: 4cqh; font-size: clamp(26px, 4cqw, 58px); font-weight: 700; color: var(--t-conclusion); }
   .intention { margin-top: 2cqh; font-size: clamp(14px, 1.4cqw, 20px); color: var(--muted); }
   .sources { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 4cqh; align-items: flex-start; }
   .sources .src { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-size: 13px; max-width: 360px; color: var(--muted); }
@@ -225,7 +235,7 @@ const api = async (url, opts = {}) => {
 };
 function toast(msg) { const t = $("#toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove("show"), 2800); }
 const mmss = s => { s = Math.max(0, Math.round(s)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
-const LABELS = { citation: "Citation", diapo: "Diapo", question: "Question", contribution: "Contributions", diagramme: "Diagramme" };
+const LABELS = { citation: "Citation", diapo: "Diapo", question: "Question", contribution: "Contributions", diagramme: "Diagramme", introduction: "Introduction", argumentaire: "Argumentaire", conclusion: "Conclusion" };
 const qrSvg = text => { if (!window.qrcode || !text) return ""; const q = window.qrcode(0, "M"); q.addData(text); q.make(); return q.createSvgTag({ cellSize: 4, margin: 2, scalable: true }); };
 
 // cadre 1920 × 1080 mis à l'échelle de la zone d'affichage (centré)
@@ -434,6 +444,16 @@ async function render() {
       try { svg = (await mermaid.render(`d${current}_${Date.now()}`, code)).svg; break; } catch { document.querySelectorAll('[id^="dd"]').forEach(x => x.remove()); }
     }
     if (svg) panZoom(box, svg); else box.replaceWith(el("pre", { className: "code", textContent: s.diagramme.mermaid }));
+  } else if (["introduction", "argumentaire", "conclusion"].includes(s.type) && s.cadre) {
+    // écran de cadre : l'argumentaire numérote ses étapes ; la conclusion finit par les remerciements
+    const f = s.cadre;
+    stage.append(el("div", { className: `center cadre ${s.type}` },
+      el("h1", { textContent: f.title || LABELS[s.type] }),
+      f.subtitle ? el("div", { className: "subtitle", textContent: f.subtitle }) : null,
+      f.credits ? el("div", { className: "credits", textContent: f.credits }) : null,
+      f.text ? el("div", { className: "text", textContent: f.text }) : null,
+      f.points?.length ? el(s.type === "argumentaire" ? "ol" : "ul", {}, f.points.map(x => el("li", { textContent: x }))) : null,
+      f.thanks ? el("div", { className: "thanks", textContent: f.thanks }) : null));
   } else if (s.type === "contribution" && FOLLOW) {
     stage.append(el("div", { className: "center" },
       s.contribution?.instruction ? el("div", { className: "instruction", textContent: s.contribution.instruction }) : null,
@@ -664,7 +684,9 @@ $("#b-end").onclick = async () => {
       el("p", {}, `${p.events.length} passage(s) d'écran, ${p.contributions.length} contribution(s), ${mmss(p.elapsedSeconds)}${p.transcript.length ? `, ${p.transcript.length} passage(s) transcrit(s)` : ""}.`),
       r.itemId ? el("p", {}, "Omeka S : ", el("a", { href: r.adminUrl, target: "_blank", textContent: `item ${r.itemId}`, style: "color:var(--accent)" })) : el("p", { className: "muted", textContent: `Archive locale seulement${r.error ? ` (Omeka S : ${r.error})` : ""}.` }),
       shareBlock(r),
-      el("button", { className: "primary", textContent: "Rejouer cette séance", onclick: () => { location.href = `/jouer?run=${encodeURIComponent(runId)}&replay=${encodeURIComponent(r.id)}`; } }));
+      el("button", { className: "primary", textContent: "Rejouer cette séance", onclick: () => { location.href = `/jouer?run=${encodeURIComponent(runId)}&replay=${encodeURIComponent(r.id)}`; } }),
+      // export PDF de la séance enregistrée (déroulé, écrans, contributions, transcription, annotations)
+      el("a", { href: `/api/chaoticum/pdf?run=${encodeURIComponent(runId)}&id=${encodeURIComponent(r.id)}`, download: "", textContent: "Télécharger le PDF", style: "margin-left:8px;color:var(--accent)" }));
   } catch (e) { $("#b-end").disabled = false; toast("Enregistrement impossible : " + e.message); }
 };
 window.addEventListener("beforeunload", e => { if (started && !saved && !REPLAY && events.length) { e.preventDefault(); e.returnValue = ""; } });

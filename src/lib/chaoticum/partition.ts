@@ -1,5 +1,5 @@
 // Structure d'une partition chaoticumSeminario : suite d'écrans typés, regroupés en cycles, avec leur durée
-import type { ChaoticumConfig, ScreenType } from "../../config/chaoticum";
+import type { ChaoticumConfig, FrameType, ScreenType } from "../../config/chaoticum";
 import type { Citation } from "./citations";
 import type { Diapo } from "./slides";
 
@@ -11,8 +11,8 @@ export interface DiapoScreen extends Diapo {
 
 export interface Screen {
   index: number;
-  type: ScreenType;
-  // cycle : la question et le diagramme d'un cycle sont tirés de ses citations et de ses diapos
+  type: ScreenType | FrameType;
+  // cycle : la question et le diagramme d'un cycle sont tirés de ses citations et de ses diapos (-1 : écran de cadre)
   cycle: number;
   // durée prévue et début prévu (secondes depuis le début de la séance)
   duration: number;
@@ -23,8 +23,20 @@ export interface Screen {
   diagramme?: { title: string; mermaid: string };
   // écran de contributions : consigne affichée au public (éditeur d'écran)
   contribution?: { instruction: string };
+  // écran de cadre (introduction, argumentaire, conclusion) : titre, sous-titre, texte, points, intervenant, remerciements
+  cadre?: FrameContent;
   // coût cumulé des traitements IA lancés depuis l'éditeur pour cet écran
   editCost?: EditCost;
+}
+
+export interface FrameContent {
+  title: string;
+  subtitle: string;
+  text: string;
+  points: string[];
+  // intervenant et institution (introduction), remerciements (conclusion) : repris de la configuration
+  credits?: string;
+  thanks?: string;
 }
 
 // coût cumulé de traitements IA (tokens et estimation de estimateImpact)
@@ -82,18 +94,26 @@ export function retime(screens: Pick<Screen, "index" | "start" | "duration">[]):
 }
 
 // écrans de la partition (types, cycles, durées), avant tirage et génération
-export function planScreens(c: Pick<ChaoticumConfig, "screens" | "durationMinutes" | "pattern" | "weights">): Screen[] {
+// les écrans de cadre (s'ils sont activés) prennent leur durée sur la durée totale : seul le reste est réparti ici
+export function planScreens(c: Pick<ChaoticumConfig, "screens" | "durationMinutes" | "pattern" | "weights"> & { frame?: ChaoticumConfig["frame"] }): Screen[] {
   const pattern = c.pattern.length ? c.pattern : (["citation"] as ScreenType[]);
   const n = Math.max(1, Math.round(c.screens));
   const types = Array.from({ length: n }, (_, i) => pattern[i % pattern.length]!);
   const weight = (t: ScreenType) => Math.max(0.1, Number(c.weights[t]) || 1);
-  const durations = spreadDuration(types.map(weight), Math.max(1, Math.round(c.durationMinutes * 60)));
+  const total = Math.max(1, Math.round(c.durationMinutes * 60));
+  const durations = spreadDuration(types.map(weight), Math.max(5 * n, total - (c.frame ? frameSeconds(c.frame) : 0)));
   let start = 0;
   return types.map((type, index) => {
     const s: Screen = { index, type, cycle: Math.floor(index / pattern.length), duration: durations[index]!, start };
     start += durations[index]!;
     return s;
   });
+}
+
+// durée totale des écrans de cadre (0 s'ils sont désactivés)
+export function frameSeconds(f: ChaoticumConfig["frame"]): number {
+  if (!f?.enabled) return 0;
+  return Object.values(f.durations ?? {}).reduce((s, d) => s + Math.max(5, Math.round(Number(d) || 0)), 0);
 }
 
 // matière d'un cycle : ses citations et ses diapos, à défaut celles des cycles précédents

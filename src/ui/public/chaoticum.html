@@ -10,6 +10,7 @@
     --accent: #a23b62; --accent-ink: #ffffff; --ok: #2e7d4f; --warn: #b26a00; --err: #b3261e;
     --code-bg: #f0eee8; --shadow: 0 1px 2px rgba(0,0,0,.05), 0 4px 16px rgba(0,0,0,.04);
     --t-citation: #2f6db0; --t-diapo: #2e8b57; --t-question: #c2477d; --t-contribution: #d0802e; --t-diagramme: #7a5bb5;
+    --t-introduction: #2f9693; --t-argumentaire: #9a7a2e; --t-conclusion: #b5544a;
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
@@ -118,6 +119,14 @@
         <div class="field"><label for="c-seed">Graine du tirage</label><input id="c-seed" placeholder="vide = nouveau tirage à chaque génération"><span class="help">Reprendre la graine d'une partition redonne les mêmes citations et diapos.</span></div>
         <div class="field wide"><label>Suite des écrans (un cycle)</label><div class="pattern" id="pattern"></div></div>
         <div class="field wide"><label>Poids des types d'écran (part de la durée)</label><div class="grid" id="weights"></div></div>
+        <div class="field wide"><label class="check"><input id="f-enabled" type="checkbox"> Ajouter une introduction, un argumentaire général et une conclusion (remerciements)</label><span class="help">Rédigés par l'agent « Rédacteur du cadre » à partir de toute la partition ; leur durée est prise sur la durée totale. Modifiables ensuite dans l'éditeur d'écran.</span></div>
+        <div class="field"><label for="f-presenter">Intervenant</label><input id="f-presenter" placeholder="affiché sur l'introduction"></div>
+        <div class="field"><label for="f-affiliation">Institution</label><input id="f-affiliation" placeholder="ex. Laboratoire Paragraphe, Université Paris 8"></div>
+        <div class="field"><label for="f-position">Place de l'argumentaire</label><select id="f-position"><option value="debut">au début, après l'introduction (plan)</option><option value="fin">à la fin, avant la conclusion (synthèse)</option></select></div>
+        <div class="field"><label for="f-d-intro">Durée de l'introduction (s)</label><input id="f-d-intro" type="number" min="5" step="5"></div>
+        <div class="field"><label for="f-d-arg">Durée de l'argumentaire (s)</label><input id="f-d-arg" type="number" min="5" step="5"></div>
+        <div class="field"><label for="f-d-concl">Durée de la conclusion (s)</label><input id="f-d-concl" type="number" min="5" step="5"></div>
+        <div class="field wide"><label for="f-thanks">Remerciements (écran de conclusion)</label><input id="f-thanks"></div>
         <div class="field wide"><label>Aperçu</label><div class="timeline" id="preview"></div><div class="legend" id="legend"></div><span class="help" id="preview-help"></span></div>
         <div class="field"><label for="t-warning">Chronomètre orange au-delà de (× durée prévue)</label><input id="t-warning" type="number" step="0.05" min="0.5"></div>
         <div class="field"><label for="t-danger">Chronomètre rouge au-delà de (× durée prévue)</label><input id="t-danger" type="number" step="0.05" min="0.5"></div>
@@ -314,7 +323,8 @@ function toast(msg) { const t = $("#toast"); t.textContent = msg; t.classList.ad
 const md = text => window.marked ? window.marked.parse(text) : text;
 const mmss = s => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, "0")}`;
 const TYPES = ["citation", "diapo", "question", "contribution", "diagramme"];
-const LABELS = { citation: "Citation", diapo: "Diapo", question: "Question", contribution: "Contributions", diagramme: "Diagramme" };
+const LABELS = { citation: "Citation", diapo: "Diapo", question: "Question", contribution: "Contributions", diagramme: "Diagramme", introduction: "Introduction", argumentaire: "Argumentaire", conclusion: "Conclusion" };
+const FRAME_TYPES = ["introduction", "argumentaire", "conclusion"];
 const typeColor = t => `var(--t-${t})`;
 
 // QR code (SVG) d'une adresse
@@ -350,24 +360,33 @@ async function loadWorkflow() {
 // ==========================================
 let settings = null, config = null;
 
-// même calcul que planScreens (src/lib/chaoticum/partition.ts)
+// même calcul que planScreens (src/lib/chaoticum/partition.ts) et insertFrames (src/lib/chaoticum/frame.ts)
 function plan() {
   const pattern = config.pattern.length ? config.pattern : ["citation"];
   const n = Math.max(1, Math.round(config.screens));
   const types = Array.from({ length: n }, (_, i) => pattern[i % pattern.length]);
   const w = t => Math.max(0.1, Number(config.weights[t]) || 1);
-  const total = Math.max(1, Math.round(config.durationMinutes * 60));
+  const f = config.frame ?? {};
+  const fd = t => Math.max(5, Math.round(Number(f.durations?.[t]) || 0));
+  const frames = f.enabled ? FRAME_TYPES.reduce((s, t) => s + fd(t), 0) : 0;
+  const total = Math.max(5 * n, Math.max(1, Math.round(config.durationMinutes * 60)) - frames);
   const sum = types.reduce((s, t) => s + w(t), 0);
   const d = types.map(t => Math.max(5, Math.round((total * w(t)) / sum)));
   d[n - 1] = Math.max(5, d[n - 1] + total - d.reduce((s, x) => s + x, 0));
-  return types.map((type, i) => ({ type, duration: d[i] }));
+  const screens = types.map((type, i) => ({ type, duration: d[i] }));
+  if (f.enabled) {
+    screens.unshift({ type: "introduction", duration: fd("introduction") });
+    screens.splice(f.argumentPosition === "debut" ? 1 : screens.length, 0, { type: "argumentaire", duration: fd("argumentaire") });
+    screens.push({ type: "conclusion", duration: fd("conclusion") });
+  }
+  return screens;
 }
 function renderPreview() {
   const screens = plan(), total = screens.reduce((s, x) => s + x.duration, 0);
   $("#preview").replaceChildren(...screens.map((s, i) => el("span", { style: `width:${(s.duration / total) * 100}%;background:${typeColor(s.type)}`, title: `${i + 1}. ${LABELS[s.type]} : ${mmss(s.duration)}`, textContent: i + 1 })));
-  $("#legend").replaceChildren(...TYPES.map(t => el("span", {}, el("i", { className: "sw", style: `background:${typeColor(t)}` }), `${LABELS[t]} · ${mmss(screens.find(s => s.type === t)?.duration ?? 0)}`)));
-  const cycles = Math.ceil(screens.length / Math.max(1, config.pattern.length));
-  $("#preview-help").textContent = `${screens.length} écrans · ${cycles} cycle(s) · ${mmss(total)} au total · ${screens.filter(s => s.type === "citation").length} citation(s) et ${screens.filter(s => s.type === "diapo").length} diapo(s) à tirer`;
+  $("#legend").replaceChildren(...[...TYPES, ...(config.frame?.enabled ? FRAME_TYPES : [])].map(t => el("span", {}, el("i", { className: "sw", style: `background:${typeColor(t)}` }), `${LABELS[t]} · ${mmss(screens.find(s => s.type === t)?.duration ?? 0)}`)));
+  const cycles = Math.ceil(screens.filter(s => !FRAME_TYPES.includes(s.type)).length / Math.max(1, config.pattern.length));
+  $("#preview-help").textContent = `${screens.length} écrans${config.frame?.enabled ? " (dont introduction, argumentaire et conclusion)" : ""} · ${cycles} cycle(s) · ${mmss(total)} au total · ${screens.filter(s => s.type === "citation").length} citation(s) et ${screens.filter(s => s.type === "diapo").length} diapo(s) à tirer`;
 }
 function renderPattern() {
   $("#pattern").replaceChildren(
@@ -384,6 +403,8 @@ function renderPattern() {
 const FIELDS = [
   ["#c-title", "title"], ["#c-description", "description"], ["#c-program", "programUrl"], ["#c-candidates", "selection.citationCandidates", true], ["#c-shortlist", "selection.slideShortlist", true], ["#c-screens", "screens", true], ["#c-duration", "durationMinutes", true], ["#c-seed", "seed"],
   ["#t-warning", "timer.warning", true], ["#t-danger", "timer.danger", true],
+  ["#f-presenter", "frame.presenter"], ["#f-affiliation", "frame.affiliation"], ["#f-position", "frame.argumentPosition"], ["#f-thanks", "frame.thanks"],
+  ["#f-d-intro", "frame.durations.introduction", true], ["#f-d-arg", "frame.durations.argumentaire", true], ["#f-d-concl", "frame.durations.conclusion", true],
   ["#ci-scope", "citations.scope"], ["#ci-min", "citations.minLength", true], ["#ci-max", "citations.maxLength", true],
   ["#s-site", "slides.siteUrl"], ["#s-local", "slides.localDir"], ["#s-repo", "slides.repo"], ["#s-settle", "slides.settleMs", true],
   ["#g-form", "grist.formUrl"], ["#g-responses", "grist.responsesUrl"], ["#g-url", "grist.urlColumn"], ["#g-name", "grist.nameColumn"], ["#g-date", "grist.dateColumn"], ["#g-poll", "grist.pollSeconds", true],
@@ -398,6 +419,7 @@ function renderSettings() {
   $("#ci-notes").checked = !!config.citations.includeNotes;
   $("#c-bytheme").checked = config.selection?.byTheme !== false;
   $("#r-enabled").checked = config.rag?.enabled !== false;
+  $("#f-enabled").checked = config.frame?.enabled !== false;
   $("#g-moderation").checked = config.grist.moderation !== false;
   $("#tr-captions").checked = config.transcription?.captions !== false;
   for (const src of ["zotero", "diigo"]) $(`#ci-src-${src}`).checked = (config.citations.sources ?? ["zotero"]).includes(src);
@@ -457,7 +479,7 @@ $("#u-save").onclick = async () => {
 };
 for (const [sel, p, num] of FIELDS) $(sel).addEventListener("input", e => {
   setPath(config, p, num ? Number(e.target.value) : e.target.value);
-  if (["screens", "durationMinutes"].includes(p)) renderPreview();
+  if (["screens", "durationMinutes"].includes(p) || p.startsWith("frame.")) renderPreview();
   if (p === "grist.formUrl") renderQr();
   if (p === "citations.scope") $("#ci-collection").disabled = e.target.value !== "collection";
 });
@@ -465,6 +487,7 @@ $("#ci-scope").addEventListener("change", e => { config.citations.scope = e.targ
 $("#ci-notes").onchange = e => { config.citations.includeNotes = e.target.checked; };
 $("#c-bytheme").onchange = e => { config.selection.byTheme = e.target.checked; };
 $("#r-enabled").onchange = e => { config.rag.enabled = e.target.checked; };
+$("#f-enabled").onchange = e => { config.frame.enabled = e.target.checked; renderPreview(); };
 
 // état des index RAG et lancement des indexations (suivies dans l'onglet Exécution)
 const fmtDate = d => (d ? new Date(d).toLocaleString("fr-FR") : "jamais");
@@ -676,6 +699,7 @@ const summaryOf = s =>
   s.diapo ? `${s.diapo.name}, diapo ${s.diapo.diapo}/${s.diapo.max}` :
   s.question ? s.question.text :
   s.diagramme ? s.diagramme.title :
+  s.cadre ? `${s.cadre.title}${s.cadre.subtitle ? ` — ${s.cadre.subtitle}` : ""}${s.cadre.text ? ` : ${s.cadre.text.slice(0, 110)}${s.cadre.text.length > 110 ? "…" : ""}` : ""}` :
   s.type === "contribution" ? (s.contribution?.instruction ? `Consigne : ${s.contribution.instruction}` : "URL proposées par le public") : "(non généré)";
 function renderSteps() {
   const p = detailPartition;
@@ -699,6 +723,24 @@ function renderSteps() {
     ...(p.modifiedAt ? [el("p", { className: "help", textContent: `Modifiée le ${new Date(p.modifiedAt).toLocaleString("fr-FR")} · durée totale ${mmss(p.durationSeconds)}` })] : []));
   renderPartitionSettings();
 }
+// partition générée sans écrans de cadre : bouton pour les ajouter (durée totale conservée, textes par Albert)
+function renderFrameButton() {
+  $("#p-frame-btn")?.remove();
+  const missing = FRAME_TYPES.filter(t => !detailPartition.screens.some(s => s.type === t));
+  if (!missing.length) return;
+  const btn = el("button", { id: "p-frame-btn", className: "btn", textContent: `Ajouter ${missing.map(t => LABELS[t].toLowerCase()).join(", ")} (Albert)`, onclick: async () => {
+    if (!confirm(`Ajouter les écrans ${missing.map(t => LABELS[t].toLowerCase()).join(", ")} ? La durée totale est conservée : les autres écrans sont réduits en proportion.`)) return;
+    btn.disabled = true; btn.textContent = "Rédaction en cours…";
+    try {
+      const r = await api("/api/chaoticum/partition/frame", { method: "POST", body: { run: detailPartition.runId } });
+      detailPartition = r.partition; renderSteps(); renderFrameButton();
+      toast(`${r.added.length} écran(s) ajouté(s)${r.error ? ` — textes non rédigés (${r.error}) : à compléter dans l'éditeur` : ""}${r.cost ? ` · ${Number(r.cost.tokens).toLocaleString("fr-FR")} tokens` : ""}${r.omeka === "ok" ? " (et dans Omeka S)" : r.omeka ? ` — Omeka S : ${r.omeka}` : ""}`);
+      partitionsLoaded = false;
+    } catch (e) { toast("Écrans non ajoutés : " + e.message); btn.disabled = false; btn.textContent = "Réessayer"; }
+  } });
+  $("#p-detail-actions").append(btn);
+}
+
 // réglages de la partition ouverte : durée totale, formulaire Grist, recalcul du déroulé
 function renderPartitionSettings() {
   const p = detailPartition;
@@ -766,16 +808,36 @@ async function shareSession(runId, id) {
   } catch (e) { toast("Lien indisponible : " + e.message); }
 }
 
+// export PDF (généré par le serveur avec Chromium : quelques secondes) ; erreur affichée sans quitter la page
+function pdfLink(href, label, title) {
+  const a = el("a", { className: "btn", href, title, textContent: label, onclick: async e => {
+    e.preventDefault();
+    if (a.dataset.busy) return;
+    a.dataset.busy = "1"; a.textContent = "PDF en cours…";
+    try {
+      const res = await fetch(href);
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `HTTP ${res.status}`);
+      const name = /filename="([^"]+)"/.exec(res.headers.get("Content-Disposition") ?? "")?.[1] ?? "seance.pdf";
+      const url = URL.createObjectURL(await res.blob());
+      el("a", { href: url, download: name }).click();
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch (err) { toast("PDF impossible : " + err.message); }
+    finally { delete a.dataset.busy; a.textContent = label; }
+  } });
+  return a;
+}
+
 async function openPartition(p) {
   detailRun = p.runId;
   $("#step-editor").classList.add("hidden");
   $("#p-steps").textContent = "Chargement…";
   $("#ps-info").textContent = "";
-  api(`/api/chaoticum/partition?run=${encodeURIComponent(p.runId)}`).then(x => { detailPartition = x; renderSteps(); }).catch(e => { $("#p-steps").textContent = `Partition indisponible : ${e.message}`; });
+  api(`/api/chaoticum/partition?run=${encodeURIComponent(p.runId)}`).then(x => { detailPartition = x; renderSteps(); renderFrameButton(); }).catch(e => { $("#p-steps").textContent = `Partition indisponible : ${e.message}`; });
   $("#p-detail").classList.remove("hidden");
   $("#p-detail-title").textContent = `${p.title} · ${new Date(p.createdAt).toLocaleString("fr-FR")}`;
   $("#p-detail-actions").replaceChildren(
     el("a", { className: "btn primary", href: `/jouer?run=${encodeURIComponent(p.runId)}`, target: "_blank", textContent: "Jouer la partition" }),
+    pdfLink(`/api/chaoticum/pdf?run=${encodeURIComponent(p.runId)}`, "PDF de la partition", "Exporter la partition (sans séance) en PDF"),
     el("button", { className: "btn", textContent: "Reprendre la graine", onclick: () => { config.seed = p.seed ?? ""; $("#c-seed").value = config.seed; toast("Graine reprise dans l'onglet Partition (enregistrer pour confirmer)"); } }));
   $("#p-sessions").textContent = "Chargement…";
   $("#p-report").textContent = "Chargement…";
@@ -798,7 +860,8 @@ async function openPartition(p) {
         el("td", {}, s.source.includes("local") ? "locale" : "", s.source === "local+omeka" ? " · " : "", s.omekaItemId && r.omekaAdmin ? el("a", { href: r.omekaAdmin + s.omekaItemId, target: "_blank", textContent: "Omeka S", style: "color:var(--accent)" }) : ""),
         el("td", { style: "min-width:190px" },
           el("a", { className: "btn", href: `/jouer?run=${encodeURIComponent(p.runId)}&replay=${encodeURIComponent(s.id)}`, target: "_blank", textContent: "Rejouer", style: "margin:0 4px 4px 0" }),
-          el("button", { className: "btn", textContent: "Lien public", title: "QR code du rejeu en lecture seule, à partager", onclick: () => shareSession(p.runId, s.id) }))))))),
+          el("button", { className: "btn", textContent: "Lien public", title: "QR code du rejeu en lecture seule, à partager", onclick: () => shareSession(p.runId, s.id), style: "margin:0 4px 4px 0" }),
+          pdfLink(`/api/chaoticum/pdf?run=${encodeURIComponent(p.runId)}&id=${encodeURIComponent(s.id)}`, "PDF", "Exporter la séance en PDF : déroulé prévu et réel, écrans, contributions, transcription, annotations"))))))),
       el("div", { id: "p-share", className: "hidden", style: "margin-top:12px" }));
   } catch (e) { $("#p-sessions").textContent = "Séances indisponibles : " + e.message; }
 }

@@ -1,11 +1,13 @@
 // Éditeur d'un écran de partition chaoticumSeminario (page de configuration et lecteur)
 // Outils par type : citation (recherche dans l'index de la bibliothèque), diapo (présentation, navigation, aperçu,
 // recherche dans l'index des diapos), question (compteur, nouvelle proposition), diagramme (éditeur visuel des idées et
-// des liens ou code Mermaid, aperçu, réparation, nouvelle proposition), contributions (consigne) ; durée, type et
+// des liens ou code Mermaid, aperçu, réparation, nouvelle proposition), contributions (consigne), écrans de cadre
+// (introduction, argumentaire, conclusion : titre, sous-titre, texte, points, nouvelle proposition) ; durée, type et
 // structure (insérer, dupliquer, déplacer, supprimer).
 
-const TYPES = ["citation", "diapo", "question", "contribution", "diagramme"];
-const LABELS = { citation: "Citation", diapo: "Diapo", question: "Question", contribution: "Contributions", diagramme: "Diagramme" };
+const TYPES = ["citation", "diapo", "question", "contribution", "diagramme", "introduction", "argumentaire", "conclusion"];
+const LABELS = { citation: "Citation", diapo: "Diapo", question: "Question", contribution: "Contributions", diagramme: "Diagramme", introduction: "Introduction", argumentaire: "Argumentaire", conclusion: "Conclusion" };
+const FRAME_TYPES = ["introduction", "argumentaire", "conclusion"];
 
 const el = (tag, props = {}, ...children) => {
   const e = Object.assign(document.createElement(tag), props);
@@ -361,11 +363,41 @@ export function openScreenEditor(opts) {
       return [field("Titre", I.title, true), el("div", { className: "ed-field wide" }, modeBar, visual, I.code), el("div", { className: "ed-field wide" }, el("label", { textContent: "Aperçu" }), preview),
         el("div", { className: "ed-field wide" }, el("label", { textContent: "Nouvelle proposition" }), el("div", { className: "ed-row" }, hint, regen), info)];
     },
+    introduction() { return frameSection(); },
+    argumentaire() { return frameSection(); },
+    conclusion() { return frameSection(); },
     contribution() {
       const I = state.I = { instruction: el("input", { value: s().contribution?.instruction ?? "", placeholder: "ex. Proposez une page web qui prolonge la question" }) };
       return [field("Consigne affichée au public", I.instruction, true, "Le QR code du formulaire et les URL proposées s'affichent avec cette consigne.")];
     },
   };
+
+  // écran de cadre : textes rédigés par le Rédacteur du cadre, modifiables ; nouvelle proposition à partir de toute la partition
+  function frameSection() {
+    const f = (s().type === type && s().cadre) || {};
+    const I = state.I = {
+      title: el("input", { value: f.title ?? "" }), subtitle: el("input", { value: f.subtitle ?? "" }),
+      text: el("textarea", { rows: 4, value: f.text ?? "" }), points: el("textarea", { rows: 4, value: (f.points ?? []).join("\n") }),
+      credits: el("input", { value: f.credits ?? "", placeholder: "ex. Samuel Szoniecky — Laboratoire Paragraphe" }), thanks: el("input", { value: f.thanks ?? "" }),
+    };
+    const hint = el("input", { placeholder: "facultatif : orientation souhaitée (ex. plus court, plus engagé…)" });
+    const info = el("span", { className: "ed-help" });
+    const regen = el("button", { type: "button", className: "ed-btn", textContent: "Proposer un autre texte (Albert)", onclick: async () => {
+      if (type !== s().type) { info.textContent = "Enregistrer d'abord le nouveau type d'écran."; return; }
+      regen.disabled = true; info.textContent = "Proposition en cours…";
+      try {
+        const r = costed(await api("/api/chaoticum/partition/regenerate", { method: "POST", body: { run: runId, index, what: "cadre", hint: hint.value } }));
+        for (const k of ["title", "subtitle", "text"]) I[k].value = r.cadre[k] ?? "";
+        I.points.value = (r.cadre.points ?? []).join("\n");
+        info.textContent = `Proposition (non enregistrée) · ${costLabel(r)}`;
+      } catch (e) { info.textContent = e.message; } finally { regen.disabled = false; }
+    } });
+    return [field("Titre", I.title, true), field("Sous-titre", I.subtitle, true), field("Texte", I.text, true),
+      field(type === "argumentaire" ? "Étapes de l'argumentaire (une par ligne)" : "Points (un par ligne)", I.points, true),
+      type === "introduction" ? field("Intervenant et institution", I.credits, true) : null,
+      type === "conclusion" ? field("Remerciements (affichés en grand)", I.thanks, true) : null,
+      el("div", { className: "ed-field wide" }, el("label", { textContent: "Nouvelle proposition à partir de toute la partition" }), el("div", { className: "ed-row" }, hint, regen), info)].filter(Boolean);
+  }
 
   const changesOf = () => {
     const I = state.I ?? {}, v = k => I[k]?.value;
@@ -376,6 +408,7 @@ export function openScreenEditor(opts) {
     if (type === "question") ch.question = { text: v("text"), intention: v("intention") };
     if (type === "diagramme") ch.diagramme = { title: v("title"), mermaid: state.getCode?.() ?? v("code") };
     if (type === "contribution") ch.contribution = { instruction: v("instruction") };
+    if (FRAME_TYPES.includes(type)) ch.cadre = { title: v("title"), subtitle: v("subtitle"), text: v("text"), points: String(v("points") ?? "").split("\n").map(x => x.trim()).filter(Boolean), credits: v("credits"), thanks: v("thanks") };
     return ch;
   };
 

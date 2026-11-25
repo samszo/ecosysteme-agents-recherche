@@ -19,7 +19,7 @@ export const materialStep = createStep({
     const screens: Screen[] = planScreens(c);
     const dir = path.resolve(process.cwd(), c.outputDir, PARTITIONS_DIR, runId);
     await fs.mkdir(dir, { recursive: true });
-    console.log(`🎼 Partition : ${screens.length} écran(s) en ${c.durationMinutes} min (graine ${seed}) : ${screens.map(s => s.type).join(" → ")}`);
+    console.log(`🎼 Partition : ${screens.length} écran(s) en ${c.durationMinutes} min${c.frame.enabled ? " (dont introduction, argumentaire et conclusion)" : ""} (graine ${seed}) : ${screens.map(s => s.type).join(" → ")}`);
 
     // thème de la conférence (titre, description, programme) : oriente le choix des citations et des diapos
     const theme = await loadTheme(c);
